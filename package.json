@@ -1,1 +1,1 @@
-{"name":"sunday-fantasy-hq","version":"0.1.0","private":true,"type":"module","scripts":{"start":"python3 -m http.server 4173 --directory dist","test":"node tests/engine.test.js"}}
+{"name":"sunday-fantasy-hq","version":"0.1.0","private":true,"type":"module","scripts":{"start":"python3 -m http.server 4173 --directory dist","test":"node --test tests/*.test.js"}}
