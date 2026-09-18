@@ -1,0 +1,13 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {optimize,projected,aggregateWatch,availableIds,tradeResult} from '../dist/engine.js';
+const p={q:{position:'QB'},a:{position:'RB'},b:{position:'RB'},w:{position:'WR'},t:{position:'TE'},x:{position:'WR'}};
+const scores={q:20,a:15,b:12,w:19,t:8,x:16};
+test('optimizer assigns unique players to legal flex slots',()=>{const r=optimize(Object.keys(p),['QB','RB','WR','FLEX'],p,id=>scores[id]);assert.equal(r.total,70);assert.equal(new Set(r.ids).size,4);assert.equal(r.ids[0],'q');assert.equal(r.ids[1],'a');assert(r.complete)});
+test('started slots remain locked even when another player projects better',()=>{const r=optimize(Object.keys(p),['QB','RB','WR','FLEX'],p,id=>scores[id],{3:'t'});assert.equal(r.ids[3],'t');assert.equal(r.total,62)});
+test('missing projection is not represented as zero',()=>{assert.equal(projected(null,{rec:1}),null);assert.equal(projected({unrelated:1},{rec:1}),null);const r=optimize(['q','a'],['QB','RB','WR'],p,id=>scores[id]);assert.equal(r.complete,false);assert.equal(r.ids[2],null)});
+test('same player scores differently with each league scoring system',()=>{assert.equal(projected({rec:6,rec_yd:100},{rec:1,rec_yd:.1}),16);assert.equal(projected({rec:6,rec_yd:100},{rec:.5,rec_yd:.1}),13)});
+test('watchroom deduplicates ownership and opposing exposure across leagues',()=>{const players={w:{position:'WR',team:'BUF'}};const leagues=[1,2].map(i=>({league_id:String(i),name:'League '+i,enabled:true,mine:{roster_id:1,players:i===1?['w']:[],starters:i===1?['w']:[]},rosters:[{roster_id:2,players:i===2?['w']:[],starters:i===2?['w']:[]}],matchups:[{roster_id:1,matchup_id:1,players:i===1?['w']:[],starters:i===1?['w']:[],players_points:{w:16}},{roster_id:2,matchup_id:1,players:i===2?['w']:[],starters:i===2?['w']:[],players_points:{w:13}}]}));const a=aggregateWatch(leagues,players,{});assert.equal(a.length,1);assert.deepEqual(a[0].appearances.map(a=>a.points),[16,13]);assert.deepEqual(a[0].appearances.map(a=>a.side),['mine','opponent'])});
+test('waivers exclude active, reserve, and taxi rostered players',()=>{assert.deepEqual(availableIds({rosters:[{players:['q'],reserve:['a'],taxi:['b']}]},p),['w','t','x'])});
+test('trade values marginal starters rather than summed player points',()=>{const l={roster_positions:['RB','WR','FLEX','BN']};const r=tradeResult({league:l,roster:{players:['a','w','x','t']},partner:{players:['b','q']},give:['t'],get:['b'],players:p,value:id=>scores[id]});assert.equal(r.gainA,0);assert.equal(r.complete,false)});
+test('negative projections still fill mandatory legal lineup positions',()=>{const r=optimize(['q'],['QB'],p,()=>-2);assert.equal(r.total,-2);assert(r.complete)});
