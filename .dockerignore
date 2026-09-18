@@ -3,3 +3,8 @@
 .agents
 .openai
 tests
+
+.env
+.env.*
+data
+*.sqlite*
