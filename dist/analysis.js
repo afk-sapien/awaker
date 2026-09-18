@@ -1,5 +1,5 @@
 import {activeSlots,eligible,projected,optimize,availableIds,playableIds,tradeCandidateIds,waiverMove} from './engine.js';
-import {realismReasons} from './trades.js';
+import {realismReasons,compareTradeIdeas,tradeGains} from './trades.js';
 export const unavailable=['Out','IR','Suspended','PUP','Doubtful'];
 export function lockedLineup(data,league){
  const ids=league.matchups.find(m=>m.roster_id===league.mine.roster_id)?.starters||league.mine.starters||[],locks={};
@@ -22,19 +22,38 @@ export function waiverRows(data,league,prefs={}){
  return candidates.map(id=>({id,count:trending.get(id)||0,projection:projection(id),...waiverMove({id,roster,slots,players:data.players,value,locked:locks,protectedIds:prefs.waiverProtected?.[`${data.user.user_id}:${league.league_id}`]||[],starterIds:prefs.protectStarters!==false?ids:[],capacity:league.roster_positions.filter(s=>!['IR','TAXI'].includes(s)).length,samePosition:prefs.samePositionDrops!==false,excludedDropPositions:excluded.drop,baseline})})).sort((a,b)=>(b.gain??-999)-(a.gain??-999)||b.count-a.count).slice(0,20);
 }
 export async function findTradeIdeas(data,league,model,prefs={}, {limit=20,maxPairs=10000,cancelled=()=>false}={}){
- const excluded=prefs.tradeExcluded||{give:['DEF'],get:['DEF']},minGain=prefs.tradeMinGain??2,maxGap=prefs.tradeMaxGap??.25,penalty=prefs.tradePenalty??.15;
- const candidate=(roster,side)=>tradeCandidateIds(playableIds(roster),data.players,excluded[side]).filter(id=>model.totals[id]!=null&&model.valueAboveReplacement[id]>0&&!unavailable.includes(data.players[id]?.injury_status));
- const own=candidate(league.mine,'give'),ideas=[];let checked=0,truncated=false;
+ const excluded=prefs.tradeExcluded||{give:['DEF'],get:['DEF']},minGain=prefs.tradeMinGain??0,maxGap=prefs.tradeMaxGap??1,bias=prefs.tradeOwnBias??.15;
+ // Evaluate roster impact before value balance. A useful bench player can have
+ // zero value above the single best free agent while still fixing another team.
+ const candidate=(roster,side)=>tradeCandidateIds(playableIds(roster),data.players,excluded[side]).filter(id=>Number.isFinite(model.totals[id])&&model.totals[id]>0&&!unavailable.includes(data.players[id]?.injury_status));
+ const own=candidate(league.mine,'give'),ideas=[],nearMisses=[],diagnostics={offeredPlayers:own.length,partners:0,incomplete:0,noMutualBenefit:0,waiverRejected:0,belowMinimum:0,valueFiltered:0,mutual:0};let checked=0,truncated=false;
  outer:for(const partner of league.rosters.filter(r=>r.roster_id!==league.mine.roster_id)){
-  for(const a of own)for(const b of candidate(partner,'get')){
+  const incoming=candidate(partner,'get');if(incoming.length)diagnostics.partners++;
+  for(const a of own)for(const b of incoming){
    if(cancelled())return {ideas:[],truncated:true,cancelled:true};
-   if(checked++>=maxPairs){truncated=true;break outer}
-   if(checked%100===0)await new Promise(r=>setTimeout(r,0));
-   const va=model.valueAboveReplacement[a],vb=model.valueAboveReplacement[b];if(Math.abs(va-vb)/Math.max(va,vb)>maxGap)continue;
-   const result=model.evaluate(league.mine,partner,[a],[b]);
-   if(!realismReasons(result,{minGain,maxGap}).length){const user=league.users.find(u=>u.user_id===partner.owner_id);ideas.push({...result,partnerId:partner.roster_id,partner:user?.metadata?.team_name||user?.display_name||`Team ${partner.roster_id}`})}
+   if(checked>=maxPairs){truncated=true;break outer}checked++;
+   if(checked%50===0)await new Promise(r=>setTimeout(r,0));
+   let result;try{result=model.evaluate(league.mine,partner,[a],[b])}catch{diagnostics.incomplete++;continue}
+   if(!result.complete){diagnostics.incomplete++;continue}
+   // Even with a zero weekly minimum, both teams must gain > 0.25 season
+   // points: neutral offers give the other manager no projected incentive.
+   if(result.gainA<=.25||result.gainB<=.25){diagnostics.noMutualBenefit++;continue}
+   if(model.assessWaivers)result=model.assessWaivers(result,league.mine,partner,{protectedA:prefs.waiverProtected?.[`${data.user?.user_id}:${league.league_id}`]||[]});
+   const gains=tradeGains(result);
+   diagnostics.mutual++;
+   const user=(league.users||[]).find(u=>u.user_id===partner.owner_id),offer={...result,partnerId:partner.roster_id,partner:user?.metadata?.team_name||user?.display_name||`Team ${partner.roster_id}`};
+   if(gains.a<=.25||gains.b<=.25){
+    diagnostics.waiverRejected++;
+    nearMisses.push({...offer,filterReasons:[gains.a<=.25?'Your pickup alternative is as good or better.':'Their pickup alternative is as good or better.']});continue;
+   }
+   const below=gains.a/result.weeks+1e-8<minGain||gains.b/result.weeks+1e-8<minGain;
+   const valueBlocked=maxGap<1&&(result.valueGap===null||result.valueGap>maxGap);
+   if(below)diagnostics.belowMinimum++;if(valueBlocked)diagnostics.valueFiltered++;
+   if(!below&&!valueBlocked)ideas.push(offer);
+   else nearMisses.push({...offer,filterReasons:realismReasons(result,{minGain,maxGap})});
   }
  }
- ideas.sort((a,b)=>(b.gainA-penalty*Math.max(0,b.gainB))-(a.gainA-penalty*Math.max(0,a.gainB)));
- return {ideas:ideas.slice(0,limit),truncated,checked};
+ const rank=(a,b)=>compareTradeIdeas(a,b,bias);
+ ideas.sort(rank);nearMisses.sort(rank);
+ return {ideas:ideas.slice(0,limit),nearMisses:nearMisses.slice(0,3),diagnostics,truncated,checked};
 }

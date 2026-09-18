@@ -1,5 +1,5 @@
 import {aggregateWatch,activeSlots,optimize,playableIds} from '../dist/engine.js';
-import {buildSeasonModel,realismReasons} from '../dist/trades.js';
+import {buildSeasonModel,realismReasons,compareTradeIdeas,tradeGains} from '../dist/trades.js';
 import {findTradeIdeas,waiverRows,lockedLineup,usableValue} from '../dist/analysis.js';
 import {defaults,validateSettings,bad} from './settings.js';
 const name=(data,id)=>data.players[id]?.full_name||id;
@@ -26,14 +26,14 @@ export function createService({store,provider,now=Date.now}){
  async function trades({leagueId,limit=10,positions}={},options={}){
   const d=await load({outlook:true,...options}),ls=leagues(d,leagueId),pref=settings().preferences,ideas=[],warnings=[];
   const cachedKey=JSON.stringify([d.updatedAt,leagueId,limit,positions,pref]);if(analysisCache.has(cachedKey)){const cached=analysisCache.get(cachedKey);return envelope(d,{ideas:cached.ideas,filters:cached.filters,limitations:cached.limitations},cached.warnings)}
-  for(const l of ls){try{const result=await findTradeIdeas(d,l,model(d,l),pref,{limit:positions?10000:limit});if(result.truncated)warnings.push(`${l.name}: search capped at 10000 pairs`);ideas.push(...result.ideas.filter(r=>!positions||r.get.some(id=>(d.players[id]?.fantasy_positions||[d.players[id]?.position]).some(p=>positions.includes(p)))).map(r=>({...r,type:'trade',leagueId:l.league_id,league:l.name,gain:r.gainA/r.weeks,send:r.give.map(id=>name(d,id)),receive:r.get.map(id=>name(d,id))})))}catch(e){warnings.push(`${l.name}: ${e.message}`)}}
-  ideas.sort((a,b)=>(b.gainA-(pref.tradePenalty??.15)*Math.max(0,b.gainB))-(a.gainA-(pref.tradePenalty??.15)*Math.max(0,a.gainB)));
+  for(const l of ls){try{const result=await findTradeIdeas(d,l,model(d,l),pref,{limit:positions?10000:limit});if(result.truncated)warnings.push(`${l.name}: search capped at 10000 pairs`);ideas.push(...result.ideas.filter(r=>!positions||r.get.some(id=>(d.players[id]?.fantasy_positions||[d.players[id]?.position]).some(p=>positions.includes(p)))).map(r=>({...r,type:'trade',leagueId:l.league_id,league:l.name,gain:tradeGains(r).a/r.weeks,send:r.give.map(id=>name(d,id)),receive:r.get.map(id=>name(d,id))})))}catch(e){warnings.push(`${l.name}: ${e.message}`)}}
+  ideas.sort((a,b)=>compareTradeIdeas(a,b,pref.tradeOwnBias??.15));
   const result=envelope(d,{ideas:ideas.slice(0,limit),filters:pref,limitations:['Expected-point estimates; no acceptance probabilities, draft picks, or dynasty valuation.']},warnings);
   if(analysisCache.size>30)analysisCache.clear();analysisCache.set(cachedKey,result);return result;
  }
  async function evaluate({leagueId,partnerId,give,get}){
   const d=await load({outlook:true}),l=leagues(d,leagueId)[0],p=l.rosters.find(r=>String(r.roster_id)===String(partnerId)&&r.roster_id!==l.mine.roster_id);if(!p)throw bad('Unknown trade partner.');
-  try{const result=model(d,l).evaluate(l.mine,p,give,get),pref=settings().preferences;return envelope(d,{result,filters:pref,realismWarnings:realismReasons(result,{minGain:pref.tradeMinGain??2,maxGap:pref.tradeMaxGap??.25})},result.complete?[]:['Incomplete starting-lineup projections.'])}catch(e){throw bad(e.message,e.status||422)}
+  try{const season=model(d,l),pref=settings().preferences,result=season.assessWaivers(season.evaluate(l.mine,p,give,get),l.mine,p,{protectedA:pref.waiverProtected?.[`${d.user.user_id}:${l.league_id}`]||[]});return envelope(d,{result,filters:pref,realismWarnings:realismReasons(result,{minGain:pref.tradeMinGain??0,maxGap:pref.tradeMaxGap??1})},result.complete?[]:['Incomplete starting-lineup projections.'])}catch(e){throw bad(e.message,e.status||422)}
  }
  async function opportunities({leagueId}={}){
   const d=await load(),results=[],warnings=[],prefs=settings().preferences;
