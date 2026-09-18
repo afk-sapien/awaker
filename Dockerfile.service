@@ -1,0 +1,11 @@
+FROM node:22-alpine
+WORKDIR /app
+COPY --chown=node:node package.json ./
+COPY --chown=node:node dist ./dist
+COPY --chown=node:node server ./server
+RUN mkdir /app/data && chown node:node /app/data
+USER node
+ENV SUNDAY_HOST=0.0.0.0 PORT=4173 SUNDAY_DB=/app/data/sunday.sqlite
+EXPOSE 4173
+VOLUME /app/data
+CMD ["node", "server/main.js"]

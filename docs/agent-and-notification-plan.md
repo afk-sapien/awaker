@@ -1,6 +1,6 @@
 # Agent access, digests, and important-event alerts
 
-Status: proposed; no backend, schedule, or notification delivery is enabled by this plan.
+Status: core implementation completed on `codex/agent-notifications`. See [setup and current limits](integrations.md). The sections below preserve the design proposal; urgent injury/waiver alerts, independent service-failure pushes, and remote HTTP MCP remain future work. Schedules and delivery are disabled until the owner configures them.
 
 Interpretation of the request: “NFT” means MCP or an API for coding agents, “traits” means trades, and “NFTY” means ntfy. These are working assumptions.
 
