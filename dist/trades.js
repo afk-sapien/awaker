@@ -56,21 +56,70 @@ export function buildSeasonModel({league,players,outlook}){
   const capacity=league.roster_positions.filter(s=>!['IR','TAXI'].includes(s)).length;
   if(newA.length>Math.max(capacity,a.length)||newB.length>Math.max(capacity,b.length))throw Error('This package needs a roster drop. Use equal-size packages or free a roster spot first.');
   const beforeA=before(roster),beforeB=before(partner);
-  const weekly=weeks.map((week,i)=>{const afterA=lineup(newA,week),afterB=lineup(newB,week);return {week,gainA:afterA.total-beforeA[i].total,gainB:afterB.total-beforeB[i].total,complete:beforeA[i].complete&&beforeB[i].complete&&afterA.complete&&afterB.complete,incomingStarts:afterA.ids.filter(id=>get.includes(id)).length,partnerStarts:afterB.ids.filter(id=>give.includes(id)).length}});
+  const weekly=weeks.map((week,i)=>{const afterA=lineup(newA,week),afterB=lineup(newB,week);return {week,gainA:afterA.total-beforeA[i].total,gainB:afterB.total-beforeB[i].total,complete:beforeA[i].complete&&beforeB[i].complete&&afterA.complete&&afterB.complete,incomingStarts:afterA.ids.filter(id=>get.includes(id)).length,partnerStarts:afterB.ids.filter(id=>give.includes(id)).length,outgoingStarts:beforeA[i].ids.filter(id=>give.includes(id)).length,partnerOutgoingStarts:beforeB[i].ids.filter(id=>get.includes(id)).length}});
   const sumValue=ids=>ids.some(id=>valueAboveReplacement[id]===null)?null:ids.reduce((sum,id)=>sum+valueAboveReplacement[id],0);
   const offeredValue=sumValue(give),receivedValue=sumValue(get),largest=Math.max(offeredValue??0,receivedValue??0);
   const valueGap=offeredValue===null||receivedValue===null||largest<=0?null:Math.abs(offeredValue-receivedValue)/largest;
   return {give,get,weekly,gainA:weekly.reduce((s,r)=>s+r.gainA,0),gainB:weekly.reduce((s,r)=>s+r.gainB,0),complete:weekly.every(r=>r.complete),offeredValue,receivedValue,valueGap,weeks:weeks.length};
  }
- return {weeks,totals,valueAboveReplacement,evaluate};
+ // Cache fixed pickup/drop plans per roster and incoming position. Trades are
+ // compared with a no-trade alternative, never credited with an assumed pickup.
+ const waiverPlans=new Map();
+ function pickupAlternative(roster,incoming,keep,protectedIds=[]){
+  const positions=[...new Set(incoming.flatMap(id=>players[id].fantasy_positions||[players[id].position]))].sort();
+  const key=JSON.stringify([roster.roster_id,positions,[...protectedIds].sort()]);
+  if(!waiverPlans.has(key)){
+   const ids=playableIds(roster),base=before(roster),protectedSet=new Set([...protectedIds,...(roster.starters||base[0].ids)]);
+   const pool=free.filter(id=>!['Out','IR','PUP','Suspended','Doubtful'].includes(players[id].injury_status)&&(players[id].fantasy_positions||[players[id].position]).some(pos=>positions.includes(pos))&&slots.some(slot=>eligible(players[id],slot)));
+   const covered=pool.filter(id=>Number.isFinite(totals[id]));
+   const shortlist=new Set();
+   for(const pos of positions){
+    const same=covered.filter(id=>(players[id].fantasy_positions||[players[id].position]).includes(pos));
+    same.sort((a,b)=>totals[b]-totals[a]);same.slice(0,5).forEach(id=>shortlist.add(id));
+    for(const week of weeks){const best=same.reduce((best,id)=>best===null||values[week][id]>values[week][best]?id:best,null);if(best)shortlist.add(best)}
+   }
+   const capacity=league.roster_positions.filter(s=>!['IR','TAXI'].includes(s)).length;
+   const drops=ids.length<capacity?[null]:ids.filter(id=>!protectedSet.has(id)&&Number.isFinite(totals[id]));
+   const plans=[];
+   for(const add of shortlist)for(const drop of drops){
+    const afterIds=ids.filter(id=>id!==drop).concat(add),after=weeks.map(w=>lineup(afterIds,w));
+    if(!base.every(w=>w.complete)||!after.every(w=>w.complete))continue;
+    const gain=after.reduce((sum,w,i)=>sum+w.total-base[i].total,0);
+    if(gain>0)plans.push({add,drop,gain});
+   }
+   plans.sort((a,b)=>b.gain-a.gain||(totals[a.drop]??0)-(totals[b.drop]??0));
+   waiverPlans.set(key,{plans,checked:shortlist.size,missing:pool.length-covered.length,status:pool.length&&!covered.length?'unknown':'checked'});
+  }
+  const {plans,...coverage}=waiverPlans.get(key),best=plans.find(plan=>!keep.includes(plan.drop));
+  return {...coverage,...(best||{add:null,drop:null,gain:0})};
+ }
+ function assessWaivers(result,roster,partner,{protectedA=[],protectedB=[]}={}){
+  if(!result.complete)return result;
+  const waiverA=pickupAlternative(roster,result.get,result.give,protectedA),waiverB=pickupAlternative(partner,result.give,result.get,protectedB);
+  return {...result,waiverA,waiverB,adjustedGainA:result.gainA-waiverA.gain,adjustedGainB:result.gainB-waiverB.gain};
+ }
+ return {weeks,totals,valueAboveReplacement,evaluate,assessWaivers};
 }
 
 export function realismReasons(result,{minGain=2,maxGap=.25}={}){
  const reasons=[];
  if(!result.complete)reasons.push('Some starting slots have no projection');
- if(result.gainA/result.weeks<minGain)reasons.push(`Your gain is below ${minGain} points/week`);
- if(result.gainB/result.weeks<minGain)reasons.push(`Their gain is below ${minGain} points/week`);
- if(result.valueGap===null)reasons.push('Replacement value is unavailable');
- else if(result.valueGap>maxGap)reasons.push(`Player value gap exceeds ${Math.round(maxGap*100)}%`);
+ const gains=tradeGains(result);
+ if(gains.a/result.weeks<minGain)reasons.push(`Your gain${result.waiverA?' over pickups':''} is below ${minGain} points/week`);
+ if(gains.b/result.weeks<minGain)reasons.push(`Their gain${result.waiverB?' over pickups':''} is below ${minGain} points/week`);
+ // A limit of 1 turns this heuristic into information rather than a gate.
+ if(maxGap<1){if(result.valueGap===null)reasons.push('Replacement value is unavailable');
+ else if(result.valueGap>maxGap)reasons.push(`Player value gap exceeds ${Math.round(maxGap*100)}%`);}
  return reasons;
+}
+
+// Both gains count positively; a modest discount on the partner's gain favors you.
+export function tradeGains(result){return {a:result.adjustedGainA??result.gainA,b:result.adjustedGainB??result.gainB}}
+export function tradeScore(result,bias=.15){
+ const weight=Number.isFinite(bias)?Math.max(0,Math.min(1,bias)):.15;
+ const gains=tradeGains(result);
+ return gains.a+(1-weight)*gains.b;
+}
+export function compareTradeIdeas(a,b,bias=.15){
+ return tradeScore(b,bias)-tradeScore(a,bias)||tradeGains(b).a-tradeGains(a).a;
 }
