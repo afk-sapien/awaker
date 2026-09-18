@@ -1,7 +1,9 @@
 import {createResourceCache} from './cache.js';
 const BASE='https://api.sleeper.app/v1',MINUTE=60000,HOUR=60*MINUTE;
+let persistence;
+export function setPersistence(adapter){persistence=adapter}
 // Storage failure is non-fatal; the same cache still works in memory.
-function storage(key,value){return new Promise(resolve=>{
+function storage(key,value){if(persistence)return Promise.resolve(persistence(key,value));return new Promise(resolve=>{
  if(typeof indexedDB==='undefined'){resolve(null);return}
  let request;try{request=indexedDB.open('sunday-cache',1)}catch{resolve(null);return}
  request.onupgradeneeded=()=>request.result.createObjectStore('data');

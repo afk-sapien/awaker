@@ -33,6 +33,7 @@ The browser needs internet access to api.sleeper.app and site.api.espn.com. Goog
 - Remaining-season manual trades and one-for-one suggestions, week-by-week optimized lineups, bye weeks, adjustable minimum gains for both managers, replacement-value balance limits, and a rival-gain penalty. Multi-player packages must fit both rosters; no invented pickups or automatic drops.
 - Five-week defense projections and two-defense rotation comparisons. Weekly heatmaps compare each matchup with the league-scored median of all projected NFL defenses; byes are excluded and missing estimates stay neutral.
 - Read-only, feature-detected WebMCP watchroom tool.
+- Optional authenticated agent API/MCP service, durable report scheduling, ntfy trade alerts, and owner settings.
 
 ## Data and limitations
 
@@ -40,15 +41,15 @@ The browser needs internet access to api.sleeper.app and site.api.espn.com. Goog
 - Experimental projections: `https://api.sleeper.app/projections/nfl/{season}/{week}?season_type=regular`. This endpoint is not part of the documented supported API. It may fail or change. Projections are mapped to league scoring using available stat fields; unmodeled scoring keys are explicitly listed. Nonlinear bonuses and absent projected stats can make estimates incomplete.
 - ESPN public scoreboard supplies NFL game state, opponents, broadcast labels and game scores. It is an unofficial dependency with no availability guarantee. Game-live status is not on-field player tracking.
 - Actual fantasy scores come from Sleeper matchup `players_points`; different leagues retain separate values. Missing data is displayed as unavailable, never silently shown as zero. Scores can lag broadcasts.
-- Advice is deterministic and based on expected points. No calibrated win odds, injury probability model, actual transaction submission, FAAB bid estimation, dynasty/pick valuation, or external notifications. Trades take effect the following week and default to ending in Week 17 (Week 18 optional). Each future week uses its own projection feed and schedule; missing weeks pause the analysis instead of extrapolating next week. Replacement-value balance is a projection-based heuristic, not a market price or acceptance probability. Waiver suggestions prioritize current starting-lineup gains and may undervalue depth.
+- Advice is deterministic and based on expected points. No calibrated win odds, injury probability model, actual transaction submission, FAAB bid estimation, dynasty/pick valuation, or live injury alerts. Optional summaries and trade alerts use the background service described below. Trades take effect the following week and default to ending in Week 17 (Week 18 optional). Each future week uses its own projection feed and schedule; missing weeks pause the analysis instead of extrapolating next week. Replacement-value balance is a projection-based heuristic, not a market price or acceptance probability. Waiver suggestions prioritize current starting-lineup gains and may undervalue depth.
 - All current-season leagues are discoverable. The prototype supports team defenses and ordinary flex/superflex lineups; optimizers are capped at 15 unlocked starting slots. Nonstandard position/scoring rules need further validation.
 - A second defense's bench cost is called out but not subtracted from rotation gain. Future missing projections are shown as unavailable; rotation recommendations need all included weeks.
-- Username, league exclusions, pins, filters, roster protections and trade settings are stored locally. API data is cached in memory and IndexedDB across page reloads: scores/game status for 30 seconds, rosters for one minute, trends for 15 minutes, projections/league users/future schedules for one hour, and the player directory for 24 hours. Concurrent requests for the same resource share one fetch. Storage failures fall back to memory; failed requests are retried, not silently replaced with expired cached data. No secrets are stored.
+- In static mode, username, league exclusions, pins, filters, roster protections and trade settings are stored locally. In service mode, account and analysis settings are also persisted by the service. API data is cached in memory and IndexedDB across page reloads: scores/game status for 30 seconds, rosters for one minute, trends for 15 minutes, projections/league users/future schedules for one hour, and the player directory for 24 hours. Concurrent requests for the same resource share one fetch. Storage failures fall back to memory; failed requests are retried, not silently replaced with expired cached data. No secrets are stored.
 - Visible tabs still poll every 45 seconds. **Refresh** bypasses caches for current rosters, league users, scores, trends and the five-week projections and schedules; **Refresh outlook** bypasses future projection/schedule caches. Start/sit, waiver analysis and season models reuse bounded in-memory results across navigation and leagues. Roster/scoring/projection/filter changes invalidate the relevant results; score-only updates do not rebuild season models. First-time analyses still need data and computation.
 
-## Planned integrations
+## Agent access and notifications
 
-[Agent access, digests, and important-event alerts](docs/agent-and-notification-plan.md) describes an optional API/MCP service, daily or weekly reports, and ntfy notifications. This is a proposal; background scheduling and external notification delivery are not implemented.
+The optional Node service provides a read-only API and stdio MCP adapter, persistent daily/weekly summaries, and ntfy alerts for strong new trade opportunities. Open **My leagues → Agents & updates** to configure it. All schedules and alerts start disabled. See [setup and operation](docs/integrations.md) for tokens, account import, Docker deployment, and current limitations. Static hosting remains available without the service.
 
 ## Tests
 
@@ -62,6 +63,9 @@ Checks cover unique legal flex assignment, started player locks, negative points
 
 ## Files
 
+- `server/`: optional API/MCP service, SQLite state, scheduler, and ntfy adapter
+- `dist/integrations.html`: owner account, schedule, report archive, and notification controls
+- `dist/analysis.js`: shared browser/service trade and waiver orchestration
 - `dist/app.js`: interface and orchestration
 - `dist/api.js`: provider adapters and persistent resource caching
 - `dist/cache.js`: shared request cache and bounded computation memoization
