@@ -2,7 +2,11 @@
 
 The optional background service provides an authenticated JSON API, a stdio MCP adapter, daily/weekly summaries, and ntfy alerts for strong new trade opportunities. Static hosting still works with `npm start`. Unattended integrations require the service to stay running.
 
-## Run locally
+## Python installations
+
+After installing the Python package, run `awaker setup`, then `awaker service`. Setup prints the location of the private configuration file. `awaker mcp` runs the agent adapter using the bundled runtime. See [Python installation and data locations](self-hosting.md#python-installation) for configuration, upgrades, and migration from a checkout-based service.
+
+## Run locally from a Node checkout
 
 1. Use Node **24 LTS** (or 22.13 or newer). No package installation is needed. Run `npm run setup` to create `.env` with tokens automatically.
 2. For manual setup instead, copy `.env.example` to `.env`, restrict it to your user (`chmod 600 .env`), and generate **two distinct random tokens**, running `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` twice. Set `AWAKER_ADMIN_TOKEN` and `AWAKER_AGENT_TOKEN` in `.env`. Keep the owner token out of agent configuration.

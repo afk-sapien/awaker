@@ -6,21 +6,37 @@ Awaker is a self-hosted fantasy football companion for following players across 
 
 Awaker is an independent community project, unaffiliated with Sleeper, ESPN, or the NFL. It never asks for a Sleeper password and cannot submit transactions.
 
-## Start on your computer
+## Install and launch with Python
 
-Install [Node.js 24 LTS](https://nodejs.org/), then run:
+Use Python 3.11 or newer. From a clone of this repository, install with [pipx](https://pipx.pypa.io/) and launch:
 
 ```sh
-git clone https://github.com/afk-sapien/awaker.git
-cd awaker
-npm start
+pipx install .
+awaker
 ```
 
-Open [127.0.0.1:4173](http://127.0.0.1:4173). No dependency install or build step is needed. Node 22.13 or newer is also supported.
+Or install with pip inside an activated virtual environment:
+
+```sh
+python -m pip install .
+awaker
+```
+
+Open [127.0.0.1:4173](http://127.0.0.1:4173). The Python package includes the app and automatically installs a Node 24 runtime through [nodejs-wheel-binaries](https://pypi.org/project/nodejs-wheel-binaries/), an unofficial distribution of Node. No separate Node install, npm command, or checkout is needed after installation.
 
 The dashboard starts with labeled sample leagues. Choose **Connect Sleeper**, enter your public username, and use **My leagues** to choose leagues. Browser-only mode stores your preferences on your computer.
 
+`awaker --port 8080` chooses another local port. `python -m awaker` is equivalent to `awaker`. To install directly from GitHub:
+
+```sh
+pipx install "git+https://github.com/afk-sapien/awaker.git"
+```
+
+While the repository is private, Git must have access to it. The package has not been published to PyPI, so bare `pip install awaker` is not the installation command for this project yet.
+
 ## Run with Docker
+
+From the repository checkout:
 
 ```sh
 docker compose up -d --build
@@ -28,24 +44,28 @@ docker compose up -d --build
 
 Open [127.0.0.1:4173](http://127.0.0.1:4173). The container runs as an unprivileged user with a read-only filesystem and binds to loopback. It serves the dashboard without a database or credentials.
 
-You can also serve `dist/` with your own static web server. For a quick Python preview, use `python3 -m http.server 4173 --bind 127.0.0.1 --directory dist`. The bundled Node and Docker servers include security headers that a custom static server must configure separately.
+You can also serve `dist/` with your own static web server. For a quick Python preview, use `python3 -m http.server 4173 --bind 127.0.0.1 --directory dist`. The Python launcher, Node launcher, and Docker servers include security headers that a custom static server must configure separately.
 
 ## Enable agents and background updates
 
+For a Python installation:
+
 ```sh
-npm run setup
-npm run service
+awaker setup
+awaker service
 ```
 
-Setup creates a private `.env` containing distinct owner and agent tokens. It never overwrites an existing file. Open [Agents & updates](http://127.0.0.1:4173/integrations.html), then sign in using `AWAKER_ADMIN_TOKEN` from `.env`. Keep that token out of agent configurations.
+Setup creates a private `.env` in your Awaker user-data directory. It never overwrites existing tokens. Open [Agents & updates](http://127.0.0.1:4173/integrations.html), then sign in using `AWAKER_ADMIN_TOKEN` from the file printed by setup. Keep that token out of agent configurations. `awaker mcp` starts the stdio agent adapter.
 
-For Docker, run setup first, then use:
+For Docker, copy `.env.example` to `.env` in the checkout and configure two distinct tokens as described in [self-hosting](docs/self-hosting.md), then run:
 
 ```sh
 docker compose -f compose.service.yaml up -d --build
 ```
 
 Choose either dashboard-only mode or service mode. Both use port 4173. Schedules and notifications start disabled. The service must remain running for unattended updates.
+
+Developers with Node 24 installed can still use `npm start`, or `npm run setup` followed by `npm run service`, directly from the checkout. These commands use the checkout's `.env` and `data/`, separate from a Python installation's user data.
 
 See [integrations](docs/integrations.md) for MCP, API, scheduling and ntfy setup, and [self-hosting](docs/self-hosting.md) for remote access, backups, upgrades, and migration from Sunday.
 
@@ -78,13 +98,13 @@ npm run verify
 node scripts/container-smoke.js
 ```
 
-The second command requires Docker. CI runs syntax and unit/integration checks on Node 22 and 24, builds and tests both containers, checks persistence through restart, and scans Git history for secrets. Tests use synthetic data and fake notifications.
+The second command requires Docker. CI runs syntax and unit/integration checks on Node 22 and 24, builds and tests both containers, checks persistence through restart, and scans Git history for secrets. Python CI builds a source archive and wheel, installs the wheel, and tests launch and persistence on Linux, macOS, and Windows without system Node on PATH. Tests use synthetic data and fake notifications.
 
 - [Contributing](CONTRIBUTING.md)
 - [Security reporting](SECURITY.md)
 - [Release checklist](docs/releasing.md)
 - [Changes](CHANGELOG.md)
 
-Source is kept in `dist/` despite the directory name. Edit it directly. Pure calculations live in `engine.js`, `trades.js`, `waivers.js`, `lineup.js`, and `defenses.js`. The optional service is in `server/`. There are no generated bundles or third-party runtime packages.
+Source is kept in `dist/` despite the directory name. Edit it directly. Pure calculations live in `engine.js`, `trades.js`, `waivers.js`, `lineup.js`, and `defenses.js`. The optional service is in `server/`. There are no generated bundles or third-party JavaScript runtime packages. The Python launcher depends on the packaged Node runtime.
 
 Awaker is licensed under the [MIT License](LICENSE). External data, player photos, and third-party names and trademarks retain their respective owners' rights.

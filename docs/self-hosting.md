@@ -4,12 +4,14 @@
 
 | Mode | Command | Storage | Credentials |
 | --- | --- | --- | --- |
-| Local dashboard | `npm start` | Browser only | None |
+| Python dashboard | `awaker` | Browser only | None |
+| Node dashboard | `npm start` | Browser only | None |
 | Docker dashboard | `docker compose up -d --build` | Browser only | None |
-| Local background service | `npm run setup`, then `npm run service` | SQLite in `data/` | Owner and agent tokens |
+| Python background service | `awaker setup`, then `awaker service` | User-data directory | Owner and agent tokens |
+| Node background service | `npm run setup`, then `npm run service` | SQLite in `data/` | Owner and agent tokens |
 | Docker background service | Setup `.env`, then `docker compose -f compose.service.yaml up -d --build` | Docker volume | Owner and agent tokens |
 
-The Node launch commands work on Windows, macOS, and Linux. Node 24 LTS is recommended. Use the exact URL printed at startup. `localhost` and `127.0.0.1` are distinct hosts and browser storage origins.
+The Node launch commands work on Windows, macOS, and Linux. Docker commands build images from the checkout. Prebuilt registry images are not published yet. Node 24 LTS is recommended. Use the exact URL printed at startup. `localhost` and `127.0.0.1` are distinct hosts and browser storage origins.
 
 If only Docker is installed, copy `.env.example` to `.env` and generate two tokens with this command, once per token:
 
@@ -18,6 +20,39 @@ docker run --rm node:24-alpine node -e "console.log(require('crypto').randomByte
 ```
 
 Set `AWAKER_ADMIN_TOKEN` and `AWAKER_AGENT_TOKEN` in `.env`. Restrict file permissions to your account. On Linux and macOS, use `chmod 600 .env`.
+
+## Python installation
+
+Install from the checkout with `pipx install .`, or use `python -m pip install .` inside a virtual environment. Run `awaker` from any directory. The installed wheel includes the UI and service code. A separate Node installation is unnecessary. Python 3.11 or newer and a supported 64-bit platform are required. Runtime wheels cover Linux x86-64/ARM64, macOS x86-64/ARM64, and Windows x86-64/ARM64. See [runtime platform requirements](https://pypi.org/project/nodejs-wheel-binaries/) for OS minimums. Docker is an alternative for hosts without a compatible runtime wheel.
+
+The Python CLI provides:
+
+```sh
+awaker                         # Dashboard only
+awaker --port 8080             # Dashboard on another local port
+awaker setup                  # Generate private owner and agent tokens
+awaker service                # Dashboard, API, and scheduled updates
+awaker mcp                    # Stdio MCP adapter for a running service
+awaker --help
+```
+
+The user-data directory defaults to:
+
+| Platform | Directory |
+| --- | --- |
+| Linux | `$XDG_DATA_HOME/awaker`, or `~/.local/share/awaker` |
+| macOS | `~/Library/Application Support/Awaker` |
+| Windows | `%LOCALAPPDATA%/Awaker` |
+
+Override it with `AWAKER_HOME` or `--data-dir /path/to/awaker`. Use the same directory for setup and service. The directory contains `.env` and `awaker.sqlite`. Python setup restricts file permissions on POSIX systems. On Windows, keep the directory under your private user profile and use Windows access controls when sharing a machine.
+
+`--env-file /path/to/.env` selects a different environment file. A Python install does not load a random `.env` from the current working directory. Existing process environment values override the chosen file, and explicit CLI flags override both. `--port` defaults the browser URL to that local port unless `--public-url` is also supplied. Use `--host 0.0.0.0 --public-url https://awaker.example.com` behind a properly configured reverse proxy.
+
+To migrate an existing Node deployment, stop it, back up its database, and run `awaker service --env-file /absolute/path/to/old/.env` with `AWAKER_DB` set to the existing database's absolute path in that file. An omitted database override creates a separate Python-installation database.
+
+Upgrade with `pipx upgrade awaker`, or reinstall the newer checkout/wheel using `python -m pip install --upgrade .`. For a same-version source reinstall, use `--force-reinstall`. User data stays outside the installed package and survives reinstalls. Uninstalling the package leaves user data in place. Back up that directory while the service is stopped.
+
+For an agent's MCP configuration, use `awaker` as the command and `["mcp"]` as its arguments. Use an absolute executable path if the agent cannot find pipx commands on PATH. Set `AWAKER_API_URL` and `AWAKER_AGENT_TOKEN` in its environment. The owner token is unnecessary for MCP access.
 
 ## Configuration
 

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add a pip/pipx-installable launcher with bundled Node, persistent user configuration, and installed-wheel CI on Linux, macOS, and Windows.
+
 - License Awaker under MIT.
 - Rename the application to Awaker with updated branding, favicon, MCP identity, and configuration examples.
 - Preserve existing browser preferences, legacy environment variables, and SQLite databases.

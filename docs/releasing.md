@@ -5,7 +5,7 @@ The current package version is 0.2.0. Prepare the first Awaker release as a prer
 ## Before publication
 
 - Include the [MIT License](../LICENSE) in release archives. The source license does not grant rights to Sleeper, ESPN, NFL data, trademarks, or player photos.
-- Rename the GitHub repository to `awaker`. This requires repository administrator access. Then update local remotes with `git remote set-url origin https://github.com/afk-sapien/awaker.git`.
+- Confirm clone and installation links use `https://github.com/afk-sapien/awaker`.
 - Review all Git history, issues, branches, and release assets for personal data. Gitleaks scans credentials, not every kind of private information. The original history contains a Sites project identifier in `.openai/hosting.json`, which is not a credential.
 - Merge the reviewed release-preparation changes after CI passes.
 - Require the Node 22 tests, Node 24 tests, container smoke tests, and secret scan on the default branch. Enable private vulnerability reporting and GitHub's available secret protection features.
@@ -24,3 +24,9 @@ The current package version is 0.2.0. Prepare the first Awaker release as a prer
 ## Preparation evidence
 
 Local validation results are recorded in the release-preparation pull request or handoff. Passing synthetic tests is not verification of live provider data, live phone delivery, or every host platform. Do not describe this pass as a comprehensive security audit.
+
+## Python distribution
+
+Build source and wheel artifacts using `python -m build --outdir release/python`, then install and test the wheel from outside the checkout. The build intentionally uses `release/python` because `dist/` contains source files. Include the wheel and source archive as GitHub release assets if desired. The Python version comes from `package.json`, so update that version and the MCP server version together.
+
+PyPI and container registry publication are not configured. Do not advertise `pip install awaker` or a `ghcr.io` image until the corresponding package is actually published and verified. Git installation and Docker source builds work without either registry.
