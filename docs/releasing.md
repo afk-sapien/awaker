@@ -37,7 +37,7 @@ The CI workflow also runs weekly to detect newly disclosed image vulnerabilities
 
 Docker base images and third-party actions are pinned. Dependabot proposes updates weekly and keeps Node on the supported major version. Only publication jobs receive package-write permission. Pull requests cannot publish through this workflow. GHCR authentication uses the short-lived `GITHUB_TOKEN`, so no personal registry secret is required.
 
-Both images include the MIT license, OCI source/revision labels, build provenance, and a software bill of materials. Inspect a published image with `docker buildx imagetools inspect ghcr.io/afk-sapien/awaker:edge`. Each image is published separately, so a registry failure can leave one variant published before the other. Rerun a failed publication before announcing it.
+After pushing, each publication job pulls its exact image digest from GHCR and repeats the startup and service-persistence smoke tests. Both images include the MIT license, OCI source/revision labels, build provenance, and a software bill of materials. Inspect a published image with `docker buildx imagetools inspect ghcr.io/afk-sapien/awaker:edge`. Each image is published separately, so a registry failure can leave one variant published before the other. Rerun a failed publication before announcing it.
 
 ## Before going public
 

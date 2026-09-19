@@ -6,12 +6,17 @@ import assert from 'node:assert/strict'
 const docker = (...args) => execFileSync('docker', args, {encoding: 'utf8'})
 const owner = randomBytes(32).toString('hex')
 const agent = randomBytes(32).toString('hex')
-for (const [mode, file] of [['static', 'Dockerfile'], ['service', 'Dockerfile.service']]) {
+const published = process.env.AWAKER_SMOKE_IMAGE
+const selected = process.env.AWAKER_SMOKE_MODE
+if (published && !['static', 'service'].includes(selected)) throw Error('Choose static or service for the published-image smoke test')
+const targets = published ? [[selected, null]] : [['static', 'Dockerfile'], ['service', 'Dockerfile.service']]
+for (const [mode, file] of targets) {
   const name = `awaker-smoke-${mode}-${process.pid}`
   const volume = `${name}-data`
-  const image = `awaker-smoke:${mode}`
-  console.log(`Building and testing ${mode} container`)
-  docker('build', '-f', file, '-t', image, '.')
+  const image = published || `awaker-smoke:${mode}`
+  console.log(`Testing ${mode} container`)
+  if (file) docker('build', '-f', file, '-t', image, '.')
+  else docker('pull', image)
   let id
   try {
     const env = ['-e', `AWAKER_ADMIN_TOKEN=${owner}`, '-e', `AWAKER_AGENT_TOKEN=${agent}`]
