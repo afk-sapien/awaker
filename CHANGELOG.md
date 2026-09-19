@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- License Awaker under MIT.
 - Rename the application to Awaker with updated branding, favicon, MCP identity, and configuration examples.
 - Preserve existing browser preferences, legacy environment variables, and SQLite databases.
 - Add a Node-only dashboard launch command and safe first-run token generation.

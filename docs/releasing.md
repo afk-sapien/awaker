@@ -4,7 +4,7 @@ The current package version is 0.2.0. Prepare the first Awaker release as a prer
 
 ## Before publication
 
-- Choose and add a source license. MIT is a simple option for broad reuse. A source license does not grant rights to Sleeper, ESPN, NFL data, trademarks, or player photos.
+- Include the [MIT License](../LICENSE) in release archives. The source license does not grant rights to Sleeper, ESPN, NFL data, trademarks, or player photos.
 - Rename the GitHub repository to `awaker`. This requires repository administrator access. Then update local remotes with `git remote set-url origin https://github.com/afk-sapien/awaker.git`.
 - Review all Git history, issues, branches, and release assets for personal data. Gitleaks scans credentials, not every kind of private information. The original history contains a Sites project identifier in `.openai/hosting.json`, which is not a credential.
 - Merge the reviewed release-preparation changes after CI passes.

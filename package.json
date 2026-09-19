@@ -19,5 +19,6 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/afk-sapien/awaker.git"
-  }
+  },
+  "license": "MIT"
 }

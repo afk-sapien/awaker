@@ -87,4 +87,4 @@ The second command requires Docker. CI runs syntax and unit/integration checks o
 
 Source is kept in `dist/` despite the directory name. Edit it directly. Pure calculations live in `engine.js`, `trades.js`, `waivers.js`, `lineup.js`, and `defenses.js`. The optional service is in `server/`. There are no generated bundles or third-party runtime packages.
 
-The public release is being prepared. License selection and repository publication remain maintainer decisions.
+Awaker is licensed under the [MIT License](LICENSE). External data, player photos, and third-party names and trademarks retain their respective owners' rights.
