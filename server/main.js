@@ -4,7 +4,7 @@ import {openStore} from './store.js'
 import {createProvider} from './provider.js'
 import {createService} from './service.js'
 import {createWorker} from './scheduler.js'
-import {ntfyPublisher} from './ntfy.js'
+import {createNtfy} from './ntfy.js'
 import {createHttpServer} from './http.js'
 import {config} from './config.js'
 
@@ -20,9 +20,12 @@ if (!settings.username) {
   process.exit(1)
 }
 const service = createService({store, provider: createProvider(store), username: settings.username})
-const publish = ntfyPublisher()
-const worker = createWorker({store, service, publish, publicUrl: settings.publicUrl})
-const server = createHttpServer({...settings, service, worker, publish, dist: resolve(root, 'dist')})
+const ntfy = createNtfy({store})
+if (!process.env.NTFY_TOPIC && (process.env.NTFY_URL || process.env.NTFY_TOKEN)) {
+  console.log('NTFY_URL and NTFY_TOKEN are ignored without NTFY_TOPIC. Add the topic, or set notifications up in Agents & updates.')
+}
+const worker = createWorker({store, service, ntfy, publicUrl: settings.publicUrl})
+const server = createHttpServer({...settings, service, worker, ntfy, dist: resolve(root, 'dist')})
 let activeTick = Promise.resolve()
 let ticking = false
 const tick = () => {

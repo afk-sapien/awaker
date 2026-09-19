@@ -7,9 +7,10 @@ export function createService({store,provider,now=Date.now,username:pinned=''}){
  let pending=null,revision=0,snapshot=store.get('snapshot'),analysisCache=new Map();
  // A configured account is authoritative, so an open service cannot be repointed
  // at someone else's leagues and keep delivering notifications for them.
- const settings=()=>{const stored=store.get('settings',structuredClone(defaults));return pinned?{...stored,username:pinned}:stored};
+ // Settings saved by an earlier version lack newer alert fields, so defaults fill them in.
+ const settings=()=>{const saved=store.get('settings',structuredClone(defaults)),stored={...saved,alerts:{...defaults.alerts,...saved.alerts}};return pinned?{...stored,username:pinned}:stored};
  // saveSettings below rejects any attempt to report on a different account.
- function saveSettings(input){if(pinned&&'username'in input&&input.username!==pinned)throw bad('The Sleeper username is set by this server\'s configuration.');const previous=settings(),next=validateSettings(pinned?{...input,username:pinned}:input,previous);if(JSON.stringify(previous)===JSON.stringify(next))return next;store.set('settings',next);if(previous.username!==next.username){store.set('worker',{runs:{},reports:[],outbox:[],events:{},baselined:false,reset:0,day:'',count:0,lastScan:0,failures:0});}revision++;snapshot=null;store.set('snapshot',null);analysisCache.clear();if(JSON.stringify([previous.username,previous.daily,previous.weekly,previous.timezone])!==JSON.stringify([next.username,next.daily,next.weekly,next.timezone]))store.set('scheduleReset',now());if(JSON.stringify([previous.username,previous.disabled,previous.preferences,previous.alerts])!==JSON.stringify([next.username,next.disabled,next.preferences,next.alerts]))store.set('eventReset',now());return next}
+ function saveSettings(input){if(pinned&&'username'in input&&input.username!==pinned)throw bad('The Sleeper username is set by this server\'s configuration.');const previous=settings(),next=validateSettings(pinned?{...input,username:pinned}:input,previous);if(JSON.stringify(previous)===JSON.stringify(next))return next;store.set('settings',next);if(previous.username!==next.username){store.set('worker',{runs:{},reports:[],outbox:[],events:{},baselines:{},reset:0,day:'',count:0,lastScan:0,failures:0});}revision++;snapshot=null;store.set('snapshot',null);analysisCache.clear();if(JSON.stringify([previous.username,previous.daily,previous.weekly,previous.timezone])!==JSON.stringify([next.username,next.daily,next.weekly,next.timezone]))store.set('scheduleReset',now());if(JSON.stringify([previous.username,previous.disabled,previous.preferences,previous.alerts])!==JSON.stringify([next.username,next.disabled,next.preferences,next.alerts]))store.set('eventReset',now());return next}
  async function load({outlook=false,force=false}={}){
   const config=settings();if(!config.username)throw bad('Configure a Sleeper username in Integrations.',503);
   if(!force&&snapshot&&now()-snapshot.updatedAt<60000&&(!outlook||snapshot.outlook))return snapshot;
@@ -38,8 +39,8 @@ export function createService({store,provider,now=Date.now,username:pinned=''}){
   const d=await load({outlook:true}),l=leagues(d,leagueId)[0],p=l.rosters.find(r=>String(r.roster_id)===String(partnerId)&&r.roster_id!==l.mine.roster_id);if(!p)throw bad('Unknown trade partner.');
   try{const season=model(d,l),pref=settings().preferences,result=season.assessWaivers(season.evaluate(l.mine,p,give,get),l.mine,p,{protectedA:pref.waiverProtected?.[`${d.user.user_id}:${l.league_id}`]||[]});return envelope(d,{result,filters:pref,realismWarnings:realismReasons(result,{minGain:pref.tradeMinGain??0,maxGap:pref.tradeMaxGap??1})},result.complete?[]:['Incomplete starting-lineup projections.'])}catch(e){throw bad(e.message,e.status||422)}
  }
- async function opportunities({leagueId}={}){
-  const d=await load(),results=[],warnings=[],prefs=settings().preferences;
+ async function opportunities({leagueId}={},options={}){
+  const d=await load(options),results=[],warnings=[],prefs=settings().preferences;
   for(const l of leagues(d,leagueId)){try{
    const {ids,locks}=lockedLineup(d,l),value=id=>usableValue(d,l,id,Object.values(locks)),best=optimize(playableIds(l.mine),activeSlots(l),d.players,value,locks,ids);
    const complete=best.complete&&ids.every(id=>id==='0'||Number.isFinite(value(id))),gain=complete?best.total-ids.reduce((sum,id)=>sum+(value(id)||0),0):null;

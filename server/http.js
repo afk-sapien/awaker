@@ -10,7 +10,7 @@ const equal = (a, b) => typeof a === 'string' && typeof b === 'string' &&
 const sessionCookie = req => req.headers.cookie?.split(';').map(part => part.trim())
   .find(part => part.startsWith('awaker_session='))?.slice('awaker_session='.length)
 
-export function createHttpServer({service, worker, publish, adminToken, agentToken, publicUrl, dist, now = Date.now}) {
+export function createHttpServer({service, worker, ntfy, adminToken, agentToken, publicUrl, dist, now = Date.now}) {
   // No tokens means no login, which suits a single owner on a trusted network.
   // Setting both turns on owner and agent roles for a service reachable more widely.
   const open = !adminToken && !agentToken
@@ -118,7 +118,7 @@ export function createHttpServer({service, worker, publish, adminToken, agentTok
           return
         }
         if (path === '/api/v1/settings' && req.method === 'GET') {
-          json(res, 200, {settings: service.settings(), worker: worker.status(), authRequired: !open})
+          json(res, 200, {settings: service.settings(), worker: worker.status(), notifications: ntfy?.describe() || null, authRequired: !open})
           return
         }
         if (path === '/api/v1/settings' && req.method === 'PUT') {
@@ -133,12 +133,25 @@ export function createHttpServer({service, worker, publish, adminToken, agentTok
           json(res, 200, await compute(res, () => service.client(true)))
           return
         }
+        // The ntfy token is write-only. Responses describe the connection without it.
+        if (path === '/api/v1/notifications' && ['PUT', 'DELETE'].includes(req.method) && ntfy) {
+          json(res, 200, {notifications: req.method === 'PUT' ? ntfy.save(await body(req)) : ntfy.reset()})
+          return
+        }
         if (path === '/api/v1/notifications/test' && req.method === 'POST') {
-          if (!publish) throw bad('Configure ntfy credentials on the server first.', 409)
-          if (now() - testAt < 60000) throw bad('Wait one minute between test messages.', 429)
+          if (!ntfy?.configured()) throw bad('Choose an ntfy topic and save it first.', 409)
+          if (now() - testAt < 10000) throw bad('Wait a few seconds between test messages.', 429)
           testAt = now()
-          await publish({type: 'test', title: 'Awaker notification test', message: 'Your Awaker notification connection is working.', url: `${origin}/integrations.html`})
+          try {
+            await ntfy.publish({type: 'test', title: 'Awaker notification test', message: 'Your Awaker notification connection is working.', url: `${origin}/integrations.html`})
+          } catch (error) {
+            throw bad(error.message, 502)
+          }
           json(res, 200, {accepted: true, deviceDelivery: 'unconfirmed'})
+          return
+        }
+        if (path === '/api/v1/scan' && req.method === 'POST') {
+          json(res, 200, {worker: await compute(res, () => worker.scan())})
           return
         }
         throw bad('Endpoint not found.', 404)
