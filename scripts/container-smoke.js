@@ -19,7 +19,8 @@ for (const [mode, file] of targets) {
   else docker('pull', image)
   let id
   try {
-    const env = ['-e', `AWAKER_ADMIN_TOKEN=${owner}`, '-e', `AWAKER_AGENT_TOKEN=${agent}`]
+    // The service needs the account it reports on before it will start.
+    const env = ['-e', `AWAKER_ADMIN_TOKEN=${owner}`, '-e', `AWAKER_AGENT_TOKEN=${agent}`, '-e', 'SLEEPER_USERNAME=example']
     const storage = mode === 'service' ? ['-v', `${volume}:/app/data`] : []
     id = docker('run', '-d', '--name', name, '--read-only', '--cap-drop=ALL', '--security-opt=no-new-privileges', '-p', '127.0.0.1::4173', ...env, ...storage, image).trim()
     const port = docker('port', id, '4173/tcp').trim().split(':').at(-1)
@@ -55,6 +56,9 @@ for (const [mode, file] of targets) {
       }
       const settings = await httpRequest(`${url}/api/v1/settings`, {headers: admin, signal: AbortSignal.timeout(10000)}).then(response => response.json())
       assert.equal(settings.settings.timezone, 'UTC')
+      assert.equal(settings.settings.username, 'example')
+      // The configured account cannot be swapped through the API.
+      assert.equal((await httpRequest(`${url}/api/v1/settings`, {method: 'PUT', headers: admin, body: JSON.stringify({username: 'someone-else'})})).status, 400)
     }
     console.log(`${mode} container passed`)
   } catch (error) {
