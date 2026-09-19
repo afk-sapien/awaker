@@ -7,6 +7,8 @@
   previous owner and agent roles for a service reachable more widely, and setting only
   one is still rejected.
 - Skip a missing `.env` in the service Compose files instead of failing to start.
+- Treat `SLEEPER_USERNAME` as authoritative. When set, the reported account cannot be
+  changed through the browser or API, so an open service keeps reporting on your leagues.
 
 ## 0.2.0
 

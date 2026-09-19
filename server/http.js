@@ -118,7 +118,7 @@ export function createHttpServer({service, worker, publish, adminToken, agentTok
           return
         }
         if (path === '/api/v1/settings' && req.method === 'GET') {
-          json(res, 200, {settings: service.settings(), worker: worker.status(), authRequired: !open})
+          json(res, 200, {settings: service.settings(), worker: worker.status(), authRequired: !open, usernameLocked: service.usernameLocked?.() ?? false})
           return
         }
         if (path === '/api/v1/settings' && req.method === 'PUT') {

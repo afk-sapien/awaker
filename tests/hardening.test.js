@@ -196,3 +196,22 @@ test('one token alone is rejected, and configured tokens still gate owner routes
   assert.equal((await request('/api/v1/settings', {headers: {Authorization: `Bearer ${agent}`}})).status, 403)
   assert.equal((await request('/api/v1/settings', {headers: {Authorization: `Bearer ${owner}`}})).status, 200)
 })
+
+test('a configured Sleeper account cannot be changed through the service', async t => {
+  const {createService} = await import('../server/service.js')
+  const data = new Map()
+  const store = {get: (key, fallback) => data.has(key) ? data.get(key) : fallback, set: (key, value) => data.set(key, value)}
+  const service = createService({store, provider: {}, username: 'owner-account'})
+  assert.equal(service.settings().username, 'owner-account')
+  assert.equal(service.usernameLocked(), true)
+  assert.throws(() => service.saveSettings({username: 'someone-else'}), /set by this server/)
+  // Other settings still save, and the account stays put.
+  assert.equal(service.saveSettings({timezone: 'UTC'}).username, 'owner-account')
+  assert.equal(service.settings().username, 'owner-account')
+  // Stored settings from before the account was configured never win.
+  data.set('settings', {...service.settings(), username: 'stale-account'})
+  assert.equal(service.settings().username, 'owner-account')
+  const free = createService({store: {get: (k, f) => f, set: () => {}}, provider: {}})
+  assert.equal(free.usernameLocked(), false)
+  assert.equal(free.saveSettings({username: 'anyone'}).username, 'anyone')
+})

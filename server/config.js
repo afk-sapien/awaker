@@ -22,6 +22,7 @@ export function config(env = process.env, root = process.cwd()) {
     host: setting(env, 'HOST') || '127.0.0.1',
     port,
     publicUrl: publicOrigin(setting(env, 'PUBLIC_URL') || `http://127.0.0.1:${port}`),
+    username: env.SLEEPER_USERNAME || setting(env, 'SLEEPER_USERNAME') || '',
     adminToken: setting(env, 'ADMIN_TOKEN'),
     agentToken: setting(env, 'AGENT_TOKEN'),
     db: setting(env, 'DB') || (existsSync(legacyDb) ? legacyDb : resolve(root, 'data/awaker.sqlite'))

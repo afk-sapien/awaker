@@ -110,7 +110,9 @@ awaker service
 
 Stop the dashboard first, since both use port 4173, then open [Agents & updates](http://127.0.0.1:4173/integrations.html). There's no login and nothing to set up. For Docker, use `ghcr.io/afk-sapien/awaker-service:latest` with the [service Compose file](compose.ghcr.service.yaml).
 
-Because there's no login, anyone who can reach the address can read your reports and change its settings, the same as any small self-hosted tool. Notification settings are the exception: where notifications go is read from the environment and can't be changed through the browser. If you're putting the service somewhere less private, run `awaker setup` once to generate an owner token and a read-only token for agents, and it will start asking for a sign-in.
+Because there's no login, anyone who can reach the address can read your reports and change its settings, the same as any small self-hosted tool. Two things are deliberately out of reach of the browser: where notifications are delivered, and, if you set `SLEEPER_USERNAME`, which account the service reports on. Set both in the environment and an open service can only ever report on your leagues, to your phone.
+
+If you're putting the service somewhere less private, run `awaker setup` once to generate an owner token and a read-only token for agents, and it will start asking for a sign-in.
 
 Schedules and notifications start switched off. Set up HTTPS before exposing it anywhere. [Self-hosting](docs/self-hosting.md) covers configuration and backups; [integrations](docs/integrations.md) covers agents, schedules and ntfy.
 

@@ -3,10 +3,12 @@ import {buildSeasonModel,realismReasons,compareTradeIdeas,tradeGains} from '../d
 import {findTradeIdeas,waiverRows,lockedLineup,usableValue} from '../dist/analysis.js';
 import {defaults,validateSettings,bad} from './settings.js';
 const name=(data,id)=>data.players[id]?.full_name||id;
-export function createService({store,provider,now=Date.now}){
+export function createService({store,provider,now=Date.now,username:pinned=''}){
  let pending=null,revision=0,snapshot=store.get('snapshot'),analysisCache=new Map();
- const settings=()=>store.get('settings',structuredClone(defaults));
- function saveSettings(input){const previous=settings(),next=validateSettings(input,previous);if(JSON.stringify(previous)===JSON.stringify(next))return next;store.set('settings',next);if(previous.username!==next.username){store.set('worker',{runs:{},reports:[],outbox:[],events:{},baselined:false,reset:0,day:'',count:0,lastScan:0,failures:0});}revision++;snapshot=null;store.set('snapshot',null);analysisCache.clear();if(JSON.stringify([previous.username,previous.daily,previous.weekly,previous.timezone])!==JSON.stringify([next.username,next.daily,next.weekly,next.timezone]))store.set('scheduleReset',now());if(JSON.stringify([previous.username,previous.disabled,previous.preferences,previous.alerts])!==JSON.stringify([next.username,next.disabled,next.preferences,next.alerts]))store.set('eventReset',now());return next}
+ // A configured account is authoritative, so an open service cannot be repointed
+ // at someone else's leagues and keep delivering notifications for them.
+ const settings=()=>{const stored=store.get('settings',structuredClone(defaults));return pinned?{...stored,username:pinned}:stored};
+ function saveSettings(input){if(pinned&&'username'in input&&input.username!==pinned)throw bad('The Sleeper username is set by this server\'s configuration.');const previous=settings(),next=validateSettings(pinned?{...input,username:pinned}:input,previous);if(JSON.stringify(previous)===JSON.stringify(next))return next;store.set('settings',next);if(previous.username!==next.username){store.set('worker',{runs:{},reports:[],outbox:[],events:{},baselined:false,reset:0,day:'',count:0,lastScan:0,failures:0});}revision++;snapshot=null;store.set('snapshot',null);analysisCache.clear();if(JSON.stringify([previous.username,previous.daily,previous.weekly,previous.timezone])!==JSON.stringify([next.username,next.daily,next.weekly,next.timezone]))store.set('scheduleReset',now());if(JSON.stringify([previous.username,previous.disabled,previous.preferences,previous.alerts])!==JSON.stringify([next.username,next.disabled,next.preferences,next.alerts]))store.set('eventReset',now());return next}
  async function load({outlook=false,force=false}={}){
   const config=settings();if(!config.username)throw bad('Configure a Sleeper username in Integrations.',503);
   if(!force&&snapshot&&now()-snapshot.updatedAt<60000&&(!outlook||snapshot.outlook))return snapshot;
@@ -54,5 +56,5 @@ export function createService({store,provider,now=Date.now}){
   const complete=state.complete&&opps.complete&&trade.complete,sources=[...new Map([...state.sources,...opps.sources,...trade.sources].map(s=>[s.name,s])).values()];
   return {...state,generatedAt:now(),sources,complete,health:complete?'healthy':'degraded',warnings,period,actions,changes:changed.length,text};
  }
- return {settings,saveSettings,load,status,trades,evaluate,opportunities,digest,envelope,client:async(force=false)=>{const data=await load({force});return {data,settings:settings()}}};
+ return {settings,saveSettings,usernameLocked:()=>!!pinned,load,status,trades,evaluate,opportunities,digest,envelope,client:async(force=false)=>{const data=await load({force});return {data,settings:settings()}}};
 }
