@@ -64,7 +64,7 @@ Pending trade alerts recheck current rosters and trade qualification before deli
 ## Deployment and recovery
 
 ```sh
-docker compose -f compose.service.yaml up -d --build
+docker compose up -d
 ```
 
 The optional service image uses Node and a persistent `sunday-data` volume. The default `Dockerfile` serves the static dashboard through Node. Run **one service instance per SQLite database**. The worker is guarded against overlapping runs within that process, not distributed replicas. The included compose file binds port 4173 to host loopback. No deployment is performed automatically.

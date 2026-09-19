@@ -6,8 +6,7 @@ The package version is currently 0.2.0. Container publishing is configured, but 
 
 Open **Actions → Publish containers → Run workflow** and choose the default branch (`master`). The workflow verifies that branch, runs the full CI suite, and publishes:
 
-- `ghcr.io/afk-sapien/awaker:edge` for the dashboard.
-- `ghcr.io/afk-sapien/awaker-service:edge` for the service.
+- `ghcr.io/afk-sapien/awaker:edge`, the single application image.
 - A `sha-<full-commit>` tag for each image.
 
 This makes a tested preview available without creating a release or moving `latest`. Packages remain private until their visibility is changed explicitly.

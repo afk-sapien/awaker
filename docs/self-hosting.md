@@ -1,59 +1,58 @@
 # Self-hosting Awaker
 
-## Choose a mode
+## How it runs
 
-| Mode | Command | Storage | Credentials |
-| --- | --- | --- | --- |
-| Python dashboard | `awaker` | Browser only | None |
-| Node dashboard | `npm start` | Browser only | None |
-| Docker dashboard | `docker compose up -d --build` | Browser only | None |
-| Python background service | `awaker service --username NAME` | User-data directory | None, or optional tokens |
-| Node background service | `npm run setup`, then `npm run service` | SQLite in `data/` | Owner and agent tokens |
-| Docker background service | Setup `.env`, then `docker compose -f compose.service.yaml up -d --build` | Docker volume | Owner and agent tokens |
+There is one application and one image. Start it and you get the dashboard, which runs
+in your browser and keeps its preferences there. Set `SLEEPER_USERNAME` and the same
+process also runs the API and scheduled reports for that account, storing them in SQLite.
 
-The Node launch commands work on Windows, macOS, and Linux. The source Compose files build locally. The `compose.ghcr*.yaml` files use prebuilt images from GitHub Container Registry. Node 24 LTS is recommended. Use the exact URL printed at startup. `localhost` and `127.0.0.1` are distinct hosts and browser storage origins.
+| Start it with | Dashboard | Add `SLEEPER_USERNAME` for reports |
+| --- | --- | --- |
+| Python | `awaker` | `awaker service --username NAME` |
+| Node | `npm start` | `SLEEPER_USERNAME=NAME npm start` |
+| Docker | `docker compose up -d` | Set it in `.env` or the Compose file |
 
-If only Docker is installed, copy `.env.example` to `.env` and generate two tokens with this command, once per token:
+The Node commands work on Windows, macOS, and Linux, and Node 24 LTS is recommended.
+`compose.yaml` pulls the published image; add `-f compose.build.yaml` to build this
+checkout instead. Use the exact URL printed at startup, because `localhost` and
+`127.0.0.1` are distinct hosts and browser storage origins.
+
+There is no login. Anyone who can reach the service can read its reports and change its
+settings, though neither the reported account nor the notification destination can be
+changed that way. To require a sign-in, set `AWAKER_ADMIN_TOKEN` and `AWAKER_AGENT_TOKEN`
+in `.env`, restricted to your account (`chmod 600 .env`). Setting one without the other
+is rejected. Generate them with `awaker setup`, or with Docker alone:
 
 ```sh
 docker run --rm node:24-alpine node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-Set `AWAKER_ADMIN_TOKEN` and `AWAKER_AGENT_TOKEN` in `.env`. Restrict file permissions to your account. On Linux and macOS, use `chmod 600 .env`. Both are optional: with neither set the service has no login, and setting one without the other is rejected.
-
 ## Prebuilt containers
 
-The dashboard image is `ghcr.io/afk-sapien/awaker`. The background-service image is `ghcr.io/afk-sapien/awaker-service`. Both support Linux AMD64 and ARM64.
+The image is `ghcr.io/afk-sapien/awaker`, for Linux AMD64 and ARM64. It is public, so pulls need no GitHub account or registry login.
 
 - `edge` follows successful manual publications from the default branch and is intended for previews.
 - Version tags such as `0.2.0` are created when that matching GitHub release is published. Use a tag that actually appears in Packages.
 - `latest` is created or updated only for a stable GitHub release. Prereleases never replace it.
 - `sha-<full-commit>` identifies a publication's source commit. Pin `image@sha256:<digest>` when you need immutable deployment content.
 
-Both packages are public, so pulls need no GitHub account or registry login. Repository visibility and package visibility are separate settings, so a private repository can still publish public images.
-
-For dashboard mode, from the checkout:
+Start it from a checkout, or with only `compose.yaml` copied out of it:
 
 ```sh
-docker compose -f compose.ghcr.yaml up -d
+docker compose up -d
 ```
 
-For service mode, create `.env` using the token instructions above, then:
+Add `SLEEPER_USERNAME` to `.env` or the Compose file for scheduled reports. Set `AWAKER_IMAGE`
+to a published version or digest to pin a deployment. After backing it up, upgrade with:
 
 ```sh
-docker compose -f compose.ghcr.service.yaml up -d
+docker compose pull
+docker compose up -d
 ```
 
-Choose one mode because both use the same local port. The GHCR Compose files preserve the existing service and volume names so source-build installations can switch without losing data. Keep the same Compose project name and directory when switching. Back up first.
-
-Set `AWAKER_IMAGE` to a published version or digest to pin a deployment. Service mode requires the `awaker-service` image. After backing up the stopped service, upgrade with:
-
-```sh
-docker compose -f compose.ghcr.service.yaml pull
-docker compose -f compose.ghcr.service.yaml up -d
-```
-
-Use `compose.ghcr.yaml` for the dashboard equivalent. Browser preferences survive container replacement. Do not run `down -v` unless you intend to delete the service database.
+Browser preferences survive container replacement, and the service keeps its database in the
+`sunday-data` volume. Do not run `down -v` unless you intend to delete that database. The volume
+and service names are unchanged from earlier versions, so an existing deployment keeps its data.
 
 ## Python installation
 
@@ -62,10 +61,10 @@ Install from the checkout with `pipx install .`, or use `python -m pip install .
 The Python CLI provides:
 
 ```sh
-awaker                         # Dashboard only
-awaker --port 8080             # Dashboard on another local port
+awaker                         # Dashboard, plus reports when SLEEPER_USERNAME is set
+awaker --port 8080             # Use another local port
+awaker service --username NAME # Dashboard, API, and scheduled reports for that account
 awaker setup                  # Optional: generate owner and agent tokens
-awaker service                # Dashboard, API, and scheduled updates
 awaker mcp                    # Stdio MCP adapter for a running service
 awaker --help
 ```
@@ -123,15 +122,15 @@ Configure certificates and HTTPS redirects in the proxy. The application does no
 Run one service process per database. Preserve `.env` and the complete data directory or Docker volume. Stop the service before a filesystem backup so SQLite writes and notification updates have finished:
 
 ```sh
-docker compose -f compose.service.yaml stop
+docker compose stop
 ```
 
-Back up the mounted volume using your Docker host's backup tools, then restart with `docker compose -f compose.service.yaml start`. For Node deployments, stop the process and copy `data/`. Protect backups like the live data.
+Back up the mounted volume using your Docker host's backup tools, then restart with `docker compose start`. For Node deployments, stop the process and copy `data/`. Protect backups like the live data.
 
 To upgrade, review release notes, back up state, pull the desired Git tag, and run:
 
 ```sh
-docker compose -f compose.service.yaml up -d --build
+docker compose up -d
 ```
 
 Do not use `down -v` during upgrades. It deletes the data volume. Keep a pre-upgrade backup for rollback. Restore the matching backup if a later release introduces incompatible database changes. An ordinary restart preserves settings and report history, but ends browser sessions. To rotate a token, replace it in `.env` and recreate the service container or restart Node.
@@ -143,7 +142,7 @@ Existing `SUNDAY_*` environment variables, browser preference/cache keys, and `d
 The Compose volume key remains `sunday-data`. Docker prefixes it with the Compose project name, which defaults to the checkout directory. If you rename an existing checkout from `sunday-fantasy-hq` to `awaker`, keep the original project name:
 
 ```sh
-docker compose -p sunday-fantasy-hq -f compose.service.yaml up -d --build --remove-orphans
+docker compose -p sunday-fantasy-hq up -d --remove-orphans
 ```
 
 Use your actual previous project name if it differs. Stop the old stack first to avoid a port conflict. `--remove-orphans` removes the old `sunday` service container within that project. It preserves the named volume. Confirm the volume name with `docker volume ls` before migrating.

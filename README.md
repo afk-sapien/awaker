@@ -92,29 +92,28 @@ services:
     security_opt: [no-new-privileges:true]
 ```
 
-For the background service, use [compose.ghcr.service.yaml](compose.ghcr.service.yaml) from the
-repository instead. It keeps the database in a named volume and reads your tokens from `.env`.
-[Registry access, Compose and upgrades](docs/self-hosting.md#prebuilt-containers) has the details.
+Add `SLEEPER_USERNAME` to that file, or to a `.env` beside it, and the same container also runs
+scheduled reports. [compose.yaml](compose.yaml) in the repository is this file with a data volume
+already wired up. [Registry access, Compose and upgrades](docs/self-hosting.md#prebuilt-containers)
+has the details.
 
 </details>
 
 **Then connect your leagues:** click **Connect Sleeper**, enter your public Sleeper username, and pick which leagues show up in **My leagues**. Roster moves still happen in Sleeper; Awaker only reads. Your preferences live in that browser, so come back to the same address each time (`localhost` and `127.0.0.1` count as different addresses).
 
-## The background service
+## Reports while you're away
 
-Optional, built for a single owner, and what you want if you'd like reports to arrive on their own. Tell it which Sleeper account to follow, and it follows that one:
+Everything above runs in your browser. Name the Sleeper account you want followed and the same app also runs in the background: scheduled reports, trade alerts, optional phone notifications, and read-only tools for an AI assistant.
 
 ```sh
 awaker service --username YOUR_SLEEPER_NAME
 ```
 
-Stop the dashboard first, since both use port 4173, then open [Agents & updates](http://127.0.0.1:4173/integrations.html). There's no login and nothing else to set up. For Docker, set `SLEEPER_USERNAME` in the environment and use `ghcr.io/afk-sapien/awaker-service:latest` with the [service Compose file](compose.ghcr.service.yaml).
+With Docker, set `SLEEPER_USERNAME` in your `.env` or Compose file. Same image, same command, same address. Open [Agents & updates](http://127.0.0.1:4173/integrations.html) to pick schedules and alert thresholds, which start switched off. Add `NTFY_URL`, `NTFY_TOPIC` and `NTFY_TOKEN` for phone pushes.
 
-The account is fixed at startup and can't be changed from the browser, and neither can the place notifications are delivered. So even though there's no login, an open service can only ever report on your leagues, to your devices. Everything else, like schedules and alert thresholds, is editable by anyone who can reach it, the same as any small self-hosted tool.
+There's no login. The account it reports on and the place notifications go are both read from the environment and can't be changed from the browser, so it can only ever report on your leagues, to your devices. Schedules and thresholds are editable by anyone who can reach it, the same as any small self-hosted tool. Run `awaker setup` to generate an owner token and a read-only agent token if you want a sign-in, and set up HTTPS before exposing it anywhere.
 
-If you're putting the service somewhere less private, run `awaker setup` once to generate an owner token and a read-only token for agents, and it will start asking for a sign-in.
-
-Schedules and notifications start switched off. Set up HTTPS before exposing it anywhere. [Self-hosting](docs/self-hosting.md) covers configuration and backups; [integrations](docs/integrations.md) covers agents, schedules and ntfy.
+[Self-hosting](docs/self-hosting.md) covers configuration and backups; [integrations](docs/integrations.md) covers agents, schedules and ntfy.
 
 ## Honest limits
 

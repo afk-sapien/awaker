@@ -7,6 +7,10 @@
   previous owner and agent roles for a service reachable more widely, and setting only
   one is still rejected.
 - Skip a missing `.env` in the service Compose files instead of failing to start.
+- Collapse the dashboard and the background service into one application and one image.
+  Starting it serves the dashboard; setting `SLEEPER_USERNAME` also runs the API and
+  scheduled reports. The separate `awaker-service` image, `compose.service.yaml` and
+  `compose.ghcr*.yaml` files are gone, replaced by `compose.yaml` plus `compose.build.yaml`.
 - Require `SLEEPER_USERNAME` (or `awaker service --username NAME`) to start the background
   service, and fix the reported account at startup. It can no longer be changed through the
   browser or API, so an open service keeps reporting on your leagues only. The startup message

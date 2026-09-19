@@ -8,7 +8,11 @@ COPY --chown=node:node package.json ./
 COPY --chown=node:node dist ./dist
 COPY --chown=node:node server ./server
 COPY --chown=node:node LICENSE ./LICENSE
+COPY --chown=node:node scripts/healthcheck.js scripts/http-request.js ./scripts/
+RUN mkdir /app/data && chown node:node /app/data
 USER node
 ENV AWAKER_HOST=0.0.0.0 PORT=4173
 EXPOSE 4173
-CMD ["node", "server/preview.js"]
+VOLUME /app/data
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD ["node", "scripts/healthcheck.js"]
+CMD ["node", "server/start.js"]

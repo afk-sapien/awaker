@@ -7,20 +7,20 @@ const docker = (...args) => execFileSync('docker', args, {encoding: 'utf8'})
 const owner = randomBytes(32).toString('hex')
 const agent = randomBytes(32).toString('hex')
 const published = process.env.AWAKER_SMOKE_IMAGE
-const selected = process.env.AWAKER_SMOKE_MODE
-if (published && !['static', 'service'].includes(selected)) throw Error('Choose static or service for the published-image smoke test')
-const targets = published ? [[selected, null]] : [['static', 'Dockerfile'], ['service', 'Dockerfile.service']]
-for (const [mode, file] of targets) {
+const image = published || 'awaker-smoke:local'
+if (published) docker('pull', image)
+else docker('build', '-t', image, '.')
+// The same image serves the dashboard alone, and the full service once an account is set.
+for (const mode of ['dashboard', 'service']) {
   const name = `awaker-smoke-${mode}-${process.pid}`
   const volume = `${name}-data`
-  const image = published || `awaker-smoke:${mode}`
-  console.log(`Testing ${mode} container`)
-  if (file) docker('build', '-f', file, '-t', image, '.')
-  else docker('pull', image)
+  console.log(`Testing ${mode} mode`)
   let id
   try {
-    // The service needs the account it reports on before it will start.
-    const env = ['-e', `AWAKER_ADMIN_TOKEN=${owner}`, '-e', `AWAKER_AGENT_TOKEN=${agent}`, '-e', 'SLEEPER_USERNAME=example']
+    // An account turns the same image into the full service.
+    const env = mode === 'service'
+      ? ['-e', `AWAKER_ADMIN_TOKEN=${owner}`, '-e', `AWAKER_AGENT_TOKEN=${agent}`, '-e', 'SLEEPER_USERNAME=example']
+      : []
     const storage = mode === 'service' ? ['-v', `${volume}:/app/data`] : []
     id = docker('run', '-d', '--name', name, '--read-only', '--cap-drop=ALL', '--security-opt=no-new-privileges', '-p', '127.0.0.1::4173', ...env, ...storage, image).trim()
     const port = docker('port', id, '4173/tcp').trim().split(':').at(-1)
@@ -60,7 +60,12 @@ for (const [mode, file] of targets) {
       // The configured account cannot be swapped through the API.
       assert.equal((await httpRequest(`${url}/api/v1/settings`, {method: 'PUT', headers: admin, body: JSON.stringify({username: 'someone-else'})})).status, 400)
     }
-    console.log(`${mode} container passed`)
+    if (mode === 'dashboard') {
+      // Without an account there is no API to reach, only the browser app.
+      assert.equal((await httpRequest(`${url}/api/v1/settings`, {headers})).status, 404)
+      docker('exec', id, 'node', 'scripts/healthcheck.js')
+    }
+    console.log(`${mode} mode passed`)
   } catch (error) {
     if (id) console.error(docker('logs', id))
     throw error
