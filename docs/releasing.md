@@ -1,32 +1,56 @@
-# Public release checklist
+# Releasing Awaker
 
-The current package version is 0.2.0. Prepare the first Awaker release as a prerelease, such as `v0.3.0-beta.1`, until enough real-league feedback supports a stable release. No tag, release, or visibility change is made by CI.
+The package version is currently 0.2.0. Container publishing is configured, but creating a tag, publishing a GitHub release, changing visibility, and publishing to PyPI remain separate actions.
 
-## Before publication
+## Try the container workflow
 
-- Include the [MIT License](../LICENSE) in release archives. The source license does not grant rights to Sleeper, ESPN, NFL data, trademarks, or player photos.
-- Confirm clone and installation links use `https://github.com/afk-sapien/awaker`.
-- Review all Git history, issues, branches, and release assets for personal data. Gitleaks scans credentials, not every kind of private information. The original history contains a Sites project identifier in `.openai/hosting.json`, which is not a credential.
-- Merge the reviewed release-preparation changes after CI passes.
-- Require the Node 22 tests, Node 24 tests, container smoke tests, and secret scan on the default branch. Enable private vulnerability reporting and GitHub's available secret protection features.
-- Review the upstream [Sleeper API terms](https://docs.sleeper.com/) and retain external-data attribution.
-- Approve changing repository visibility to public only after this checklist is complete.
+Open **Actions → Publish containers → Run workflow** and choose the default branch (`master`). The workflow verifies that branch, runs the full CI suite, and publishes:
 
-## Cut a release
+- `ghcr.io/afk-sapien/awaker:edge` for the dashboard.
+- `ghcr.io/afk-sapien/awaker-service:edge` for the service.
+- A `sha-<full-commit>` tag for each image.
 
-1. Update `package.json`, the MCP server version, and `CHANGELOG.md` together.
-2. Run `npm run verify` and `node scripts/container-smoke.js` on the exact commit to release. Confirm hosted CI is green too.
-3. Verify a browser can connect a public Sleeper username, switch themes, run lineup/waiver/trade views, sign in to the service, and preview a report. Test ntfy separately with an owner-controlled topic if notifications are part of the release claim.
-4. Stop and back up an existing service, then confirm the upgrade keeps preferences, reports, and the same Docker volume.
-5. Tag the reviewed commit and create a GitHub prerelease. Include limitations, migration instructions, and launch commands in the release notes.
-6. Test a fresh clone using the public URL. GitHub's source archive is sufficient because no build is required. Container registry publishing is optional and not configured in this release pass.
+This makes a tested preview available without creating a release or moving `latest`. Packages remain private until their visibility is changed explicitly.
 
-## Preparation evidence
+## Publish a version
 
-Local validation results are recorded in the release-preparation pull request or handoff. Passing synthetic tests is not verification of live provider data, live phone delivery, or every host platform. Do not describe this pass as a comprehensive security audit.
+1. Update `package.json`, the MCP server version in `server/mcp.js`, and `CHANGELOG.md`. The Python version is read from `package.json`.
+2. Push the release commit to the default branch and confirm CI passes. Test the live-provider flows you intend to claim, including any owner-controlled ntfy delivery.
+3. Stop and back up an existing service. Confirm an upgrade preserves its settings, reports, and database volume.
+4. Create a tag matching the package version, such as `v0.2.0`, on the tested commit. For a preview, use a version such as `0.3.0-beta.1` and tag `v0.3.0-beta.1`.
+5. Publish a GitHub release for that tag. Mark preview versions as a prerelease. Include changes, limits, migration notes, and launch commands.
+6. Watch **Publish containers** finish, then verify both packages and test a fresh pull.
 
-## Python distribution
+The tag must match `package.json` and point to a commit reachable from the default branch. Draft releases do not publish images. Prereleases get their exact version tag. Stable releases get their exact version and `latest`. Manual runs get `edge` only.
 
-Build source and wheel artifacts using `python -m build --outdir release/python`, then install and test the wheel from outside the checkout. The build intentionally uses `release/python` because `dist/` contains source files. Include the wheel and source archive as GitHub release assets if desired. The Python version comes from `package.json`, so update that version and the MCP server version together.
+## What publication checks
 
-PyPI and container registry publication are not configured. Do not advertise `pip install awaker` or a `ghcr.io` image until the corresponding package is actually published and verified. Git installation and Docker source builds work without either registry.
+Publication calls the same CI workflow used for pull requests and branch pushes:
+
+- Syntax and regression tests on Node 22 and 24.
+- Source archive and wheel installation on Python 3.11/3.14, with Linux, macOS, and Windows coverage.
+- Dashboard and service startup, authentication boundaries, unprivileged execution, and service persistence on native Linux AMD64 and ARM64 runners.
+- Full-history Gitleaks scanning.
+- Trivy scans of both container variants on both architectures. Any known HIGH or CRITICAL vulnerability blocks publication, even without an available fix. Full JSON reports include lower severities and are retained for 14 days.
+
+The CI workflow also runs weekly to detect newly disclosed image vulnerabilities. A scanner or database-download failure fails the check. Remediate the base image or affected dependency and rerun. Do not silently bypass the gate.
+
+Docker base images and third-party actions are pinned. Dependabot proposes updates weekly and keeps Node on the supported major version. Only publication jobs receive package-write permission. Pull requests cannot publish through this workflow. GHCR authentication uses the short-lived `GITHUB_TOKEN`, so no personal registry secret is required.
+
+Both images include the MIT license, OCI source/revision labels, build provenance, and a software bill of materials. Inspect a published image with `docker buildx imagetools inspect ghcr.io/afk-sapien/awaker:edge`. Each image is published separately, so a registry failure can leave one variant published before the other. Rerun a failed publication before announcing it.
+
+## Before going public
+
+- Review history, issues, branches, and release assets for personal data. Gitleaks detects credentials, not every kind of private information. Historical `.openai/hosting.json` contains a Sites project identifier, not a credential.
+- Enable private vulnerability reporting and available GitHub secret protection features.
+- Review the upstream [Sleeper API terms](https://docs.sleeper.com/) and retain external-data attribution. MIT covers Awaker's code, not provider data, photos, names, or trademarks.
+- Change the repository visibility only when ready. Separately make both GHCR packages public and confirm anonymous pulls work.
+- Test installation from a fresh machine using the public URLs.
+
+Synthetic tests and dependency scans do not prove there are no security issues. They also do not verify live data accuracy, every deployment configuration, or phone delivery.
+
+## Python artifacts
+
+Build with `python -m build --outdir release/python`, then install and test the wheel from outside the checkout. Use `release/python` because `dist/` contains app source. The wheel and source archive can be attached as GitHub release assets.
+
+PyPI publishing is not configured. Continue documenting Git installation, a checkout, or a published wheel. Do not advertise bare `pip install awaker` until this project's package is actually published and verified there.

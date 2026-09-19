@@ -102,6 +102,36 @@ test('API request limits expire and health remains available', async t => {
   assert.equal((await request('/api/v1/settings')).status, 401)
 })
 
+test('concurrent analysis is bounded and capacity returns after failure', async t => {
+  const resolvers = []
+  let started
+  const allStarted = new Promise(resolve => { started = resolve })
+  const {request} = await harness(t, {service: {
+    status: () => new Promise((resolve, reject) => {
+      resolvers.push({resolve, reject})
+      if (resolvers.length === 4) started()
+    })
+  }})
+  const options = {headers: {Authorization: `Bearer ${agent}`}}
+  const pending = Array.from({length: 4}, () => request('/api/v1/status', options))
+  await allStarted
+  try {
+    const busy = await request('/api/v1/status', options)
+    assert.equal(busy.status, 503)
+    assert.equal(busy.headers.get('retry-after'), '5')
+    assert.equal((await request('/healthz')).status, 200)
+  } finally {
+    resolvers[0].reject(Error('Provider failed'))
+    resolvers.slice(1).forEach(({resolve}) => resolve({ok: true}))
+  }
+  const results = await Promise.all(pending)
+  assert.deepEqual(results.map(result => result.status).sort(), [200, 200, 200, 500])
+  const recovered = request('/api/v1/status', options)
+  while (resolvers.length < 5) await new Promise(resolve => setImmediate(resolve))
+  resolvers[4].resolve({ok: true})
+  assert.equal((await recovered).status, 200)
+})
+
 test('configuration preserves old environment names and database paths', () => {
   const dir = mkdtempSync(join(tmpdir(), 'awaker-config-'))
   try {

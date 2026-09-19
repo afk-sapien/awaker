@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add GHCR publication for dashboard and service images on AMD64 and ARM64, gated by CI and vulnerability scans, with provenance and SBOMs.
+- Remove vulnerable unused package-manager dependencies from pinned runtime images.
+- Bound provider responses, MCP input, and concurrent HTTP analysis. Reject inherited schema fields and invalid timezone types.
+- Add weekly image vulnerability scans and GHCR Compose examples.
+- Rewrite onboarding with Python and Docker quick starts and real demo screenshots.
+
 - Add a pip/pipx-installable launcher with bundled Node, persistent user configuration, and installed-wheel CI on Linux, macOS, and Windows.
 
 - License Awaker under MIT.

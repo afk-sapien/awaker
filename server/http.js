@@ -17,6 +17,7 @@ export function createHttpServer({service, worker, publish, adminToken, agentTok
   const origin = publicOrigin(publicUrl)
   const sessions = new Map()
   const rates = new Map()
+  let activeRequests = 0
   let testAt = -Infinity
   const cookie = (token, maxAge) => `awaker_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAge}${origin.startsWith('https:') ? '; Secure' : ''}`
 
@@ -49,6 +50,16 @@ export function createHttpServer({service, worker, publish, adminToken, agentTok
     if (expires > now()) return 'admin'
     sessions.delete(token)
     return null
+  }
+
+  async function compute(res, operation) {
+    if (activeRequests >= 4) {
+      res.setHeader('Retry-After', '5')
+      throw bad('Analysis is busy. Retry shortly.', 503)
+    }
+    activeRequests++
+    try { return await operation() }
+    finally { activeRequests-- }
   }
 
   const server = createServer(async (req, res) => {
@@ -91,7 +102,7 @@ export function createHttpServer({service, worker, publish, adminToken, agentTok
         const contract = contracts.find(item => path === `/api/v1${item.path}` && req.method === item.method)
         if (contract) {
           const input = validate(req.method === 'GET' ? Object.fromEntries(new URL(req.url, origin).searchParams) : await body(req), contract.inputSchema)
-          json(res, 200, await service[contract.call](input))
+          json(res, 200, await compute(res, () => service[contract.call](input)))
           return
         }
         if (auth !== 'admin') throw bad('Owner access required.', 403)
@@ -110,11 +121,11 @@ export function createHttpServer({service, worker, publish, adminToken, agentTok
           return
         }
         if (path === '/api/v1/client' && req.method === 'GET') {
-          json(res, 200, await service.client())
+          json(res, 200, await compute(res, () => service.client()))
           return
         }
         if (path === '/api/v1/refresh' && req.method === 'POST') {
-          json(res, 200, await service.client(true))
+          json(res, 200, await compute(res, () => service.client(true)))
           return
         }
         if (path === '/api/v1/notifications/test' && req.method === 'POST') {

@@ -13,8 +13,8 @@ export function validate(value,s,path='input'){
  if(!valid)throw bad(`${path} must be ${type}.`);
  if(s.enum&&!s.enum.includes(value))throw bad(`Invalid ${path}.`);
  if(type==='object'){
-  if(Object.keys(value).some(k=>!(k in s.properties)))throw bad(`Unknown ${path} field.`);
-  for(const key of s.required||[])if(!(key in value))throw bad(`Missing ${key}.`);
+  if(Object.keys(value).some(k=>!Object.hasOwn(s.properties,k)))throw bad(`Unknown ${path} field.`)
+  for(const key of s.required||[])if(!Object.hasOwn(value,key))throw bad(`Missing ${key}.`)
   for(const [key,v]of Object.entries(value))validate(v,s.properties[key],`${path}.${key}`);
  }
  if(type==='array'){

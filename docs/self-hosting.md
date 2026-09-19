@@ -11,7 +11,7 @@
 | Node background service | `npm run setup`, then `npm run service` | SQLite in `data/` | Owner and agent tokens |
 | Docker background service | Setup `.env`, then `docker compose -f compose.service.yaml up -d --build` | Docker volume | Owner and agent tokens |
 
-The Node launch commands work on Windows, macOS, and Linux. Docker commands build images from the checkout. Prebuilt registry images are not published yet. Node 24 LTS is recommended. Use the exact URL printed at startup. `localhost` and `127.0.0.1` are distinct hosts and browser storage origins.
+The Node launch commands work on Windows, macOS, and Linux. The source Compose files build locally. The `compose.ghcr*.yaml` files use prebuilt images from GitHub Container Registry. Node 24 LTS is recommended. Use the exact URL printed at startup. `localhost` and `127.0.0.1` are distinct hosts and browser storage origins.
 
 If only Docker is installed, copy `.env.example` to `.env` and generate two tokens with this command, once per token:
 
@@ -20,6 +20,40 @@ docker run --rm node:24-alpine node -e "console.log(require('crypto').randomByte
 ```
 
 Set `AWAKER_ADMIN_TOKEN` and `AWAKER_AGENT_TOKEN` in `.env`. Restrict file permissions to your account. On Linux and macOS, use `chmod 600 .env`.
+
+## Prebuilt containers
+
+The dashboard image is `ghcr.io/afk-sapien/awaker`. The background-service image is `ghcr.io/afk-sapien/awaker-service`. Both support Linux AMD64 and ARM64.
+
+- `edge` follows successful manual publications from the default branch and is intended for previews.
+- Version tags such as `0.2.0` are created when that matching GitHub release is published. Use a tag that actually appears in Packages.
+- `latest` is created or updated only for a stable GitHub release. Prereleases never replace it.
+- `sha-<full-commit>` identifies a publication's source commit. Pin `image@sha256:<digest>` when you need immutable deployment content.
+
+Packages start private. Until the owner makes each package public, authenticate with a GitHub personal access token (classic) with `read:packages` and repository/package access. Run `docker login ghcr.io -u YOUR_GITHUB_USERNAME` and paste the token at the password prompt. Do not put it in a command or Compose file. Public packages allow anonymous pulls. Repository visibility and package visibility are separate settings.
+
+For dashboard mode, from the checkout:
+
+```sh
+docker compose -f compose.ghcr.yaml up -d
+```
+
+For service mode, create `.env` using the token instructions above, then:
+
+```sh
+docker compose -f compose.ghcr.service.yaml up -d
+```
+
+Choose one mode because both use the same local port. The GHCR Compose files preserve the existing service and volume names so source-build installations can switch without losing data. Keep the same Compose project name and directory when switching. Back up first.
+
+Set `AWAKER_IMAGE` to a published version or digest to pin a deployment. Service mode requires the `awaker-service` image. After backing up the stopped service, upgrade with:
+
+```sh
+docker compose -f compose.ghcr.service.yaml pull
+docker compose -f compose.ghcr.service.yaml up -d
+```
+
+Use `compose.ghcr.yaml` for the dashboard equivalent. Browser preferences survive container replacement. Do not run `down -v` unless you intend to delete the service database.
 
 ## Python installation
 

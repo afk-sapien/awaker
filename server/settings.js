@@ -21,12 +21,16 @@ export function validateSettings(input,previous=defaults){
  for(const key of ['username','disabled','timezone'])if(key in input)s[key]=input[key];
  if(typeof s.username!=='string'||!/^[-\w.]{0,60}$/.test(s.username))throw bad('Invalid Sleeper username.');
  if(!strings(s.disabled))throw bad('Invalid league exclusions.');
+ if(typeof s.timezone!=='string'||s.timezone.length>100)throw bad('Invalid timezone.')
  try{new Intl.DateTimeFormat('en',{timeZone:s.timezone}).format()}catch{throw bad('Invalid timezone.')}
  if('preferences'in input)s.preferences=preferences(input.preferences);
  for(const key of ['daily','weekly'])if(key in input){if(!object(input[key])||Object.keys(input[key]).some(k=>!['enabled','time',...(key==='weekly'?['day']:[])].includes(k)))throw bad('Invalid schedule.');s[key]={...s[key],...input[key]}}
  for(const key of ['daily','weekly'])if(typeof s[key].enabled!=='boolean'||!time(s[key].time))throw bad('Invalid schedule time.');
  if(!Number.isInteger(s.weekly.day)||s.weekly.day<0||s.weekly.day>6)throw bad('Invalid weekday.');
- if('alerts'in input){if(!object(input.alerts)||Object.keys(input.alerts).some(k=>!(k in defaults.alerts)))throw bad('Unknown alert setting.');s.alerts={...s.alerts,...input.alerts}}
+ if ('alerts' in input) {
+  if (!object(input.alerts) || Object.keys(input.alerts).some(k => !Object.hasOwn(defaults.alerts, k))) throw bad('Unknown alert setting.')
+  s.alerts = {...s.alerts, ...input.alerts}
+ }
  const a=s.alerts;
  if(typeof a.trades!=='boolean'||!time(a.quietStart)||!time(a.quietEnd))throw bad('Invalid alert settings.');
  for(const [key,min,max]of [['minGain',1,100],['improvement',.1,100],['cooldownHours',1,168],['dailyCap',1,20]])if(!Number.isFinite(a[key])||a[key]<min||a[key]>max)throw bad(`Invalid ${key}`);

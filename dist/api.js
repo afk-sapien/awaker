@@ -1,3 +1,4 @@
+import {readJsonResponse} from './network.js'
 import {createResourceCache} from './cache.js';
 const BASE='https://api.sleeper.app/v1',MINUTE=60000,HOUR=60*MINUTE;
 let persistence;
@@ -17,7 +18,16 @@ function storage(key,value){if(persistence)return Promise.resolve(persistence(ke
  };
 });}
 const cache=createResourceCache({read:key=>storage(key),write:(key,value)=>storage(key,value)});
-export async function json(url){const r=await fetch(url,{signal:AbortSignal.timeout(22000)});if(!r.ok)throw Error(`Data service returned ${r.status}. Please try again.`);return r.json();}
+export async function json(url) {
+ const target = new URL(url)
+ if (target.protocol !== 'https:' || target.username || target.password || !['https://api.sleeper.app', 'https://site.api.espn.com'].includes(target.origin)) throw Error('Unrecognized data provider.')
+ const response = await fetch(target.href, {redirect: 'error', credentials: 'omit', signal: AbortSignal.timeout(22000)})
+ if (!response.ok) {
+  await response.body?.cancel()
+  throw Error(`Data service returned ${response.status}. Please try again.`)
+ }
+ return readJsonResponse(response)
+}
 export const sleeper=(path,options={})=>cache.get(BASE+path,()=>json(BASE+path),options);
 export function loadPlayers(options={}){return cache.get('directory',async()=>{
  // Reuse the directory saved by earlier versions of the app.
