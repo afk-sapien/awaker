@@ -18,7 +18,7 @@ checkout instead. Use the exact URL printed at startup, because `localhost` and
 `127.0.0.1` are distinct hosts and browser storage origins.
 
 There is no login. Anyone who can reach the service can read its reports and change its
-settings, though neither the reported account nor the notification destination can be
+settings, including where notifications are sent, though the reported account cannot be
 changed that way. To require a sign-in, set `AWAKER_ADMIN_TOKEN` and `AWAKER_AGENT_TOKEN`
 in `.env`, restricted to your account (`chmod 600 .env`). Setting one without the other
 is rejected. Generate them with `awaker setup`, or with Docker alone:
@@ -53,6 +53,16 @@ docker compose up -d
 Browser preferences survive container replacement, and the service keeps its database in the
 `sunday-data` volume. Do not run `down -v` unless you intend to delete that database. The volume
 and service names are unchanged from earlier versions, so an existing deployment keeps its data.
+
+### Upgrading from 0.2.0 (two containers to one)
+
+0.2.0 shipped a dashboard image and a separate `awaker-service` image. There is now one image
+that does both. Change the image to `ghcr.io/afk-sapien/awaker`, keep the same data volume
+mounted at `/app/data`, keep your environment, add `SLEEPER_USERNAME` if the account was only ever entered in the
+browser, and start it again. Settings, reports and alert
+history carry over. Remove the old dashboard container if you ran both, since one container
+now serves the dashboard and the service on port 4173. `compose.service.yaml` and the
+`compose.ghcr*.yaml` files are replaced by `compose.yaml`.
 
 ## Python installation
 
@@ -99,7 +109,7 @@ For an agent's MCP configuration, use `awaker` as the command and `["mcp"]` as i
 | `AWAKER_AGENT_TOKEN` | Empty | Read-only analysis access for agents |
 | `AWAKER_DB` | `data/awaker.sqlite` | SQLite path. Existing `data/sunday.sqlite` takes precedence when unset |
 | `SLEEPER_USERNAME` | Required for the service | The account it reports on. Fixed at startup and not changeable through the browser or API |
-| `NTFY_URL`, `NTFY_TOPIC`, `NTFY_TOKEN` | Empty | All three are required to enable pushes |
+| `NTFY_URL`, `NTFY_TOPIC`, `NTFY_TOKEN` | `https://ntfy.sh`, empty, empty | Optional defaults for phone pushes. Only the topic is required, and the token is for access-controlled topics. Notification settings saved in **Agents & updates** take over |
 
 Legacy `SUNDAY_*` names still work. An explicitly set `AWAKER_*` value takes precedence, including an empty value. Tokens must be distinct and at least 32 printable ASCII characters. Generated tokens have 256 bits of randomness.
 
@@ -115,7 +125,7 @@ For nginx, configure the existing HTTPS virtual host to proxy `/` to `http://127
 
 Configure certificates and HTTPS redirects in the proxy. The application does not terminate TLS. Its API limits requests by direct peer IP, so clients behind one proxy share the 120-request-per-minute budget. Forwarded IP headers are deliberately not trusted. The public UI is accessible without a login. Service account data and owner settings require authentication. This is a single-owner service, not a multi-user hosting platform.
 
-`GET /healthz` checks service HTTP liveness and returns only `{"status":"ok"}`. It does not check provider freshness, schedule success, or notification delivery. The service image includes a healthcheck. Inspect worker activity in **Agents & updates** for provider and delivery failures.
+`GET /healthz` checks service HTTP liveness and returns only `{"status":"ok"}`. It does not check provider freshness, schedule success, or notification delivery. The image includes a healthcheck. Inspect worker activity in **Agents & updates** for provider and delivery failures.
 
 ## Backups and upgrades
 

@@ -8,7 +8,7 @@ services:
       AWAKER_HOST: 0.0.0.0
       PORT: 4173
       # SLEEPER_USERNAME: your-sleeper-name
-      # NTFY_URL, NTFY_TOPIC and NTFY_TOKEN enable phone notifications.
+      # Schedules, alerts and phone notifications are set up in the browser.
     env_file:
       - path: .env
         required: false
