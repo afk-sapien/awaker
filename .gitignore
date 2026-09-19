@@ -9,3 +9,7 @@ data/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+.openai/
+coverage/
+*.log
+release/

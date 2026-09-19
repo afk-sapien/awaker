@@ -1,79 +1,90 @@
-# Sunday — Fantasy Football HQ
+# Awaker
 
-A dependency-free, self-hostable prototype for following multiple Sleeper NFL leagues.
+Your Sleeper leagues, wide awake.
 
-## Run locally
+Awaker is a self-hosted fantasy football companion for following players across leagues, comparing lineups, planning waivers, and finding trades that help both teams. An optional background service adds read-only agent access, scheduled reports, and ntfy notifications.
 
-Python 3 is the only server requirement:
+Awaker is an independent community project, unaffiliated with Sleeper, ESPN, or the NFL. It never asks for a Sleeper password and cannot submit transactions.
 
-```sh
-python3 -m http.server 4173 --directory dist
-```
+## Start on your computer
 
-Open http://localhost:4173. The app starts with clearly labeled sample leagues. Choose **Connect Sleeper** and enter a public Sleeper username to load all current-season leagues. Use **My leagues** to choose which ones to include. No Sleeper password or API key is needed.
-
-## Self-host
-
-Serve the `dist/` directory using any static web server. No build, paid API key, backend, or database is required. Docker is optional:
+Install [Node.js 24 LTS](https://nodejs.org/), then run:
 
 ```sh
-docker build -t sunday .
-docker run --rm -p 8080:80 sunday
+git clone https://github.com/afk-sapien/awaker.git
+cd awaker
+npm start
 ```
 
-The browser needs internet access to api.sleeper.app and site.api.espn.com. Google Fonts are optional; system fonts are the fallback. If hosted publicly, protect the site through your hosting provider if desired. Sleeper's public data is fetched directly by each browser; no authenticated Sleeper actions occur.
+Open [127.0.0.1:4173](http://127.0.0.1:4173). No dependency install or build step is needed. Node 22.13 or newer is also supported.
 
-## Implemented
+The dashboard starts with labeled sample leagues. Choose **Connect Sleeper**, enter your public username, and use **My leagues** to choose leagues. Browser-only mode stores your preferences on your computer.
 
-- **Theme** in the top bar lets you choose any of the 32 NFL teams or reset to Sunday original. Colors apply across navigation, buttons, controls, and the page background, and save locally in this browser. Score and availability colors retain their meanings.
-
-- Multi-league discovery and browser-local league selection.
-- Deduplicated player watchroom, jersey numbers, NFL game status, per-league actual scores, opponent exposure, bench toggle, search, pins, and focus mode.
-- 45-second refresh while the tab is visible, explicit refresh, week selection, failure notices and preserved last-known data.
-- League-specific waiver availability, global adds, projected marginal lineup gains and drop candidates. This-week, next-week and rest-of-season planning compare lineup impact. Future views optimize each week separately with bye schedules, keeping the same pickup and drop throughout the window; missing forecasts pause the affected advice. Season totals include a weekly impact breakdown and default to Weeks following the selected week through Week 17 (Week 18 optional). Independent saved pickup/drop position exclusions, protections and an upgrades-only filter live in a collapsed settings panel.
-- Exact position/flex assignment via dynamic programming, started lineup locks, unavailable projections and injury exclusions.
-- Separate Auto trades and Trade builder pages for remaining-season one-for-one suggestions and manual packages, week-by-week optimized lineups, bye weeks, adjustable minimum gains for both managers, optional replacement-value balance limits, and a saved bias toward your gain. Ranking uses each team’s gain over a no-trade pickup alternative, with a default 15% discount on the partner’s gain. A trade must beat both pickup alternatives. Each alternative keeps the outgoing trade player, protects starters and your protected players, and uses one fixed pickup/drop for the full season. The shortlist contains the top five projected free agents per incoming position plus weekly leaders; incomplete forecasts are excluded and missing waiver coverage is labeled. Waiver priority, claim costs and future availability are not modeled. Auto trades default to a zero-point weekly minimum and informational value gaps: both teams must gain more than 0.25 projected season points. Offer cards show your gain, their gain, combined gain, and the adjusted ranking score. Suggestions explain incoming versus outgoing lineup usage for both teams; search diagnostics show why other roster fits were excluded. Multi-player packages must fit both rosters; no invented pickups or automatic drops.
-- Five-week defense projections and two-defense rotation comparisons. Weekly heatmaps compare each matchup with the league-scored median of all projected NFL defenses; byes are excluded and missing estimates stay neutral. Team names show league-specific ownership (green available, red rostered elsewhere, blue yours); other managers’ defenses are comparison-only and excluded from rotations.
-- Read-only, feature-detected WebMCP watchroom tool.
-- Optional authenticated agent API/MCP service, durable report scheduling, ntfy trade alerts, and owner settings.
-
-## Data and limitations
-
-- Official Sleeper API: https://docs.sleeper.com/ (read-only league, roster, player, matchup and trending endpoints). Trending data attributed to Sleeper. API free for noncommercial use; commercial use requires discussing licensing with Sleeper.
-- Experimental projections: `https://api.sleeper.app/projections/nfl/{season}/{week}?season_type=regular`. This endpoint is not part of the documented supported API. It may fail or change. Projections are mapped to league scoring using available stat fields; unmodeled scoring keys are explicitly listed. Nonlinear bonuses and absent projected stats can make estimates incomplete.
-- ESPN public scoreboard supplies NFL game state, opponents, broadcast labels and game scores. It is an unofficial dependency with no availability guarantee. Game-live status is not on-field player tracking.
-- Actual fantasy scores come from Sleeper matchup `players_points`; different leagues retain separate values. Missing data is displayed as unavailable, never silently shown as zero. Scores can lag broadcasts.
-- Advice is deterministic and based on expected points. No calibrated win odds, injury probability model, actual transaction submission, FAAB bid estimation, dynasty/pick valuation, or live injury alerts. Optional summaries and trade alerts use the background service described below. Trades take effect the following week and default to ending in Week 17 (Week 18 optional). Each future week uses its own projection feed and schedule; missing weeks pause the analysis instead of extrapolating next week. Replacement-value balance is a projection-based heuristic, not a market price or acceptance probability. Waiver suggestions prioritize starting-lineup gains over the selected window and may undervalue depth. They do not estimate future availability, waiver priority or transaction lock rules.
-- All current-season leagues are discoverable. The prototype supports team defenses and ordinary flex/superflex lineups; optimizers are capped at 15 unlocked starting slots. Nonstandard position/scoring rules need further validation.
-- A second defense's bench cost is called out but not subtracted from rotation gain. Future missing projections are shown as unavailable; rotation recommendations need all included weeks.
-- In static mode, username, league exclusions, pins, filters, roster protections and trade settings are stored locally. In service mode, account and analysis settings are also persisted by the service. API data is cached in memory and IndexedDB across page reloads: scores/game status for 30 seconds, rosters for one minute, trends for 15 minutes, projections/league users/future schedules for one hour, and the player directory for 24 hours. Concurrent requests for the same resource share one fetch. Storage failures fall back to memory; failed requests are retried, not silently replaced with expired cached data. No secrets are stored.
-- Visible tabs still poll every 45 seconds. **Refresh** bypasses caches for current rosters, league users, scores, trends and the five-week projections and schedules; **Refresh outlook** bypasses future projection/schedule caches. Start/sit, waiver analysis and season models reuse bounded in-memory results across navigation and leagues. Roster/scoring/projection/filter changes invalidate the relevant results; score-only updates do not rebuild season models. First-time analyses still need data and computation.
-
-## Agent access and notifications
-
-The optional Node service provides a read-only API and stdio MCP adapter, persistent daily/weekly summaries, and ntfy alerts for strong new trade opportunities. Open **My leagues → Agents & updates** to configure it. All schedules and alerts start disabled. See [setup and operation](docs/integrations.md) for tokens, account import, Docker deployment, and current limitations. Static hosting remains available without the service.
-
-## Tests
-
-Node 22+ is sufficient; no install required:
+## Run with Docker
 
 ```sh
-npm test
+docker compose up -d --build
 ```
 
-Checks cover unique legal flex assignment, started player locks, negative points, missing projections, league scoring differences, multi-league ownership/opponent deduplication, reserve/taxi availability, protected waiver drops, score changes, weekly and season trade valuation, bye/missing data, value imbalance and negligible opponent gains. The season assignment solver is checked against the existing exact optimizer across 80 deterministic flex/superflex scenarios. Cache tests cover concurrent request deduplication, persistence, expiry, force refresh, failures, bounded memory, league/week isolation, and roster/scoring invalidation.
+Open [127.0.0.1:4173](http://127.0.0.1:4173). The container runs as an unprivileged user with a read-only filesystem and binds to loopback. It serves the dashboard without a database or credentials.
 
-## Files
+You can also serve `dist/` with your own static web server. For a quick Python preview, use `python3 -m http.server 4173 --bind 127.0.0.1 --directory dist`. The bundled Node and Docker servers include security headers that a custom static server must configure separately.
 
-- `server/`: optional API/MCP service, SQLite state, scheduler, and ntfy adapter
-- `dist/integrations.html`: owner account, schedule, report archive, and notification controls
-- `dist/analysis.js`: shared browser/service trade and waiver orchestration
-- `dist/app.js`: interface and orchestration
-- `dist/api.js`: provider adapters and persistent resource caching
-- `dist/cache.js`: shared request cache and bounded computation memoization
-- `dist/engine.js`: pure lineup, scoring, trade and aggregation functions
-- `dist/waivers.js`: future-week pickup/drop evaluation and horizon selection
-- `dist/defenses.js`: five-week windows, median baselines and matchup color bands
-- `dist/trades.js`: season lineup assignment, remaining-season impact and realism checks
-- `dist/demo.js`: explicitly illustrative sample data
-- `dist/styles.css`: responsive presentation
+## Enable agents and background updates
+
+```sh
+npm run setup
+npm run service
+```
+
+Setup creates a private `.env` containing distinct owner and agent tokens. It never overwrites an existing file. Open [Agents & updates](http://127.0.0.1:4173/integrations.html), then sign in using `AWAKER_ADMIN_TOKEN` from `.env`. Keep that token out of agent configurations.
+
+For Docker, run setup first, then use:
+
+```sh
+docker compose -f compose.service.yaml up -d --build
+```
+
+Choose either dashboard-only mode or service mode. Both use port 4173. Schedules and notifications start disabled. The service must remain running for unattended updates.
+
+See [integrations](docs/integrations.md) for MCP, API, scheduling and ntfy setup, and [self-hosting](docs/self-hosting.md) for remote access, backups, upgrades, and migration from Sunday.
+
+## What it does
+
+- A multi-league watchroom with player photos, actual scores, opponent exposure, pins, and focus mode.
+- Legal lineup optimization that respects flex slots, started players, injuries, missing projections, and league scoring.
+- Waiver planning for this week, next week, or the remaining season, with protected players and drop controls.
+- Automated one-for-one trade suggestions and a manual package builder. Suggestions compare both managers' lineup gains with their no-trade pickup alternatives.
+- Five-week defense projections and two-defense rotation comparisons.
+- Themes for all 32 NFL teams, stored locally in your browser.
+- An authenticated API, stdio MCP adapter, scheduled reports, and opt-in ntfy trade alerts.
+
+## Data, privacy, and limits
+
+The browser needs access to `api.sleeper.app`, `site.api.espn.com`, and `sleepercdn.com`. Google Fonts are optional, with system fonts as fallback. Requests go directly to these providers in dashboard-only mode. The service also fetches league data when enabled. There is no bundled analytics or telemetry.
+
+Sleeper usernames, leagues, rosters, and matchups come from the [read-only Sleeper API](https://docs.sleeper.com/). Its documented terms allow noncommercial use. Contact Sleeper about commercial use. Player projections use an experimental, undocumented endpoint that may change or fail. ESPN game status is also an unofficial dependency. Player photos, team names, and external data retain their respective owners' rights.
+
+Advice uses projected points, not calibrated win probabilities. It does not model trade acceptance, dynasty picks, FAAB, transaction deadlines, or all custom scoring bonuses. Future analysis requires actual future projections. Missing estimates are shown as unavailable. Byes are included only when a schedule is available. Optimizers support up to 15 unlocked starting slots.
+
+Scores can lag broadcasts. Visible tabs refresh every 45 seconds. Cached player details can be 24 hours old, so urgent injury alerts are not offered. Trade alerts scan every 15 minutes when enabled and are not a guaranteed real-time feed.
+
+Browser preferences and cached data stay on that browser's origin. Service settings, caches, and reports live in SQLite and can contain private league strategy. API tokens stay in the server environment. The owner token is sent during login, then replaced by an eight-hour HttpOnly session cookie. Protect `.env`, the data volume, and backups.
+
+## Development and release
+
+```sh
+npm run verify
+node scripts/container-smoke.js
+```
+
+The second command requires Docker. CI runs syntax and unit/integration checks on Node 22 and 24, builds and tests both containers, checks persistence through restart, and scans Git history for secrets. Tests use synthetic data and fake notifications.
+
+- [Contributing](CONTRIBUTING.md)
+- [Security reporting](SECURITY.md)
+- [Release checklist](docs/releasing.md)
+- [Changes](CHANGELOG.md)
+
+Source is kept in `dist/` despite the directory name. Edit it directly. Pure calculations live in `engine.js`, `trades.js`, `waivers.js`, `lineup.js`, and `defenses.js`. The optional service is in `server/`. There are no generated bundles or third-party runtime packages.
+
+Awaker is licensed under the [MIT License](LICENSE). External data, player photos, and third-party names and trademarks retain their respective owners' rights.

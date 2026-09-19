@@ -1,19 +1,43 @@
-import {resolve,dirname} from 'node:path';
-import {fileURLToPath} from 'node:url';
-import {openStore} from './store.js';
-import {createProvider} from './provider.js';
-import {createService} from './service.js';
-import {createWorker} from './scheduler.js';
-import {ntfyPublisher} from './ntfy.js';
-import {createHttpServer} from './http.js';
-const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
-const host=process.env.SUNDAY_HOST||'127.0.0.1',port=Number(process.env.PORT||4173),publicUrl=process.env.SUNDAY_PUBLIC_URL||`http://127.0.0.1:${port}`;
-if(!Number.isInteger(port)||port<1||port>65535)throw Error('Invalid PORT');
-const store=openStore(process.env.SUNDAY_DB||resolve(root,'data/sunday.sqlite'));
-const service=createService({store,provider:createProvider(store)});
-if(process.env.SLEEPER_USERNAME&&!service.settings().username)service.saveSettings({username:process.env.SLEEPER_USERNAME});
-const publish=ntfyPublisher(),worker=createWorker({store,service,publish,publicUrl});
-const server=createHttpServer({service,worker,publish,publicUrl,adminToken:process.env.SUNDAY_ADMIN_TOKEN,agentToken:process.env.SUNDAY_AGENT_TOKEN,dist:resolve(root,'dist')});
-server.listen(port,host,()=>console.log(`Sunday service: ${publicUrl}/integrations.html`));
-const interval=setInterval(()=>worker.tick(),60000);worker.tick();
-for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{clearInterval(interval);server.close(()=>process.exit(0))});
+import {resolve, dirname} from 'node:path'
+import {fileURLToPath} from 'node:url'
+import {openStore} from './store.js'
+import {createProvider} from './provider.js'
+import {createService} from './service.js'
+import {createWorker} from './scheduler.js'
+import {ntfyPublisher} from './ntfy.js'
+import {createHttpServer} from './http.js'
+import {config} from './config.js'
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const settings = config(process.env, root)
+const store = openStore(settings.db)
+const service = createService({store, provider: createProvider(store)})
+if (process.env.SLEEPER_USERNAME && !service.settings().username) service.saveSettings({username: process.env.SLEEPER_USERNAME})
+const publish = ntfyPublisher()
+const worker = createWorker({store, service, publish, publicUrl: settings.publicUrl})
+const server = createHttpServer({...settings, service, worker, publish, dist: resolve(root, 'dist')})
+let activeTick = Promise.resolve()
+let ticking = false
+const tick = () => {
+  if (ticking) return
+  ticking = true
+  activeTick = worker.tick().finally(() => { ticking = false })
+}
+const interval = setInterval(tick, 60000)
+server.listen(settings.port, settings.host, () => {
+  console.log(`Awaker service: ${settings.publicUrl}/integrations.html`)
+  tick()
+})
+let stopping = false
+for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => {
+  if (stopping) return
+  stopping = true
+  clearInterval(interval)
+  const deadline = setTimeout(() => process.exit(1), 10000)
+  deadline.unref()
+  server.close(async () => {
+    await activeTick
+    store.close()
+    clearTimeout(deadline)
+  })
+})

@@ -1,15 +1,24 @@
 {
-  "name": "sunday-fantasy-hq",
+  "name": "awaker",
   "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "python3 -m http.server 4173 --directory dist",
+    "start": "node --env-file-if-exists=.env server/preview.js",
     "test": "node --test tests/*.test.js",
     "service": "node --env-file-if-exists=.env server/main.js",
-    "mcp": "node --env-file-if-exists=.env server/mcp.js"
+    "mcp": "node --env-file-if-exists=.env server/mcp.js",
+    "setup": "node scripts/setup.js",
+    "check": "node scripts/check.js",
+    "verify": "npm run check && npm test"
   },
   "engines": {
     "node": ">=22.13.0"
-  }
+  },
+  "description": "A self-hosted, read-only companion for your Sleeper fantasy football leagues.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/afk-sapien/awaker.git"
+  },
+  "license": "MIT"
 }
