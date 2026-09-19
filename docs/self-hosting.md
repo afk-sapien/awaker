@@ -30,7 +30,7 @@ The dashboard image is `ghcr.io/afk-sapien/awaker`. The background-service image
 - `latest` is created or updated only for a stable GitHub release. Prereleases never replace it.
 - `sha-<full-commit>` identifies a publication's source commit. Pin `image@sha256:<digest>` when you need immutable deployment content.
 
-Packages start private. Until the owner makes each package public, authenticate with a GitHub personal access token (classic) with `read:packages` and repository/package access. Run `docker login ghcr.io -u YOUR_GITHUB_USERNAME` and paste the token at the password prompt. Do not put it in a command or Compose file. Public packages allow anonymous pulls. Repository visibility and package visibility are separate settings.
+Both packages are public, so pulls need no GitHub account or registry login. Repository visibility and package visibility are separate settings, so a private repository can still publish public images.
 
 For dashboard mode, from the checkout:
 
