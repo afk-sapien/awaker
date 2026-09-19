@@ -1,7 +1,9 @@
 services:
   awaker:
     image: ${AWAKER_IMAGE:-ghcr.io/afk-sapien/awaker-service:latest}
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     environment:
       AWAKER_HOST: 0.0.0.0
       PORT: 4173

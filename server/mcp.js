@@ -36,12 +36,11 @@ export function createMcpHandler({call}){
 }
 export async function runMcp(){
  const base=new URL(setting(process.env,'API_URL')||'http://127.0.0.1:4173'),token=setting(process.env,'AGENT_TOKEN');
- if(!token)throw Error('Set AWAKER_AGENT_TOKEN.');
  if(base.username||base.password||base.pathname!=='/'||base.search||base.hash)throw Error('Use an API origin without credentials or a path.')
  if(base.protocol!=='https:'&&!(base.protocol==='http:'&&['localhost','127.0.0.1','[::1]'].includes(base.hostname)))throw Error('Use HTTPS or a loopback API URL.');
  const handler=createMcpHandler({call:async(c,input)=>{
   const url=new URL(`/api/v1${c.path}`,base);if(c.method==='GET')for(const [k,v]of Object.entries(input))url.searchParams.set(k,v);
-  const response=await fetch(url,{method:c.method,redirect:'error',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:c.method==='GET'?undefined:JSON.stringify(input),signal:AbortSignal.timeout(180000)});
+  const response=await fetch(url,{method:c.method,redirect:'error',headers:{...(token?{Authorization:`Bearer ${token}`}:{}),'Content-Type':'application/json'},body:c.method==='GET'?undefined:JSON.stringify(input),signal:AbortSignal.timeout(180000)});
   const result = await readJsonResponse(response, 8 * 1024 * 1024)
   if (!response.ok) throw Error(result.error || `API error ${response.status}`)
   return result

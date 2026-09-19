@@ -7,7 +7,7 @@
 | Python dashboard | `awaker` | Browser only | None |
 | Node dashboard | `npm start` | Browser only | None |
 | Docker dashboard | `docker compose up -d --build` | Browser only | None |
-| Python background service | `awaker setup`, then `awaker service` | User-data directory | Owner and agent tokens |
+| Python background service | `awaker service` | User-data directory | None, or optional tokens |
 | Node background service | `npm run setup`, then `npm run service` | SQLite in `data/` | Owner and agent tokens |
 | Docker background service | Setup `.env`, then `docker compose -f compose.service.yaml up -d --build` | Docker volume | Owner and agent tokens |
 
@@ -19,7 +19,7 @@ If only Docker is installed, copy `.env.example` to `.env` and generate two toke
 docker run --rm node:24-alpine node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-Set `AWAKER_ADMIN_TOKEN` and `AWAKER_AGENT_TOKEN` in `.env`. Restrict file permissions to your account. On Linux and macOS, use `chmod 600 .env`.
+Set `AWAKER_ADMIN_TOKEN` and `AWAKER_AGENT_TOKEN` in `.env`. Restrict file permissions to your account. On Linux and macOS, use `chmod 600 .env`. Both are optional: with neither set the service has no login, and setting one without the other is rejected.
 
 ## Prebuilt containers
 
@@ -64,7 +64,7 @@ The Python CLI provides:
 ```sh
 awaker                         # Dashboard only
 awaker --port 8080             # Dashboard on another local port
-awaker setup                  # Generate private owner and agent tokens
+awaker setup                  # Optional: generate owner and agent tokens
 awaker service                # Dashboard, API, and scheduled updates
 awaker mcp                    # Stdio MCP adapter for a running service
 awaker --help
@@ -96,8 +96,8 @@ For an agent's MCP configuration, use `awaker` as the command and `["mcp"]` as i
 | `PORT` | `4173` | Local listening port. Compose fixes the container port to 4173 |
 | `AWAKER_PUBLIC_URL` | `http://127.0.0.1:4173` | Exact browser origin, including a nonstandard port |
 | `AWAKER_API_URL` | `http://127.0.0.1:4173` | Origin used by the MCP client |
-| `AWAKER_ADMIN_TOKEN` | Required for service | Owner access |
-| `AWAKER_AGENT_TOKEN` | Required for service | Read-only analysis access |
+| `AWAKER_ADMIN_TOKEN` | Empty | Owner access. Empty means no login at all |
+| `AWAKER_AGENT_TOKEN` | Empty | Read-only analysis access for agents |
 | `AWAKER_DB` | `data/awaker.sqlite` | SQLite path. Existing `data/sunday.sqlite` takes precedence when unset |
 | `SLEEPER_USERNAME` | Empty | Optional first-run account |
 | `NTFY_URL`, `NTFY_TOPIC`, `NTFY_TOKEN` | Empty | All three are required to enable pushes |

@@ -11,7 +11,10 @@ const sessionCookie = req => req.headers.cookie?.split(';').map(part => part.tri
   .find(part => part.startsWith('awaker_session='))?.slice('awaker_session='.length)
 
 export function createHttpServer({service, worker, publish, adminToken, agentToken, publicUrl, dist, now = Date.now}) {
-  if (![adminToken, agentToken].every(token => typeof token === 'string' && token.length >= 32 && /^[\x21-\x7e]+$/.test(token)) || equal(adminToken, agentToken)) {
+  // No tokens means no login, which suits a single owner on a trusted network.
+  // Setting both turns on owner and agent roles for a service reachable more widely.
+  const open = !adminToken && !agentToken
+  if (!open && (![adminToken, agentToken].every(token => typeof token === 'string' && token.length >= 32 && /^[\x21-\x7e]+$/.test(token)) || equal(adminToken, agentToken))) {
     throw Error('Set distinct AWAKER_ADMIN_TOKEN and AWAKER_AGENT_TOKEN of at least 32 printable ASCII characters.')
   }
   const origin = publicOrigin(publicUrl)
@@ -38,6 +41,7 @@ export function createHttpServer({service, worker, publish, adminToken, agentTok
   }
 
   function role(req) {
+    if (open) return 'admin'
     // An explicit credential must never inherit owner access from a cookie.
     if (req.headers.authorization !== undefined) {
       const bearer = req.headers.authorization.startsWith('Bearer ') ? req.headers.authorization.slice(7) : ''
@@ -84,6 +88,7 @@ export function createHttpServer({service, worker, publish, adminToken, agentTok
         }
         if (path === '/api/v1/session' && req.method === 'POST') {
           if (req.headers.origin !== origin) throw bad('Same-origin login required.', 403)
+          if (open) throw bad('This service has no owner token, so there is nothing to sign in to.', 409)
           const input = await body(req)
           if (!equal(input?.token, adminToken)) throw bad('Invalid owner token.', 401)
           for (const [key, until] of sessions) if (until <= now()) sessions.delete(key)
@@ -113,7 +118,7 @@ export function createHttpServer({service, worker, publish, adminToken, agentTok
           return
         }
         if (path === '/api/v1/settings' && req.method === 'GET') {
-          json(res, 200, {settings: service.settings(), worker: worker.status()})
+          json(res, 200, {settings: service.settings(), worker: worker.status(), authRequired: !open})
           return
         }
         if (path === '/api/v1/settings' && req.method === 'PUT') {

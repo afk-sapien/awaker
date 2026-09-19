@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Make the background service's owner and agent tokens optional. Without them there is
+  no login, which suits a personal machine or a trusted network. Setting both keeps the
+  previous owner and agent roles for a service reachable more widely, and setting only
+  one is still rejected.
+- Skip a missing `.env` in the service Compose files instead of failing to start.
+
 ## 0.2.0
 
 - Add GHCR publication for dashboard and service images on AMD64 and ARM64, gated by CI and vulnerability scans, with provenance and SBOMs.

@@ -2,7 +2,9 @@
 
 Awaker is a single-owner, read-only Sleeper companion. The optional service stores league strategy, account settings, and report history. It is not designed to host mutually untrusted users in one instance.
 
-Use the latest maintained release, a supported Node LTS version, distinct random tokens, and HTTPS for remote access. Protect `.env`, the database, and backups. Keep the owner token out of MCP clients. Agent tokens can read analysis and trigger computation, but cannot change owner settings or submit Sleeper transactions.
+Use the latest maintained release, a supported Node LTS version, and HTTPS for remote access. Protect `.env`, the database, and backups.
+
+The service has no login unless you configure tokens. Anyone who can reach it can then read reports and change its settings, so the default deployment binds to loopback. Where notifications are delivered is read from the environment and cannot be changed through the browser or the API, so an open instance cannot be used to redirect them. Set `AWAKER_ADMIN_TOKEN` and `AWAKER_AGENT_TOKEN` before exposing the service beyond a trusted network. Keep the owner token out of MCP clients. Agent tokens can read analysis and trigger computation, but cannot change owner settings or submit Sleeper transactions.
 
 Report vulnerabilities privately through [GitHub private vulnerability reporting](https://github.com/afk-sapien/awaker/security/advisories/new) (**Security → Report a vulnerability**). Do not post exploit details or credentials in a public issue.
 

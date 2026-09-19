@@ -26,6 +26,10 @@ const tick = () => {
 const interval = setInterval(tick, 60000)
 server.listen(settings.port, settings.host, () => {
   console.log(`Awaker service: ${settings.publicUrl}/integrations.html`)
+  if (!settings.adminToken && !settings.agentToken) {
+    console.log('No owner token is set, so anyone who can reach this address can view and change its settings.')
+    console.log('That suits a personal machine or a trusted network. Run awaker setup to add tokens before exposing it more widely.')
+  }
   tick()
 })
 let stopping = false
