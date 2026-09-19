@@ -1,0 +1,33 @@
+name: Feature request
+description: Suggest an improvement to Awaker
+title: "[Feature] "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe what you were trying to do in your leagues and what got in the way.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like to happen?
+      description: Describe the behavior you have in mind. Screenshots or sketches are welcome. Remove private league data.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+  - type: dropdown
+    id: mode
+    attributes:
+      label: How do you run Awaker?
+      options:
+        - Docker dashboard
+        - Docker background service
+        - Python install
+        - Node from a checkout
+        - Other

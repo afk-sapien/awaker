@@ -1,5 +1,7 @@
 # Contributing to Awaker
 
+Everyone taking part is expected to follow the [code of conduct](CODE_OF_CONDUCT.md). For questions, see [getting help](SUPPORT.md).
+
 Open an issue describing the problem before proposing a large feature. Include your Node version, hosting mode, relevant scoring rules, and reproduction steps. Use synthetic player and league data where possible. Never include tokens, `.env`, database files, private strategy, or full reports in an issue.
 
 Use Node 24 LTS or Node 22.13 or newer. No package install is required. Run `npm run verify` before opening a pull request. Changes to serving or deployment should also pass `node scripts/container-smoke.js` with Docker available.

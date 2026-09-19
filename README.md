@@ -144,6 +144,6 @@ The last two commands require Docker. CI tests Node 22 and 24, installed Python 
 
 The [Publish containers workflow](.github/workflows/release-containers.yml) runs the same checks before pushing to GHCR. Published images include build provenance and a software bill of materials. See [release instructions](docs/releasing.md).
 
-[Contributing](CONTRIBUTING.md) · [Security reporting](SECURITY.md) · [Changelog](CHANGELOG.md)
+[Contributing](CONTRIBUTING.md) · [Code of conduct](CODE_OF_CONDUCT.md) · [Getting help](SUPPORT.md) · [Security reporting](SECURITY.md) · [Changelog](CHANGELOG.md)
 
 Awaker is licensed under the [MIT License](LICENSE). External data, player photos, and third-party names and trademarks retain their respective owners' rights.
