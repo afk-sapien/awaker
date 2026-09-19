@@ -105,11 +105,12 @@ repository instead. It keeps the database in a named volume and reads your token
 Optional, built for a single owner, and what you want if you'd like reports to arrive on their own:
 
 ```sh
-awaker setup
 awaker service
 ```
 
-Stop the dashboard first, since both use port 4173. Setup writes a private `.env` with two tokens. Sign in at [Agents & updates](http://127.0.0.1:4173/integrations.html) with the owner token and keep it to yourself; agents get the separate read-only token, and `awaker mcp` is their adapter. For Docker, use `ghcr.io/afk-sapien/awaker-service:latest` with the [service Compose file](compose.ghcr.service.yaml).
+Stop the dashboard first, since both use port 4173, then open [Agents & updates](http://127.0.0.1:4173/integrations.html). There's no login and nothing to set up. For Docker, use `ghcr.io/afk-sapien/awaker-service:latest` with the [service Compose file](compose.ghcr.service.yaml).
+
+Because there's no login, anyone who can reach the address can read your reports and change its settings, the same as any small self-hosted tool. Notification settings are the exception: where notifications go is read from the environment and can't be changed through the browser. If you're putting the service somewhere less private, run `awaker setup` once to generate an owner token and a read-only token for agents, and it will start asking for a sign-in.
 
 Schedules and notifications start switched off. Set up HTTPS before exposing it anywhere. [Self-hosting](docs/self-hosting.md) covers configuration and backups; [integrations](docs/integrations.md) covers agents, schedules and ntfy.
 

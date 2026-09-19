@@ -169,3 +169,30 @@ test('setup generates private distinct tokens and refuses to overwrite configura
     assert.equal(readFileSync(join(dir, '.env'), 'utf8'), content)
   } finally { rmSync(dir, {recursive: true, force: true}) }
 })
+
+test('without tokens the service is open, still refuses cross-origin writes, and has nothing to sign in to', async t => {
+  const {request} = await harness(t, {adminToken: undefined, agentToken: undefined})
+  const settings = await request('/api/v1/settings')
+  assert.equal(settings.status, 200)
+  assert.equal((await settings.json()).authRequired, false)
+  assert.equal((await request('/api/v1/settings', {
+    method: 'PUT', headers: {Origin: origin, 'Content-Type': 'application/json'}, body: JSON.stringify({username: 'open'})
+  })).status, 200)
+  // Cross-site requests are still rejected, so another page cannot drive the service.
+  assert.equal((await request('/api/v1/settings', {
+    method: 'PUT', headers: {Origin: 'https://evil.example', 'Content-Type': 'application/json'}, body: JSON.stringify({username: 'evil'})
+  })).status, 403)
+  assert.equal((await request('/api/v1/session', {
+    method: 'POST', headers: {Origin: origin, 'Content-Type': 'application/json'}, body: JSON.stringify({token: owner})
+  })).status, 409)
+})
+
+test('one token alone is rejected, and configured tokens still gate owner routes', async t => {
+  assert.throws(() => createHttpServer({
+    service: {}, worker: {status: () => ({})}, adminToken: owner, agentToken: undefined, publicUrl: origin, dist: resolve('dist')
+  }), /distinct/)
+  const {request} = await harness(t)
+  assert.equal((await request('/api/v1/settings')).status, 401)
+  assert.equal((await request('/api/v1/settings', {headers: {Authorization: `Bearer ${agent}`}})).status, 403)
+  assert.equal((await request('/api/v1/settings', {headers: {Authorization: `Bearer ${owner}`}})).status, 200)
+})

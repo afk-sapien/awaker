@@ -8,15 +8,15 @@ After installing the Python package, run `awaker setup`, then `awaker service`. 
 
 ## Run locally from a Node checkout
 
-1. Use Node **24 LTS** (or 22.13 or newer). No package installation is needed. Run `npm run setup` to create `.env` with tokens automatically.
-2. For manual setup instead, copy `.env.example` to `.env`, restrict it to your user (`chmod 600 .env`), and generate **two distinct random tokens**, running `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` twice. Set `AWAKER_ADMIN_TOKEN` and `AWAKER_AGENT_TOKEN` in `.env`. Keep the owner token out of agent configuration.
-3. Run `npm run service`. Open `http://127.0.0.1:4173/integrations.html` and sign in with the owner token. Use the exact host configured by `AWAKER_PUBLIC_URL`. `localhost` and `127.0.0.1` are different origins.
+1. Use Node **24 LTS** (or 22.13 or newer). No package installation is needed.
+2. Run `npm run service` and open `http://127.0.0.1:4173/integrations.html`. There is no login by default. Use the exact host configured by `AWAKER_PUBLIC_URL`. `localhost` and `127.0.0.1` are different origins.
+3. To require a sign-in, run `npm run setup` to write `.env` with two distinct tokens, or create them yourself with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` run twice, then restart. Keep the owner token out of agent configuration, and set only the agent token in an MCP client.
 4. Enter a public Sleeper username, or import the account and analysis preferences already saved in this browser on this origin. Save settings. Choose excluded league IDs, daily/weekly schedules, timezone, and alert thresholds. Schedules and alerts start disabled.
 5. To receive pushes, set **all three** `NTFY_URL`, `NTFY_TOPIC`, and `NTFY_TOKEN`, then restart the service. Use an access-controlled topic on your chosen ntfy host. Subscribe on your phone and use **Send test notification** to check delivery. Without ntfy, scheduled reports are archived in the app.
 
 `AWAKER_HOST` defaults to loopback. `PORT` defaults to 4173. Update `AWAKER_PUBLIC_URL` and `AWAKER_API_URL` if you change it. `SLEEPER_USERNAME` optionally initializes an empty installation. SQLite state defaults to `data/awaker.sqlite`, overridable with `AWAKER_DB`. The service uses Node's built-in SQLite support, which Node 22 labels experimental.
 
-The owner signs in using an eight-hour, HttpOnly, SameSite=Strict cookie. Sessions expire on service restart. Agent credentials authorize only the five analysis capabilities below. Rotate either token in the environment and restart to revoke it. API and ntfy tokens are never returned to the browser, stored in browser preferences, or included in reports. Serve remote access through a TLS reverse proxy. Preserve the configured Host header. HTTPS is required for remote ntfy and MCP-to-API connections.
+With tokens configured, the owner signs in using an eight-hour, HttpOnly, SameSite=Strict cookie. Sessions expire on service restart. Agent credentials authorize only the five analysis capabilities below. Rotate either token in the environment and restart to revoke it. API and ntfy tokens are never returned to the browser, stored in browser preferences, or included in reports. Serve remote access through a TLS reverse proxy. Preserve the configured Host header. HTTPS is required for remote ntfy and MCP-to-API connections.
 
 ## Connect a coding agent
 
@@ -47,7 +47,7 @@ Adapt the container format to your agent's MCP configuration. The service runs s
 | `get_opportunities` | `GET /api/v1/opportunities` | Optional `leagueId` |
 | `preview_digest` | `POST /api/v1/digests/preview` | Optional `period`: `daily` or `weekly` |
 
-HTTP callers send `Authorization: Bearer <agent token>`. GET inputs are query parameters. POST inputs are JSON. Unknown fields, invalid player packages, and excluded leagues are rejected. Example requests in natural language: “Find mutually beneficial trades in my leagues,” “Show my current matchups and player status,” or “Preview this week's summary.” Previews never send notifications.
+HTTP callers send `Authorization: Bearer <agent token>` when tokens are configured, and no header when they are not. GET inputs are query parameters. POST inputs are JSON. Unknown fields, invalid player packages, and excluded leagues are rejected. Example requests in natural language: “Find mutually beneficial trades in my leagues,” “Show my current matchups and player status,” or “Preview this week's summary.” Previews never send notifications.
 
 Responses include schema version, season/week, source fetch times, available upstream timestamps, demo status, completeness, and warnings. Missing projections remain unavailable. Searches reuse the browser's trade and waiver engines, retain owner protections, and cap each league's trade search at 10,000 pairs. Results explain both managers' projected gains and realism checks. Every capability is read-only toward Sleeper.
 
