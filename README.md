@@ -2,7 +2,9 @@
 
 **Your Sleeper leagues, wide awake.**
 
-Follow all your fantasy football teams in one place. Compare lineups, find waiver upgrades, and see what a trade does for both managers. Run Awaker on your computer or your own server.
+If you're in more than one fantasy league, Sunday means flipping between tabs and losing track of who's playing who. Awaker puts every league on one screen: your players, your opponents' players, and what the scoreboard is doing to all of your teams at once.
+
+It also answers the questions you actually ask on a Sunday morning. Who should I start? Is anyone worth grabbing off waivers? Would this trade help me or help them more? You run it yourself, on your computer or your own server.
 
 [![CI](https://github.com/afk-sapien/awaker/actions/workflows/ci.yml/badge.svg)](https://github.com/afk-sapien/awaker/actions/workflows/ci.yml)
 [![Container publishing](https://github.com/afk-sapien/awaker/actions/workflows/release-containers.yml/badge.svg)](https://github.com/afk-sapien/awaker/actions/workflows/release-containers.yml)
@@ -10,50 +12,37 @@ Follow all your fantasy football teams in one place. Compare lineups, find waive
 
 ![Awaker watchroom showing three sample leagues and player scores across teams](docs/images/watchroom.png)
 
-*Real app, illustrative demo data. No Sleeper password, subscription, or transactions required.*
+*The real app with demo leagues. No Sleeper password, no subscription, no transactions.*
 
-[Quick start](#quick-start) · [Self-hosting](docs/self-hosting.md) · [Agents and notifications](docs/integrations.md) · [Releases](https://github.com/afk-sapien/awaker/releases)
+## What it does
 
-## What you can do
+Every league lands in one watchroom, with your players and your opponents' side by side, favorites pinned, and a focus mode for game day. Start/sit comparisons use your league's actual scoring, flex rules and started-game locks, so the advice matches the league you're in and not a generic average.
 
-- **Watch every league together.** Track your players and opponents, pin favorites, and switch to focus mode on game day.
-- **Make your lineup count.** Compare starters and bench players with league scoring, flex eligibility, and started-game locks.
-- **Plan the next move.** Explore waivers, trade ideas, package comparisons, and defense rotations.
-- **Keep an eye on things while away.** Enable the optional service for scheduled reports, read-only agent tools, and opt-in ntfy notifications.
-- **Make it yours.** Choose colors for any of the 32 NFL teams.
+Beyond that there's the waiver wire, trade ideas and defense streaming. The trade builder is the one people seem to like most: a trade can help you and help the other manager more, so it shows both sides and compares what you could have picked up instead.
 
 <details>
 <summary>See the trade builder</summary>
 
 ![Sample trade comparing the projected gain for both managers and showing trade warnings](docs/images/trade-builder.png)
 
-A trade can help you while hurting the other manager. Awaker shows both sides and compares available pickup alternatives. Projections are estimates.
+Projections are estimates, and it says so when it isn't sure.
 
 </details>
 
-## Quick start
+There's an optional background service for scheduled reports, phone notifications and agent access. You can also recolor all 32 teams, if that's your thing.
 
-Start with the dashboard. It opens with sample leagues so you can explore before connecting an account.
+## Getting started
 
-| You want to… | Start here |
-| --- | --- |
-| Run it on your computer | Python install below |
-| Run a prebuilt container | Docker below |
-| Get reports and connect an agent | [Enable the background service](#enable-the-background-service) |
-| Develop or build from source | [Development](#development) |
+The dashboard opens with sample leagues, so you can poke around before connecting anything.
 
-### Python
-
-You need **Python 3.11+**, **Git**, and [pipx](https://pipx.pypa.io/stable/installation/).
+**With [pipx](https://pipx.pypa.io/stable/installation/)** (needs Python 3.11+ and Git):
 
 ```sh
 pipx install "git+https://github.com/afk-sapien/awaker.git"
 awaker
 ```
 
-Open **[http://127.0.0.1:4173](http://127.0.0.1:4173)**. Leave the terminal running while using the app. Press Ctrl+C to stop it.
-
-The install includes Awaker and automatically installs a Node 24 runtime. You do not need to install Node separately. `awaker --port 8080` changes the port, and `python -m awaker` also launches the app.
+Then open **[http://127.0.0.1:4173](http://127.0.0.1:4173)**, and leave the terminal open while you use it. Ctrl+C stops it. Node comes bundled, so you don't need to install it. `awaker --port 8080` moves it elsewhere.
 
 <details>
 <summary>Prefer pip and a virtual environment?</summary>
@@ -62,77 +51,82 @@ The install includes Awaker and automatically installs a Node 24 runtime. You do
 python -m venv .venv
 ```
 
-Activate it with `source .venv/bin/activate` on Linux/macOS, or `.venv\Scripts\Activate.ps1` in Windows PowerShell. Then:
+Activate it (`source .venv/bin/activate`, or `.venv\Scripts\Activate.ps1` on Windows), then:
 
 ```sh
 python -m pip install "git+https://github.com/afk-sapien/awaker.git"
 awaker
 ```
 
-From a repository checkout, `python -m pip install .` works too.
+`python -m pip install .` works from a checkout. Awaker isn't on PyPI yet, so plain `pip install awaker` gets someone else's package. The bundled Node comes from [nodejs-wheel-binaries](https://pypi.org/project/nodejs-wheel-binaries/); see [supported platforms](docs/self-hosting.md#python-installation).
 
 </details>
 
-This project is not published to PyPI yet. Use the Git URL or a checkout, not bare `pip install awaker`. While the repository is private, your Git account needs access. The bundled runtime is supplied by the unofficial [nodejs-wheel-binaries](https://pypi.org/project/nodejs-wheel-binaries/) package. See [supported platforms and upgrades](docs/self-hosting.md#python-installation).
-
-### Docker
-
-With Docker installed, run the prebuilt dashboard:
+**With Docker:**
 
 ```sh
 docker run -d --name awaker --restart unless-stopped --init \
   --read-only --cap-drop=ALL --security-opt=no-new-privileges \
   -p 127.0.0.1:4173:4173 \
-  ghcr.io/afk-sapien/awaker:edge
+  ghcr.io/afk-sapien/awaker:latest
 ```
 
-Open **[http://127.0.0.1:4173](http://127.0.0.1:4173)**. Stop it with `docker stop awaker` and start it again with `docker start awaker`. Images support Linux AMD64 and ARM64, including Docker Desktop.
+Same address. `docker stop awaker` and `docker start awaker` do what you'd expect. Images are public and cover Linux AMD64 and ARM64. `latest` follows stable releases, version tags like `0.2.0` pin one, and `edge` is the preview channel.
 
-`edge` is the tested preview channel. Tagged GitHub releases publish versioned images, and stable releases also publish `latest`. For dependable deployments, pin a published version or digest. **Private packages require a GitHub login with package read access.** See [registry access, Compose, and upgrades](docs/self-hosting.md#prebuilt-containers). Building locally remains available with `docker compose up -d --build` from a checkout.
+<details>
+<summary>Prefer Docker Compose?</summary>
 
-### Connect your leagues
+Save this as `compose.yaml` and run `docker compose up -d`:
 
-1. Click **Connect Sleeper** and enter your public Sleeper username.
-2. Open **My leagues** to choose which leagues appear.
-3. Use the watchroom for scores, then try **Start / sit**, **Waiver wire**, or **Auto trades**.
+```yaml
+services:
+  awaker:
+    image: ghcr.io/afk-sapien/awaker:latest
+    container_name: awaker
+    ports:
+      - "127.0.0.1:4173:4173"
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+```
 
-Awaker reads public league data. Make roster changes and transactions in Sleeper. Dashboard preferences stay in your browser, so use the same address each time. `localhost` and `127.0.0.1` have separate browser storage.
+For the background service, use [compose.ghcr.service.yaml](compose.ghcr.service.yaml) from the
+repository instead. It keeps the database in a named volume and reads your tokens from `.env`.
+[Registry access, Compose and upgrades](docs/self-hosting.md#prebuilt-containers) has the details.
 
-## Enable the background service
+</details>
 
-The service adds persistent settings, scheduled reports, an authenticated API, and MCP tools for agents. It is optional and designed for one owner.
+**Then connect your leagues:** click **Connect Sleeper**, enter your public Sleeper username, and pick which leagues show up in **My leagues**. Roster moves still happen in Sleeper; Awaker only reads. Your preferences live in that browser, so come back to the same address each time (`localhost` and `127.0.0.1` count as different addresses).
 
-With a Python installation:
+## The background service
+
+Optional, built for a single owner, and what you want if you'd like reports to arrive on their own:
 
 ```sh
 awaker setup
 awaker service
 ```
 
-Stop the dashboard first because both modes use port 4173. Setup prints the location of a private `.env` file containing two generated tokens. Open **[Agents & updates](http://127.0.0.1:4173/integrations.html)** and sign in with `AWAKER_ADMIN_TOKEN`. Keep this owner token private. Agent clients use the separate `AWAKER_AGENT_TOKEN`, and `awaker mcp` starts their stdio adapter.
+Stop the dashboard first, since both use port 4173. Setup writes a private `.env` with two tokens. Sign in at [Agents & updates](http://127.0.0.1:4173/integrations.html) with the owner token and keep it to yourself; agents get the separate read-only token, and `awaker mcp` is their adapter. For Docker, use `ghcr.io/afk-sapien/awaker-service:latest` with the [service Compose file](compose.ghcr.service.yaml).
 
-For Docker, use `ghcr.io/afk-sapien/awaker-service:edge` with the [service Compose file](compose.ghcr.service.yaml) and follow the [token setup instructions](docs/self-hosting.md). The service keeps its database in a Docker volume.
+Schedules and notifications start switched off. Set up HTTPS before exposing it anywhere. [Self-hosting](docs/self-hosting.md) covers configuration and backups; [integrations](docs/integrations.md) covers agents, schedules and ntfy.
 
-Schedules and notifications start disabled. Keep the service running for unattended updates. Configure HTTPS before remote access. See [self-hosting](docs/self-hosting.md) for configuration and backups, and [integrations](docs/integrations.md) for agents, schedules, and ntfy.
+## Honest limits
 
-## Data, privacy, and limits
+Worth knowing before you trust it with a lineup decision:
 
+- **Projections are projections.** Advice ranks projected points. It doesn't model whether someone would accept a trade, dynasty picks, FAAB, deadlines, or every exotic scoring bonus. Missing estimates show up as unavailable rather than as a guess.
+- **Scores lag the broadcast.** Open tabs refresh every 45 seconds, and cached player details can be a day old, so this is not an injury alert system. Trade scans run every 15 minutes when enabled.
+- **It leans on unofficial endpoints.** League data comes from the [documented Sleeper API](https://docs.sleeper.com/), but projections and ESPN game status use undocumented endpoints that can change or break.
+- **Your data stays with you.** Browser preferences stay in your browser. Service settings, caches and reports live in a local SQLite file that can contain private league strategy, so protect `.env`, the data volume and your backups. No analytics, no telemetry.
 
-The browser needs access to `api.sleeper.app`, `site.api.espn.com`, and `sleepercdn.com`. Google Fonts are optional, with system fonts as fallback. Requests go directly to these providers in dashboard-only mode. The service also fetches league data when enabled. There is no bundled analytics or telemetry.
-
-Sleeper usernames, leagues, rosters, and matchups come from the [read-only Sleeper API](https://docs.sleeper.com/). Its documented terms allow noncommercial use. Contact Sleeper about commercial use. Player projections use an experimental, undocumented endpoint that may change or fail. ESPN game status is also an unofficial dependency. Player photos, team names, and external data retain their respective owners' rights.
-
-Advice uses projected points, not calibrated win probabilities. It does not model trade acceptance, dynasty picks, FAAB, transaction deadlines, or all custom scoring bonuses. Future analysis requires actual future projections. Missing estimates are shown as unavailable. Byes are included only when a schedule is available. Optimizers support up to 15 unlocked starting slots.
-
-Scores can lag broadcasts. Visible tabs refresh every 45 seconds. Cached player details can be 24 hours old, so urgent injury alerts are not offered. Trade alerts scan every 15 minutes when enabled and are not a guaranteed real-time feed.
-
-Browser preferences and cached data stay on that browser's origin. Service settings, caches, and reports live in SQLite and can contain private league strategy. API tokens stay in the server environment. The owner token is sent during login, then replaced by an eight-hour HttpOnly session cookie. Protect `.env`, the data volume, and backups.
-
-Awaker is an independent community project, unaffiliated with Sleeper, ESPN, or the NFL.
+The browser talks to `api.sleeper.app`, `site.api.espn.com` and `sleepercdn.com`. Sleeper's terms allow noncommercial use; talk to them about anything commercial. Awaker is an independent project, unaffiliated with Sleeper, ESPN or the NFL.
 
 ## Development
 
-With Node 24 installed, clone the repository and run `npm start`. Source lives in `dist/` despite the directory name. There is no frontend build step and no third-party JavaScript runtime dependency to install.
+Clone it, install Node 24, run `npm start`. Source lives in `dist/` despite the name, there's no build step, and there are no third-party JavaScript runtime dependencies.
 
 ```sh
 npm run verify
@@ -140,10 +134,8 @@ node scripts/container-smoke.js
 node scripts/scan-images.js
 ```
 
-The last two commands require Docker. CI tests Node 22 and 24, installed Python packages on Linux/macOS/Windows, and both containers on AMD64/ARM64. It scans Git history for secrets and container packages for known vulnerabilities. Weekly checks catch newly disclosed container vulnerabilities, and publication is blocked on HIGH or CRITICAL findings.
-
-The [Publish containers workflow](.github/workflows/release-containers.yml) runs the same checks before pushing to GHCR. Published images include build provenance and a software bill of materials. See [release instructions](docs/releasing.md).
+The last two need Docker. CI covers Node 22 and 24, installed Python packages on Linux, macOS and Windows, and both containers on AMD64 and ARM64. It also scans history for secrets and images for known vulnerabilities, and blocks publishing on HIGH or CRITICAL findings. See [release instructions](docs/releasing.md).
 
 [Contributing](CONTRIBUTING.md) · [Code of conduct](CODE_OF_CONDUCT.md) · [Getting help](SUPPORT.md) · [Security reporting](SECURITY.md) · [Changelog](CHANGELOG.md)
 
-Awaker is licensed under the [MIT License](LICENSE). External data, player photos, and third-party names and trademarks retain their respective owners' rights.
+Awaker is [MIT licensed](LICENSE). External data, player photos and third-party names and trademarks belong to their owners.
