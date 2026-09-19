@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Ask a question or share an idea
+    url: https://github.com/afk-sapien/awaker/discussions
+    about: Setup help and general questions belong in Discussions.
+  - name: Report a security vulnerability privately
+    url: https://github.com/afk-sapien/awaker/security/advisories/new
+    about: Keep security-sensitive reports out of public issues.
