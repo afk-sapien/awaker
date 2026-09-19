@@ -1,3 +1,7 @@
+# Historical design notes
+
+This is the original pre-implementation plan. For current behavior, see [integrations](integrations.md).
+
 # Agent access, digests, and important-event alerts
 
 Status: core implementation completed on `codex/agent-notifications`. See [setup and current limits](integrations.md). The sections below preserve the design proposal; urgent injury/waiver alerts, independent service-failure pushes, and remote HTTP MCP remain future work. Schedules and delivery are disabled until the owner configures them.

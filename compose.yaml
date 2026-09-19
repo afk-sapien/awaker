@@ -1,0 +1,12 @@
+services:
+  awaker:
+    build: .
+    environment:
+      AWAKER_PUBLIC_URL: ${AWAKER_PUBLIC_URL:-http://127.0.0.1:4173}
+    ports:
+      - "127.0.0.1:4173:4173"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    init: true
+    restart: unless-stopped

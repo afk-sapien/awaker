@@ -37,7 +37,7 @@ export function createWorker({store,service,publish=null,now=Date.now,publicUrl=
     const report=await service.digest({period});
     state.runs[period]=key;
     const entry={...report,id:key,createdAt:at,delivery:publish&&!report.demo?'pending':'archived'};state.reports.unshift(entry);
-    if(publish&&!report.demo)state.outbox.push({id:key,type:'digest',title:`Sunday ${period} report`,message:report.text,url:link('settings'),status:'pending',attempts:0,nextAttempt:at,expiresAt:at+86400000});
+    if(publish&&!report.demo)state.outbox.push({id:key,type:'digest',title:`Awaker ${period} report`,message:report.text,url:link('settings'),status:'pending',attempts:0,nextAttempt:at,expiresAt:at+86400000});
     save();
    }
    const day=localParts(at,settings.timezone).date;if(state.day!==day){state.day=day;state.count=0}

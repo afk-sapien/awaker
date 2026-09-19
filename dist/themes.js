@@ -2,7 +2,7 @@
 // https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams?limit=32
 // Kept locally so changing themes needs no network request.
 export const themes = [
-  ['default', 'Sunday original', '#141d21', '#cafa5a'],
+  ['default', 'Awaker original', '#141d21', '#cafa5a'],
   ['ARI', 'Arizona Cardinals', '#a40227', '#ffffff'],
   ['ATL', 'Atlanta Falcons', '#a71930', '#000000'],
   ['BAL', 'Baltimore Ravens', '#29126f', '#000000'],
