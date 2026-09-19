@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Set up phone notifications in the browser with no ntfy account. **Agents & updates** now edits
+  the ntfy server (default `https://ntfy.sh`), topic and an optional access token, generates a
+  random topic, shows the address to subscribe to, and sends a test that reports why ntfy
+  refused it. Changes apply without a restart. `NTFY_URL`, `NTFY_TOPIC` and `NTFY_TOKEN` remain
+  as defaults until something is saved, only the topic is required, and a saved token is never
+  returned by the API and is dropped when the server changes. On a service without owner tokens,
+  anyone who can reach it can now change where notifications go.
+- Scan for opportunities every 6 hours by default (1, 3, 6, 12 or 24) instead of every 15
+  minutes, and cover waiver pickups as well as trades, each with its own toggle and minimum
+  projected gain. Everything new in a scan arrives as one notification, such as
+  "Awaker: 2 trades, 1 waiver pickup". Findings held by quiet hours are sent when they end.
+  Settings shows the last scan, what it found and when the next is due, and adds **Scan now**.
+- Make the Docker quick start a single command with a data volume, and document moving from
+  the two 0.2.0 containers to the single image.
 - Make the background service's owner and agent tokens optional. Without them there is
   no login, which suits a personal machine or a trusted network. Setting both keeps the
   previous owner and agent roles for a service reachable more widely, and setting only
