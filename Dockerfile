@@ -1,4 +1,4 @@
-FROM node:24-alpine
+FROM node:25-alpine
 WORKDIR /app
 COPY --chown=node:node package.json ./
 COPY --chown=node:node dist ./dist
