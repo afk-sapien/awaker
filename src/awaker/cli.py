@@ -93,6 +93,7 @@ def parser():
     result.add_argument("--port", type=int, help="Listening port, default 4173")
     result.add_argument("--public-url", help="Exact browser origin, such as https://awaker.example.com")
     result.add_argument("--data-dir", type=Path, help="Configuration and database directory")
+    result.add_argument("--username", help="Sleeper account the background service reports on")
     result.add_argument("--env-file", type=Path, help="Use a specific environment file instead of the user configuration")
     return result
 
@@ -115,12 +116,8 @@ def main(argv=None):
             raise ValueError(f"Environment file does not exist: {env_file}")
         if arguments.command == "service":
             directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-            configured_tokens = all(
-                environment.get(f"AWAKER_{role}_TOKEN") or environment.get(f"SUNDAY_{role}_TOKEN")
-                for role in ("ADMIN", "AGENT")
-            )
-            if not env_file.is_file() and not configured_tokens:
-                raise ValueError("Run 'awaker setup' first, or supply both tokens in the environment.")
+            if not arguments.username and not environment.get("SLEEPER_USERNAME") and not env_file.is_file():
+                raise ValueError("Give the account to report on: awaker service --username YOUR_SLEEPER_NAME")
         # The Node bootstrap applies CLI values after loading the chosen env file.
         overrides = {}
         if arguments.host is not None:
@@ -129,6 +126,8 @@ def main(argv=None):
             overrides["PORT"] = str(arguments.port)
         if arguments.public_url is not None:
             overrides["AWAKER_PUBLIC_URL"] = arguments.public_url
+        if arguments.username is not None:
+            overrides["SLEEPER_USERNAME"] = arguments.username
         node_args = [str(Path(__file__).with_name("launch.mjs")), arguments.command, str(root), str(directory), str(env_file), json.dumps(overrides)]
         return launch(node_executable(), node_args, environment)
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:

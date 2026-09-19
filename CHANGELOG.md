@@ -7,8 +7,12 @@
   previous owner and agent roles for a service reachable more widely, and setting only
   one is still rejected.
 - Skip a missing `.env` in the service Compose files instead of failing to start.
-- Treat `SLEEPER_USERNAME` as authoritative. When set, the reported account cannot be
-  changed through the browser or API, so an open service keeps reporting on your leagues.
+- Require `SLEEPER_USERNAME` (or `awaker service --username NAME`) to start the background
+  service, and fix the reported account at startup. It can no longer be changed through the
+  browser or API, so an open service keeps reporting on your leagues only. The startup message
+  names the account an existing database already used.
+- Drop the launcher's demand for tokens before starting the service, which the optional-token
+  change had left in place.
 
 ## 0.2.0
 

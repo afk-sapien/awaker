@@ -11,6 +11,14 @@ import {config} from './config.js'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const settings = config(process.env, root)
 const store = openStore(settings.db)
+const stored = store.get('settings', {}).username
+if (!settings.username) {
+  console.error('Set SLEEPER_USERNAME to the Sleeper account this service reports on, then start it again.')
+  console.error(stored ? `This installation previously used "${stored}", so SLEEPER_USERNAME=${stored} keeps its history.`
+    : 'Pass it in the environment, in .env, or with awaker service --username YOUR_SLEEPER_NAME.')
+  store.close()
+  process.exit(1)
+}
 const service = createService({store, provider: createProvider(store), username: settings.username})
 const publish = ntfyPublisher()
 const worker = createWorker({store, service, publish, publicUrl: settings.publicUrl})

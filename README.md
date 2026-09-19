@@ -102,15 +102,15 @@ repository instead. It keeps the database in a named volume and reads your token
 
 ## The background service
 
-Optional, built for a single owner, and what you want if you'd like reports to arrive on their own:
+Optional, built for a single owner, and what you want if you'd like reports to arrive on their own. Tell it which Sleeper account to follow, and it follows that one:
 
 ```sh
-awaker service
+awaker service --username YOUR_SLEEPER_NAME
 ```
 
-Stop the dashboard first, since both use port 4173, then open [Agents & updates](http://127.0.0.1:4173/integrations.html). There's no login and nothing to set up. For Docker, use `ghcr.io/afk-sapien/awaker-service:latest` with the [service Compose file](compose.ghcr.service.yaml).
+Stop the dashboard first, since both use port 4173, then open [Agents & updates](http://127.0.0.1:4173/integrations.html). There's no login and nothing else to set up. For Docker, set `SLEEPER_USERNAME` in the environment and use `ghcr.io/afk-sapien/awaker-service:latest` with the [service Compose file](compose.ghcr.service.yaml).
 
-Because there's no login, anyone who can reach the address can read your reports and change its settings, the same as any small self-hosted tool. Two things are deliberately out of reach of the browser: where notifications are delivered, and, if you set `SLEEPER_USERNAME`, which account the service reports on. Set both in the environment and an open service can only ever report on your leagues, to your phone.
+The account is fixed at startup and can't be changed from the browser, and neither can the place notifications are delivered. So even though there's no login, an open service can only ever report on your leagues, to your devices. Everything else, like schedules and alert thresholds, is editable by anyone who can reach it, the same as any small self-hosted tool.
 
 If you're putting the service somewhere less private, run `awaker setup` once to generate an owner token and a read-only token for agents, and it will start asking for a sign-in.
 

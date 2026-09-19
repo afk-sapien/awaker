@@ -211,7 +211,4 @@ test('a configured Sleeper account cannot be changed through the service', async
   // Stored settings from before the account was configured never win.
   data.set('settings', {...service.settings(), username: 'stale-account'})
   assert.equal(service.settings().username, 'owner-account')
-  const free = createService({store: {get: (k, f) => f, set: () => {}}, provider: {}})
-  assert.equal(free.usernameLocked(), false)
-  assert.equal(free.saveSettings({username: 'anyone'}).username, 'anyone')
 })

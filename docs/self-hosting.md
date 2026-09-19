@@ -7,7 +7,7 @@
 | Python dashboard | `awaker` | Browser only | None |
 | Node dashboard | `npm start` | Browser only | None |
 | Docker dashboard | `docker compose up -d --build` | Browser only | None |
-| Python background service | `awaker service` | User-data directory | None, or optional tokens |
+| Python background service | `awaker service --username NAME` | User-data directory | None, or optional tokens |
 | Node background service | `npm run setup`, then `npm run service` | SQLite in `data/` | Owner and agent tokens |
 | Docker background service | Setup `.env`, then `docker compose -f compose.service.yaml up -d --build` | Docker volume | Owner and agent tokens |
 
@@ -99,7 +99,7 @@ For an agent's MCP configuration, use `awaker` as the command and `["mcp"]` as i
 | `AWAKER_ADMIN_TOKEN` | Empty | Owner access. Empty means no login at all |
 | `AWAKER_AGENT_TOKEN` | Empty | Read-only analysis access for agents |
 | `AWAKER_DB` | `data/awaker.sqlite` | SQLite path. Existing `data/sunday.sqlite` takes precedence when unset |
-| `SLEEPER_USERNAME` | Empty | Fixes the account. When set, it cannot be changed through the browser or API |
+| `SLEEPER_USERNAME` | Required for the service | The account it reports on. Fixed at startup and not changeable through the browser or API |
 | `NTFY_URL`, `NTFY_TOPIC`, `NTFY_TOKEN` | Empty | All three are required to enable pushes |
 
 Legacy `SUNDAY_*` names still work. An explicitly set `AWAKER_*` value takes precedence, including an empty value. Tokens must be distinct and at least 32 printable ASCII characters. Generated tokens have 256 bits of randomness.
