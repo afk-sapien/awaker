@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Add a Season review page. Every finished week shows what each of your players scored in your
+  league's scoring against Sleeper's projection for that week, colored from well under to well
+  over. Each player also gets his next three opponents rated Tough, Average or Easy from the points
+  they have actually allowed to his position, and a short read such as Rolling, Sell high? or Shop
+  or sit, with a shortcut to shop him. It needs two games before it judges anyone.
+
 ## 0.3.0
 
 - Shop one player from Auto trades. Choose someone on your roster to see which teams he would

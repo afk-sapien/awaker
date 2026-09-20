@@ -13,6 +13,12 @@
 .player-portrait .jersey{position:absolute;right:-2px;bottom:0;min-width:33px;padding:3px 7px;border:2px solid white;border-radius:7px;background:var(--team);color:white;font-size:26px;line-height:1;letter-spacing:0;text-align:center}
 .player-identity{min-width:0}.player-identity .player-name{overflow-wrap:break-word}
 @media(min-width:431px) and (max-width:760px){.player-portrait{width:60px;height:70px;flex-basis:60px}.photo-fallback,.player-headshot{width:60px;height:60px}.player-portrait .jersey{font-size:22px;min-width:29px;padding:3px 5px}}
+/* Season review */
+.season-table th.season-player{text-align:left;min-width:210px;background:#fff;position:sticky;left:0;z-index:1}
+.season-cell{min-width:82px}.season-cell>strong{font-size:17px}
+.season-upcoming{min-width:150px}.season-next{display:block;margin:2px 0;padding:2px 7px;border-radius:5px;font-size:12px;white-space:nowrap;background:#edf1f2}
+.season-read{white-space:nowrap}.link-like{display:block;margin-top:6px;padding:0;background:none;border:0;color:var(--muted);font:inherit;font-size:13px;font-weight:600;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.link-like:hover{color:var(--ink)}
 /* Shop a player */
 .shop-picker{display:inline-flex;align-items:center;gap:10px;margin-left:14px;font-size:14px;color:var(--muted)}
 .shop-summary .shop-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 24px;margin-bottom:10px}

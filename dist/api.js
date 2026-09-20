@@ -51,6 +51,12 @@ export function projections(season,week,options={}){return cache.get(`projection
  if(!Array.isArray(d))throw Error('Projection feed unavailable.');
  return Object.fromEntries(d.filter(r=>Object.keys(r.stats||{}).some(k=>!k.includes('adp'))).map(r=>[r.player_id,{stats:r.stats,team:r.team,opponent:r.opponent,updated_at:r.updated_at}]));
  },{ttl:HOUR,...options});}
+// What actually happened in a week, in the same shape as projections. Finished weeks never change.
+export function stats(season,week,options={}){return cache.get(`stats:${season}:${week}`,async()=>{
+ const d=await json(`https://api.sleeper.app/stats/nfl/${season}/${week}?season_type=regular`);
+ if(!Array.isArray(d))throw Error('Weekly results unavailable.');
+ return Object.fromEntries(d.filter(r=>r.stats&&(r.stats.gp||r.stats.pts_ppr!==undefined||r.stats.pts_std!==undefined)).map(r=>[r.player_id,{stats:r.stats,team:r.team,opponent:r.opponent}]));
+ },{ttl:24*HOUR,...options});}
 export function trends(options={}){return sleeper('/players/nfl/trending/add?lookback_hours=24&limit=100',{ttl:15*MINUTE,...options});}
 
 export async function tradeOutlook(season,weeks,onProgress=()=>{},force=false){
