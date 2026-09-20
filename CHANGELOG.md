@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Suggest bench upgrades on the waiver wire: a free agent who would not start but projects at
+  least a point a week above a bench player your lineup never needs, with the same drop
+  protections as lineup pickups. Notifications can include the best one per league, with its own bar.
 - Save notification settings as you change them. The Save box is gone, and the page only writes
   the settings it owns, so it can no longer overwrite filters changed on the dashboard.
 - Choose how alerts judge a move: trades by the average week over the rest of the season or by

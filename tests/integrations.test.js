@@ -290,3 +290,14 @@ test('alerts judge trades by their first week and pickups per week when asked to
  h.config=alerting({trades:true,waivers:false,minGain:3,tradeHorizon:'season'});h.ideas=[{...idea(2),weekly,give:['e'],send:['E']}];h.at+=hour;await h.worker.tick();h.at+=hour;await h.worker.tick();
  assert.equal(h.calls,1,'2.0 a week stays below the bar over the season');h.store.close();
 });
+test('bench upgrades alert only when asked, above their own bar, and never reuse a drop a starter pickup took',async()=>{
+ const h=harness(),bench=(perWeek,id,drop)=>({...pickup(null,id,drop),gain:null,status:'bench',benchGain:perWeek,benchPerWeek:perWeek});
+ assert.deepEqual([defaults.alerts.bench,defaults.alerts.benchMinGain],[false,3]);assert.throws(()=>validateSettings({alerts:{benchMinGain:0}}),/bench/);
+ h.config=alerting({trades:false,waivers:true,waiverMinGain:2});h.waivers=[];await h.worker.tick();
+ h.waivers=[bench(6,'stash','d1')];h.at+=hour;await h.worker.tick();assert.equal(h.calls,0,'bench alerts are off by default');
+ h.config=alerting({trades:false,waivers:true,waiverMinGain:2,bench:true,benchMinGain:4});h.waivers=[];await h.worker.tick();
+ h.waivers=[pickup(5,'starter','d1'),bench(9,'taken','d1'),bench(6,'stash','d2'),bench(5,'second','d3'),bench(3,'weak','d4')];h.at+=hour;await h.worker.tick();
+ assert.equal(h.calls,1);assert.equal(h.deliveries[0].title,'Awaker: 2 waiver pickups');
+ assert.match(h.deliveries[0].message,/add STARTER, drop D1/);assert.match(h.deliveries[0].message,/bench upgrade, add STASH over D2\. Projects \+6\.0 more points this week; would not start\./);
+ assert.doesNotMatch(h.deliveries[0].message,/TAKEN|SECOND|WEAK/);h.store.close();
+});

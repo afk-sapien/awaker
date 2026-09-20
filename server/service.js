@@ -50,7 +50,7 @@ export function createService({store,provider,now=Date.now,username:pinned=''}){
    const {ids,locks}=lockedLineup(d,l),value=id=>usableValue(d,l,id,Object.values(locks)),best=optimize(playableIds(l.mine),activeSlots(l),d.players,value,locks,ids);
    const complete=best.complete&&ids.every(id=>id==='0'||Number.isFinite(value(id))),gain=complete?best.total-ids.reduce((sum,id)=>sum+(value(id)||0),0):null;
    if(!complete)warnings.push(`${l.name}: incomplete lineup projections`);
-   results.push({leagueId:l.league_id,league:l.name,lineup:{...best,current:ids,gain,complete},waivers:(future?futureWaiverRows(d,l,{...d.outlook,weeks},prefs):waiverRows(d,l,prefs)).map(r=>({...r,perWeek:r.gain===null?null:r.gain/weeks.length,name:name(d,r.id),dropName:r.drop?name(d,r.drop):null}))});
+   results.push({leagueId:l.league_id,league:l.name,lineup:{...best,current:ids,gain,complete},waivers:(future?futureWaiverRows(d,l,{...d.outlook,weeks},prefs):waiverRows(d,l,prefs)).map(r=>({...r,perWeek:r.gain===null?null:r.gain/weeks.length,benchPerWeek:r.status==='bench'?r.benchGain/weeks.length:null,name:name(d,r.id),dropName:r.drop?name(d,r.drop):null}))});
   }catch(e){warnings.push(`${l.name}: ${e.message}`)}}
   return envelope(d,{opportunities:results,horizon,weeks},warnings);
  }

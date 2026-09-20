@@ -42,3 +42,16 @@ test('missing candidate data pauses advice rather than treating an unknown week 
  assert.equal(buildWaiverOutlook(f).evaluate('steady').status,'unavailable');
  delete f.outlook.data[4];assert.equal(buildWaiverOutlook(f).evaluate('burst').status,'unavailable');
 });
+test('a pickup that would not start is a bench upgrade only over a bench player the lineup never needs',()=>{
+ const players=Object.fromEntries(['star','scrub','stash','meh'].map(id=>[id,{position:'RB',team:'BUF'}]));
+ const league={roster_positions:['RB','BN'],scoring_settings:{rush_yd:1},mine:{players:['star','scrub'],reserve:[],taxi:[]}};
+ const week=values=>({games:{BUF:{}},projections:Object.fromEntries(Object.entries(values).map(([id,rush_yd])=>[id,{stats:{rush_yd}}]))});
+ const outlook={weeks:[3,4],data:{3:week({star:20,scrub:4,stash:9,meh:4.5}),4:week({star:20,scrub:4,stash:9,meh:4.5})}};
+ const model=buildWaiverOutlook({league,players,outlook,starterIds:['star']});
+ assert.deepEqual(model.evaluate('stash'),{drop:'scrub',gain:null,benchGain:10,status:'bench'});
+ assert.equal(model.evaluate('meh').status,'no_gain','half a point a week is not worth a move');
+ // With a bye for the star in week 4 the scrub starts once, so dropping him for depth is a real lineup move instead.
+ outlook.data[4]=week({scrub:4,stash:9,meh:4.5});
+ const covered=buildWaiverOutlook({league,players,outlook,starterIds:['star']}).evaluate('stash');
+ assert.equal(covered.status,'upgrade');assert.equal(covered.gain,5);
+});

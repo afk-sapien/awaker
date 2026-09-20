@@ -27,19 +27,32 @@ export function waiverDropReason(id,{players,value,protectedIds=[],starterIds=[]
  if(!Number.isFinite(projection)||projection<=0)return 'No usable weekly projection';
  return null;
 }
+// A pickup that would not start can still beat the weakest bench player who may be dropped.
+// Callers pass only drops that cost the starting lineup nothing in any week.
+// margin is in the same unit as value: points for one week, or the total across a window.
+export const BENCH_MARGIN=1;
+export function benchMove(id,drops,value,margin=BENCH_MARGIN){
+ const mine=value(id);if(!Number.isFinite(mine)||mine<=0)return null;
+ if(drops.includes(null))return {drop:null,gain:null,benchGain:Math.round(mine*100)/100,status:'bench'};
+ const weakest=drops.filter(d=>Number.isFinite(value(d))).sort((a,b)=>value(a)-value(b))[0];
+ if(weakest===undefined)return null;
+ const benchGain=Math.round((mine-value(weakest))*100)/100;
+ return benchGain>=margin?{drop:weakest,gain:null,benchGain,status:'bench'}:null;
+}
 export function waiverMove({id,roster,slots,players,value,locked={},protectedIds=[],starterIds=[],excludedDropPositions=[],capacity,samePosition=true,baseline}){
  const before=baseline||optimize(roster,slots,players,value,locked);
  if(!before.complete||!Number.isFinite(value(id)))return {drop:null,gain:null,status:'unavailable'};
  const lockedIds=Object.values(locked);
  const drops=roster.length<capacity?[null]:roster.filter(drop=>!waiverDropReason(drop,{players,value,protectedIds,starterIds,lockedIds,excludedDropPositions})&&(!samePosition||(players[drop]?.fantasy_positions||[players[drop]?.position]).some(pos=>(players[id]?.fantasy_positions||[players[id]?.position]).includes(pos))));
  if(!drops.length)return {drop:null,gain:null,status:'no_safe_drop'};
- let best=null;
+ let best=null;const spare=[];
  for(const drop of drops){
   const after=optimize(roster.filter(p=>p!==drop).concat(id),slots,players,value,locked);
   const gain=Math.round((after.total-before.total)*100)/100;
+  if(after.complete&&gain>=0)spare.push(drop);
   if(after.complete&&gain>.25&&(!best||gain>best.gain||gain===best.gain&&(value(drop)??0)<(value(best.drop)??0)))best={drop,gain,status:'upgrade'};
  }
- return best||{drop:null,gain:null,status:'no_gain'};
+ return best||benchMove(id,spare,value)||{drop:null,gain:null,status:'no_gain'};
 }
 export function tradeCandidateIds(ids,players,excluded=[]){
  const blocked=new Set(excluded);

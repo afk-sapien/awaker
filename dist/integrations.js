@@ -6,11 +6,11 @@ function notice(text,error=false,saved=false){$('notice').textContent=text;$('no
 async function api(path,method='GET',body){const response=await fetch('/api/v1'+path,{method,headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});let data;try{data=await response.json()}catch{throw Error('The background service is not running, so nothing can be scheduled.')}if(response.status===401){$('login-panel').hidden=false;$('connected').hidden=true;throw Error('Sign in with your owner token.')}if(!response.ok)throw Error(data.error||'Request failed.');return data}
 const date=at=>at?new Date(at).toLocaleString([], {timeZone:config.timezone,weekday:'short',hour:'numeric',minute:'2-digit'}):'Off';
 const textFields=new Set(['quiet-start','quiet-end','trade-horizon','waiver-horizon']);
-const alertFields=[['trade-horizon','tradeHorizon'],['waiver-horizon','waiverHorizon'],['scan-hours','scanHours'],['min-gain','minGain'],['waiver-min-gain','waiverMinGain'],['improvement','improvement'],['cooldown','cooldownHours'],['daily-cap','dailyCap'],['quiet-start','quietStart'],['quiet-end','quietEnd']];
+const alertFields=[['bench-min-gain','benchMinGain'],['trade-horizon','tradeHorizon'],['waiver-horizon','waiverHorizon'],['scan-hours','scanHours'],['min-gain','minGain'],['waiver-min-gain','waiverMinGain'],['improvement','improvement'],['cooldown','cooldownHours'],['daily-cap','dailyCap'],['quiet-start','quietStart'],['quiet-end','quietEnd']];
 function fill(){
  $('username-setting').textContent=config.username;$('account-pill').textContent=config.username;$('account-pill').hidden=!config.username;$('timezone').value=config.timezone;
  for(const period of ['daily','weekly']){$(period+'-enabled').checked=config[period].enabled;$(period+'-time').value=config[period].time}$('weekly-day').value=config.weekly.day;
- $('trade-alerts').checked=config.alerts.trades;$('waiver-alerts').checked=config.alerts.waivers;for(const [id,key]of alertFields)$(id).value=config.alerts[key];
+ $('trade-alerts').checked=config.alerts.trades;$('bench-alerts').checked=config.alerts.bench;$('waiver-alerts').checked=config.alerts.waivers;for(const [id,key]of alertFields)$(id).value=config.alerts[key];
 }
 const subscribeUrl=()=>`${$('ntfy-url').value.trim().replace(/\/$/,'')||'https://ntfy.sh'}/${$('ntfy-topic').value.trim()}`;
 function subscribe(){const topic=$('ntfy-topic').value.trim();$('ntfy-subscribe').hidden=!topic;$('ntfy-subscribe-url').textContent=topic?subscribeUrl():''}
@@ -54,7 +54,7 @@ async function savePhone(){
 async function saveSettings(){
  const form=$('settings-form'),invalid=[...form.querySelectorAll(':invalid')].find(el=>!phoneFields.has(el.id));
  if(invalid){invalid.closest('details')?.setAttribute('open','');invalid.reportValidity();return notice('Fix the highlighted value to save.',true)}
- const alerts={trades:$('trade-alerts').checked,waivers:$('waiver-alerts').checked};for(const [id,key]of alertFields)alerts[key]=textFields.has(id)?$(id).value:Number($(id).value);
+ const alerts={trades:$('trade-alerts').checked,waivers:$('waiver-alerts').checked,bench:$('bench-alerts').checked};for(const [id,key]of alertFields)alerts[key]=textFields.has(id)?$(id).value:Number($(id).value);
  const result=await api('/settings','PUT',{timezone:$('timezone').value.trim(),daily:{enabled:$('daily-enabled').checked,time:$('daily-time').value},weekly:{enabled:$('weekly-enabled').checked,time:$('weekly-time').value,day:Number($('weekly-day').value)},alerts});
  config=result.settings;worker=(await api('/settings')).worker;activity();notice('Saved',false,true);
 }

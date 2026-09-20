@@ -1,4 +1,4 @@
-import {activeSlots,playableIds,waiverDropReason,eligible} from './engine.js';
+import {activeSlots,playableIds,waiverDropReason,eligible,benchMove,BENCH_MARGIN} from './engine.js';
 import {futurePoints,seasonLineup} from './trades.js';
 
 export function waiverWeeks(week,horizon,endWeek=17){
@@ -22,14 +22,15 @@ export function buildWaiverOutlook({league,players,outlook,protectedIds=[],start
   if(!weeks.length||totals[id]===null||!Number.isFinite(totals[id])||before.some(r=>!r.complete)||['Out','IR','PUP','Suspended','Doubtful'].includes(players[id]?.injury_status))return {drop:null,gain:null,status:'unavailable'};
   const drops=roster.length<capacity?[null]:safeDrops.filter(drop=>!samePosition||(players[id]?.fantasy_positions||[players[id]?.position]).some(pos=>eligible(players[drop],pos)));
   if(!drops.length)return {drop:null,gain:null,status:'no_safe_drop'};
-  let best=null;
+  let best=null;const spare=[];
   for(const drop of drops){
    const afterIds=roster.filter(p=>p!==drop).concat(id),after=weeks.map((_,i)=>lineup(afterIds,i));
    if(after.some(r=>!r.complete))continue;
    const weekly=weeks.map((week,i)=>({week,gain:Math.round((after[i].total-before[i].total)*100)/100,starts:after[i].ids.includes(id)}));
    const gain=Math.round(weekly.reduce((sum,r)=>sum+r.gain,0)*100)/100;
+   if(weekly.every(r=>r.gain>=0))spare.push(drop);
    if(gain>.25&&(!best||gain>best.gain||gain===best.gain&&(totals[drop]??0)<(totals[best.drop]??0)))best={drop,gain,weekly,starts:weekly.filter(r=>r.starts).length,status:'upgrade'};
   }
-  return best||{drop:null,gain:null,status:'no_gain'};
+  return best||benchMove(id,spare,p=>totals[p],BENCH_MARGIN*weeks.length)||{drop:null,gain:null,status:'no_gain'};
  }};
 }
