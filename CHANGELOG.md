@@ -16,6 +16,14 @@
   it gives the same numbers. Below it, a depth chart shows every team's QB, RB1, RB2, WR1 and so
   on, with the player and his points a game, colored by where that spot ranks in the league. Both
   follow the same switch between the season so far and the roster ahead.
+- Every trade, in Auto trades, the builder and when shopping a player, now shows what it does to
+  both teams' playoff odds. Only the two rosters are rated again, over the same weeks the trade was
+  judged on, and both seasons are played with the same random numbers, so the change is the trade
+  and not the dice.
+- Click one of your own spots in the League outlook depth chart to look for an upgrade there. Auto
+  trades opens showing only offers that bring back that position, says where your starter ranks,
+  names the teams sitting on a better one they cannot start, and says where you have the most to
+  offer.
 - Add an Around the league page: every matchup in a league this week with the live score, where
   it is heading, each side's chance to win, who is still to play, the median line in leagues that
   use one, and the standings with playoff odds.

@@ -150,3 +150,27 @@ test('depth chart ranks every team’s best players spot by spot',()=>{
 test('player averages skip the weeks a player did not score',()=>{
  assert.deepEqual(playerAverages([{matchups:[{players_points:{a:10,b:0}}]},{matchups:[{players_points:{a:20}},{players_points:{b:7,c:-1}}]}]),{a:15,b:7,c:-1});
 });
+
+import {tradeOdds} from '../dist/league.js';
+test('a trade what-if moves both teams’ odds the way the rosters moved, and repeats exactly',()=>{
+ const two=['qb1','qb2','qb3','qb4','bench1'],all={...players,bench1:P('QB','T9')};
+ const league={...four(),matchups:[]};league.rosters=league.rosters.map(r=>({...r,players:r.roster_id===1?['qb1','bench1']:[`qb${r.roster_id}`]}));league.mine=league.rosters[0];
+ const stats=Object.fromEntries(two.map((id,i)=>[id,{stats:{pts:[110,100,100,90,60][i]}}])),projections={2:stats,3:stats};
+ const future=[2,3,4,5,6,7].map(w=>({week:w,matchups:w%2?[entry(1,1,0),entry(2,1,0),entry(3,2,0),entry(4,2,0)]:[entry(1,1,0),entry(3,1,0),entry(2,2,0),entry(4,2,0)]}));
+ const o=leagueOutlook({league,players:all,past:[],future,currentWeek:1,projections,games:{},runs:500});
+ assert.equal(JSON.stringify(o).includes('baselines'),false,'the what-if context is not serialised');
+ const swap=tradeOdds(o,{partnerId:4,give:['qb1'],get:['qb4']},{runs:1500});
+ assert.deepEqual(swap.mine.roster,[110,90]);assert.deepEqual(swap.partner.roster,[90,110]);
+ assert.ok(swap.mine.playoff[1]<swap.mine.playoff[0]-.1,'giving away the best player costs odds');assert.ok(swap.partner.playoff[1]>swap.partner.playoff[0]+.1);
+ assert.deepEqual(tradeOdds(o,{partnerId:4,give:['qb1'],get:['qb4']},{runs:1500}),swap,'same dice every time');
+ const dropped=tradeOdds(o,{partnerId:4,give:['bench1'],get:['qb4'],dropA:['qb1']},{runs:1500});assert.deepEqual(dropped.mine.roster,[110,90],'a dropped player leaves the roster too');
+ const horizon={key:'late',projections:{9:Object.fromEntries(two.map(id=>[id,{stats:{pts:100}}]))},weeks:[9]},level=tradeOdds(o,{partnerId:4,give:['qb1'],get:['qb4']},{runs:1500,horizon});
+ assert.deepEqual(level.mine.roster,[100,100]);assert.ok(Math.abs(level.mine.playoff[1]-level.mine.playoff[0])<1e-9,'equal players over the trade’s own weeks change nothing');
+ assert.equal(tradeOdds(o,{partnerId:99,give:['qb1'],get:['qb4']}),null);
+ assert.equal(tradeOdds(leagueOutlook({league,players:all,past:[],future:[],currentWeek:15,projections,games:{},runs:50}),{partnerId:4,give:['qb1'],get:['qb4']}),null,'nothing to simulate once the regular season is over');
+});
+test('the depth chart knows each team’s best player who cannot start',()=>{
+ const roster={q1:P('QB'),q2:P('QB'),q3:P('QB'),r1:P('RB')},value=id=>({q1:20,q2:17,q3:9,r1:12})[id];
+ const chart=depthChart({league:{roster_positions:['QB','RB','FLEX'],rosters:[{roster_id:1,players:['q1','q3','q2','r1']},{roster_id:2,players:[]}]},players:roster,value});
+ assert.equal(chart.spare[1].QB.id,'q2');assert.equal(chart.spare[1].RB,null,'one back and two running back spots leaves nobody spare');assert.equal(chart.spare[2].QB,null);
+});

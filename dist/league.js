@@ -97,19 +97,21 @@ export function depthSlots(league){
 // Every roster's best player at each of those spots and where he ranks in the league.
 // value(id) is points a week, or null when there is nothing to go on.
 export function depthChart({league,players,value}){
- const columns=depthSlots(league),cells={};
+ const columns=depthSlots(league),cells={},spare={},spots={};for(const c of columns)spots[c.position]=Math.max(spots[c.position]||0,c.depth);
  for(const roster of league.rosters){
   const byPosition={};
   for(const id of (roster.players||[]).filter(id=>players[id]&&!(roster.taxi||[]).includes(id))){const v=value(id);if(Number.isFinite(v))(byPosition[players[id].position]||=[]).push({id,points:round(v)})}
   for(const list of Object.values(byPosition))list.sort((a,b)=>b.points-a.points);
   cells[roster.roster_id]=columns.map(c=>byPosition[c.position]?.[c.depth-1]||null);
+  // The best player who cannot start: what a team could give up at each position.
+  spare[roster.roster_id]=Object.fromEntries(Object.keys(spots).map(position=>[position,byPosition[position]?.[spots[position]]||null]));
  }
  columns.forEach((column,i)=>{
   const ranked=league.rosters.map(r=>cells[r.roster_id][i]).filter(Boolean).sort((a,b)=>b.points-a.points);
   column.average=ranked.length?round(mean(ranked.map(c=>c.points))):null;
   ranked.forEach((cell,place)=>{cell.rank=place+1;cell.of=ranked.length;const share=ranked.length>1?place/(ranked.length-1):.5;cell.tone=share<=.2?'strong':share<=.4?'good':share<.6?'neutral':share<.8?'weak':'poor'});
  });
- return {columns,cells};
+ return {columns,cells,spare};
 }
 // Points a game for every player, from the weeks he was on someone's roster and scored.
 export function playerAverages(weeks){
@@ -228,7 +230,7 @@ export function leagueOutlook({league,players,past=[],future=[],currentWeek,proj
  const current=regular&&!closed&&live.games.length?live:null;
  const standing=Object.fromEntries(league.rosters.map(r=>[r.roster_id,{...season.rows[r.roster_id],division:r.settings?.division}]));
  const ratingSpread=round(Math.sqrt(1/(season.games/spread**2+1/RATING_SPREAD**2)));
- const odds=simulate({league,rating,standing,current,future:schedule,spread,ratingSpread,runs,seed:Number(String(league.league_id).slice(-6))||1});
+ const seed=Number(String(league.league_id).slice(-6))||1,odds=simulate({league,rating,standing,current,future:schedule,spread,ratingSpread,runs,seed});
  const opponents=Object.fromEntries(league.rosters.map(r=>[r.roster_id,[]]));
  for(const pairs of [...(current?[current.games.map(g=>g.teams)]:[]),...schedule.map(w=>w.pairs)])for(const [a,b] of pairs){opponents[a]?.push(b);opponents[b]?.push(a)}
  const rows=league.rosters.map(r=>{const id=r.roster_id;return {rosterId:id,mine:id===league.mine?.roster_id,...teamName(league,id),...season.rows[id],rating:rating[id],roster:outlook[id],odds:odds[id],live:live.teams[id]||null,
@@ -236,5 +238,26 @@ export function leagueOutlook({league,players,past=[],future=[],currentWeek,proj
  const by=(key,pick)=>[...rows].sort((a,b)=>pick(b)-pick(a)).forEach((row,i)=>{row[key]=i+1});
  by('powerRank',r=>r.rating);by('seasonRank',r=>r.average??-1);by('rosterRank',r=>r.roster?.points??-1);by('scheduleRank',r=>-(r.schedule??Infinity));
  rows.sort((a,b)=>b.odds.playoff-a.odds.playoff||b.wins+b.ties/2-(a.wins+a.ties/2)||b.pf-a.pf||b.rating-a.rating);
- return {shape,rows,depth,weeks:season.weeks,games:season.games,live,current:!!current,closed,regular,spread,weeksLeft:schedule.length+(current?1:0),scheduledGames:schedule.reduce((n,w)=>n+w.pairs.length,current?current.games.length:0),projectedWeeks:ahead,runs};
+ // What a what-if needs to replay the season with different rosters. Kept off the enumerable result so it is never serialised.
+ const result={shape,rows,depth,weeks:season.weeks,games:season.games,live,current:!!current,closed,regular,spread,weeksLeft:schedule.length+(current?1:0),scheduledGames:schedule.reduce((n,w)=>n+w.pairs.length,current?current.games.length:0),projectedWeeks:ahead,runs};
+ Object.defineProperty(result,'context',{value:{league,players,projections,ahead,season,outlook,standing,current,schedule,spread,ratingSpread,seed,baselines:new Map()}});
+ return result;
 }
+
+// Playoff and title odds for both teams before and after a trade. Only the two rosters are rated
+// again, and both seasons are played with the same random numbers, so the difference is the trade
+// and not the dice. This week's live scores stay as they are: the players have already been set.
+export function tradeOdds(result,{partnerId,give,get,dropA=[],dropB=[]},{runs=2000,horizon=null}={}){
+ const c=result?.context;if(!c||!result.regular||!result.weeksLeft)return null;
+ // horizon: {key, projections, weeks} rates every roster over the same weeks the trade was judged on.
+ const key=`${runs}:${horizon?.key??'near'}`,projections=horizon?.projections||c.projections,weeks=horizon?.weeks||c.ahead;
+ const play=outlook=>simulate({league:c.league,rating:ratings({season:c.season,outlook}),standing:c.standing,current:c.current,future:c.schedule,spread:c.spread,ratingSpread:c.ratingSpread,runs,seed:c.seed});
+ if(!c.baselines.has(key)){const outlook=horizon?rosterOutlook({league:c.league,players:c.players,projections,weeks}):c.outlook;c.baselines.set(key,{outlook,odds:play(outlook)})}
+ const base=c.baselines.get(key),mine=c.league.mine?.roster_id,a=c.league.rosters.find(r=>r.roster_id===mine),b=c.league.rosters.find(r=>r.roster_id===partnerId);
+ if(!a||!b||!base.outlook[mine]||!base.outlook[partnerId])return null;
+ const swap=(roster,out,incoming)=>({...roster,players:(roster.players||[]).filter(id=>!out.includes(id)).concat(incoming)});
+ const moved=rosterOutlook({league:{...c.league,rosters:[swap(a,[...give,...dropA],get),swap(b,[...get,...dropB],give)]},players:c.players,projections,weeks});
+ const after=play({...base.outlook,...moved}),side=id=>({playoff:[base.odds[id].playoff,after[id].playoff],title:[base.odds[id].title,after[id].title],roster:[base.outlook[id].points,moved[id].points]});
+ return {mine:side(mine),partner:side(partnerId)};
+}
+
