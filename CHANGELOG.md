@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Add a League outlook page. The rest of the schedule is played out 4,000 times to give every team
+  its odds of making the playoffs, earning a bye and winning the title, its projected wins, what
+  winning or losing this week does to those odds, and its likely final seed. It follows the
+  league's own playoff size, median game and divisions. Power rankings blend results so far with
+  the best lineup each roster projects to field, and results earn more weight as weeks pile up.
+  The page also shows all-play record, luck, the schedule left, where each team's points come from
+  by position (for the season so far or the roster ahead), results plotted against roster strength,
+  and every weekly score against the league average.
+- Add an Around the league page: every matchup in a league this week with the live score, where
+  it is heading, each side's chance to win, who is still to play, the median line in leagues that
+  use one, and the standings with playoff odds.
+- The Season review now loads after reconnecting in the browser, where it could wait forever.
+
 - Add a Season review page. Every finished week shows what each of your players scored in your
   league's scoring against Sleeper's projection for that week, colored from well under to well
   over. Each player also gets his next three opponents rated Tough, Average or Easy from the points

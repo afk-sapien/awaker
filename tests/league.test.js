@@ -1,0 +1,126 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {seasonSoFar,rosterOutlook,ratings,weeklySpread,gameRemaining,winChance,liveWeek,simulate,leagueOutlook,leagueShape,pairings,teamName} from '../dist/league.js';
+
+const P=(position,team)=>({position,fantasy_positions:[position],team});
+const entry=(roster_id,matchup_id,points,extra={})=>({roster_id,matchup_id,points,...extra});
+const four=(settings={})=>({league_id:'900001',settings:{playoff_teams:2,playoff_week_start:15,...settings},scoring_settings:{pts:1},roster_positions:['QB','BN'],
+ rosters:[1,2,3,4].map(id=>({roster_id:id,owner_id:`u${id}`,players:[`qb${id}`],starters:[`qb${id}`]})),users:[{user_id:'u1',display_name:'ann',metadata:{team_name:'Aces'}},{user_id:'u2',display_name:'bo'}],mine:{roster_id:1},matchups:[]});
+const players=Object.fromEntries([1,2,3,4].map(id=>[`qb${id}`,P('QB',`T${id}`)]));
+const week=(n,scores)=>({week:n,matchups:[entry(1,1,scores[0],{starters:['qb1'],players_points:{qb1:scores[0]}}),entry(2,1,scores[1]),entry(3,2,scores[2]),entry(4,2,scores[3])]});
+
+test('league shape reads the playoff field, byes and the median game',()=>{
+ assert.deepEqual(leagueShape({rosters:Array(12).fill({}),settings:{playoff_teams:6,playoff_week_start:15,league_average_match:1}}),{teams:12,playoffTeams:6,byes:2,playoffStart:15,startWeek:1,medianGame:true,divisions:0});
+ assert.equal(leagueShape({rosters:Array(10).fill({}),settings:{playoff_teams:4}}).byes,0);
+ assert.deepEqual(pairings([entry(1,1,0),entry(2,1,0),entry(3,null,0)]),[[1,2]],'a team without a matchup has the week off');
+ assert.deepEqual(teamName(four(),1),{team:'Aces',manager:'ann'});assert.deepEqual(teamName(four(),2),{team:'bo',manager:null});assert.equal(teamName(four(),4).team,'Team 4');
+});
+
+test('the season so far: records, all-play, luck, and weeks nobody scored in are skipped',()=>{
+ const season=seasonSoFar({league:four(),players,weeks:[week(1,[100,90,120,110]),week(2,[80,70,60,130]),week(3,[0,0,0,0])]});
+ assert.equal(season.games,2);assert.deepEqual(season.weeks.map(w=>w.week),[1,2]);
+ const a=season.rows[1],c=season.rows[3];
+ assert.deepEqual([a.wins,a.losses,a.pf,a.pa,a.average,a.high,a.low],[2,0,180,160,90,100,80]);
+ assert.deepEqual([a.allPlayWins,a.allPlayLosses],[3,3]);
+ assert.equal(a.luck,1,'two wins where the scores earned one against the whole league');
+ assert.deepEqual([c.wins,c.losses,c.luck],[1,1,0]);
+ assert.equal(a.byPosition.QB,90,'starter points are averaged by position');
+ assert.deepEqual(a.scores.map(s=>s?.diff),[-5,-5,undefined]);
+});
+
+test('a median league adds a second result every week',()=>{
+ const season=seasonSoFar({league:four({league_average_match:1}),players,weeks:[week(1,[100,90,120,110])]});
+ assert.deepEqual([season.rows[1].wins,season.rows[1].losses],[1,1],'won the matchup, under the median');
+ assert.deepEqual([season.rows[3].wins,season.rows[3].losses],[2,0]);assert.deepEqual([season.rows[2].wins,season.rows[2].losses],[0,2]);
+});
+
+test('roster outlook fields the best lineup each week, so a bye costs points',()=>{
+ const league=four();league.rosters[0].players=['qb1','qb2x'];const all={...players,qb2x:P('QB','T9')};
+ const projections={2:{qb1:{stats:{pts:20}},qb2x:{stats:{pts:12}},qb2:{stats:{pts:15}}},3:{qb2x:{stats:{pts:12}},qb2:{stats:{pts:15}}},4:{}};
+ const outlook=rosterOutlook({league,players:all,projections,weeks:[2,3,4]});
+ assert.deepEqual([outlook[1].points,outlook[1].byPosition.QB,outlook[1].weeks],[16,16,[2,3]]);assert.equal(outlook[2].points,15);assert.equal(outlook[3].points,0);
+ assert.equal(rosterOutlook({league,players:all,projections:{},weeks:[2]})[1],null,'no projections, no outlook');
+});
+
+test('ratings lean on the roster early and on results later',()=>{
+ const rows=games=>({rows:{1:{games,average:games?130:null,scores:[]},2:{games,average:games?100:null,scores:[]}}}),outlook={1:{points:100},2:{points:120}};
+ assert.deepEqual(ratings({season:rows(0),outlook}),{1:100,2:120});
+ const early=ratings({season:rows(1),outlook}),late=ratings({season:rows(12),outlook});
+ assert.ok(early[1]<early[2],'one big week does not outweigh the roster');assert.ok(late[1]>late[2],'twelve weeks do');
+ assert.equal(early[1]+early[2],230,'ratings stay centred on what the league actually scores');
+ const blind=ratings({season:rows(4),outlook:{}});assert.ok(blind[1]>blind[2]&&blind[1]<130,'with no projections, results are pulled toward the average');
+});
+
+test('weekly spread starts from a prior and learns from repeated scores',()=>{
+ const flat=s=>({rows:{1:{scores:s.map(points=>({points}))}}});
+ assert.equal(weeklySpread({rows:{}}),24);
+ assert.ok(weeklySpread(flat([100,100,100,100,100,100,100,100,100,100,100,100]))<weeklySpread(flat([100])));
+ assert.ok(weeklySpread(flat([60,140,60,140,60,140,60,140,60,140,60,140]))>weeklySpread(flat([100])));
+});
+
+test('game clock and win chance',()=>{
+ assert.deepEqual([{state:'pre'},{state:'post'},{state:'in',period:1,clock:'15:00'},{state:'in',period:3,clock:'7:30'},{state:'in',period:5,clock:'4:00'},{state:'in'}].map(gameRemaining),[1,0,1,.375,.02,.5]);
+ assert.equal(winChance({mean:100,sd:10},{mean:100,sd:10}),.5);assert.equal(winChance({mean:101,sd:0},{mean:100,sd:0}),1);assert.equal(winChance({mean:100,sd:0},{mean:100,sd:0}),.5);
+ const p=winChance({mean:110,sd:15},{mean:100,sd:15});assert.ok(p>.65&&p<.72,`about two in three, got ${p}`);
+});
+
+test('the live week adds projections only for football still to be played',()=>{
+ const league={...four(),matchups:[entry(1,1,30,{starters:['qb1','0'],players_points:{qb1:30}}),entry(2,1,8,{starters:['qb2'],players_points:{qb2:8}}),entry(3,2,0,{starters:['qb3'],players_points:{}}),entry(4,2,22.5,{starters:['qb4'],players_points:{qb4:22.5}})]};
+ const projections=Object.fromEntries([1,2,3,4].map(id=>[`qb${id}`,{stats:{pts:20}}]));
+ const games={T1:{state:'post'},T2:{state:'in',period:2,clock:'15:00'},T3:{state:'pre'},T4:{state:'post'}};
+ const live=liveWeek({league,players,projections,games,spread:20});
+ assert.deepEqual([live.teams[1].mean,live.teams[1].sd,live.teams[1].share],[30,0,0]);
+ assert.deepEqual([live.teams[2].mean,live.teams[2].share,live.teams[2].counts.live],[23,.75,1],'three quarters of 20 still to come');
+ assert.deepEqual([live.teams[3].mean,live.teams[3].sd,live.teams[3].counts.pre],[20,20,1]);
+ assert.equal(live.teams[1].top.id,'qb1');assert.equal(live.games.length,2);assert.ok(live.games[0].chance>.5);assert.equal(live.complete,false);assert.equal(live.started,true);
+ const final=liveWeek({league,players,projections,games:{T1:{state:'post'},T2:{state:'post'},T3:{state:'post'},T4:{state:'post'}}});
+ assert.equal(final.complete,true);assert.equal(final.games[0].chance,1);
+ const blind=liveWeek({league,players,projections,games:{}});
+ assert.equal(blind.complete,false,'with no NFL schedule the week is never called final');assert.equal(blind.known,false);assert.equal(blind.teams[3].share,1);
+});
+
+test('simulation: odds add up, the better team is favoured, and the same inputs give the same answer',()=>{
+ const league=four(),rating={1:130,2:110,3:110,4:90},standing=Object.fromEntries([1,2,3,4].map(id=>[id,{wins:0,losses:0,ties:0,pf:0}]));
+ const future=Array.from({length:12},(_,i)=>({week:i+2,pairs:i%2?[[1,2],[3,4]]:[[1,3],[2,4]]}));
+ const odds=simulate({league,rating,standing,future,runs:3000,seed:7});
+ const total=key=>Object.values(odds).reduce((s,o)=>s+o[key],0);
+ assert.ok(Math.abs(total('playoff')-2)<1e-9,'two playoff spots');assert.ok(Math.abs(total('title')-1)<1e-9);assert.ok(Math.abs(total('topSeed')-1)<1e-9);
+ assert.ok(odds[1].playoff>odds[2].playoff&&odds[2].playoff>odds[4].playoff);assert.ok(odds[1].playoff>.8&&odds[4].playoff<.2);
+ assert.ok(Math.abs(odds[1].seeds.reduce((s,p)=>s+p,0)-1)<1e-9);assert.equal(odds[1].ifWin,null,'no game in progress, no swing');
+ assert.deepEqual(simulate({league,rating,standing,future,runs:3000,seed:7}),odds);
+});
+
+test('simulation: a finished season is certain, and this week’s result moves the odds',()=>{
+ const league=four(),rating={1:100,2:100,3:100,4:100};
+ const done=simulate({league,rating,standing:{1:{wins:9,pf:1200},2:{wins:9,pf:1300},3:{wins:4,pf:1500},4:{wins:2,pf:900}},runs:200});
+ assert.deepEqual([1,2,3,4].map(id=>done[id].playoff),[1,1,0,0]);assert.equal(done[2].topSeed,1,'points for breaks the tie');
+ const standing=Object.fromEntries([1,2,3,4].map(id=>[id,{wins:5,losses:5,ties:0,pf:1000}]));
+ const current={games:[{teams:[1,2]},{teams:[3,4]}],teams:Object.fromEntries([1,2,3,4].map(id=>[id,{mean:100,sd:20}]))};
+ const odds=simulate({league,rating,standing,current,future:[{week:14,pairs:[[1,3],[2,4]]}],runs:4000,seed:3});
+ assert.ok(odds[1].ifWin>odds[1].playoff&&odds[1].playoff>odds[1].ifLoss,'winning helps, losing hurts');
+ const decided={...current,teams:{...current.teams,1:{mean:150,sd:0},2:{mean:90,sd:0}}};
+ const locked=simulate({league,rating,standing,current:decided,future:[],runs:500,seed:3});
+ assert.equal(locked[2].ifWin,null,'a result that never happens has no odds');assert.ok(locked[1].playoff>locked[2].playoff);
+});
+
+test('simulation: the median game and division winners change who gets in',()=>{
+ const league=four({league_average_match:1}),rating={1:100,2:100,3:100,4:100},standing=Object.fromEntries([1,2,3,4].map(id=>[id,{wins:0,pf:0}]));
+ const odds=simulate({league,rating,standing,future:[{week:2,pairs:[[1,2],[3,4]]}],runs:500,seed:2});
+ assert.ok(Math.abs(Object.values(odds).reduce((s,o)=>s+o.wins,0)-4)<.2,'two matchup wins and two median wins a week');
+ const split=simulate({league:four({divisions:2}),rating,standing:{1:{wins:9,pf:9,division:1},2:{wins:8,pf:8,division:1},3:{wins:2,pf:2,division:2},4:{wins:1,pf:1,division:2}},runs:50});
+ assert.deepEqual([split[1].playoff,split[2].playoff,split[3].playoff],[1,0,1],'the weak division’s winner takes a seed');
+});
+
+test('league outlook ties it together, and closes a week only when every game is final',()=>{
+ const league={...four(),matchups:[entry(1,1,140,{starters:['qb1'],players_points:{qb1:140}}),entry(2,1,90,{starters:['qb2'],players_points:{qb2:90}}),entry(3,2,100,{starters:['qb3'],players_points:{qb3:100}}),entry(4,2,95,{starters:['qb4'],players_points:{qb4:95}})]};
+ const projections={2:Object.fromEntries([1,2,3,4].map(id=>[`qb${id}`,{stats:{pts:100+id}}])),3:Object.fromEntries([1,2,3,4].map(id=>[`qb${id}`,{stats:{pts:100+id}}]))};
+ const future=[3,4,15].map(w=>({week:w,matchups:[entry(1,1,0),entry(3,1,0),entry(2,2,0),entry(4,2,0)]})),past=[week(1,[100,90,120,110])];
+ const open=leagueOutlook({league,players,past,future,currentWeek:2,projections,games:{T1:{state:'pre'},T2:{state:'pre'},T3:{state:'pre'},T4:{state:'pre'}},runs:400});
+ assert.deepEqual([open.games,open.current,open.closed,open.weeksLeft,open.scheduledGames],[1,true,false,3,6],'playoff weeks are not part of the race');
+ assert.equal(open.rows.length,4);assert.ok(open.rows.every(r=>r.odds&&r.live&&r.roster));assert.equal(open.rows.find(r=>r.mine).rosterId,1);
+ assert.deepEqual(open.projectedWeeks,[2,3]);
+ let asked=0;const closed=leagueOutlook({league,players,past,future,currentWeek:2,projections,games:{T1:{state:'post'},T2:{state:'post'},T3:{state:'post'},T4:{state:'post'}},runs:400,rosterMemo:(weeks,compute)=>{asked++;return compute()}});
+ assert.deepEqual([closed.games,closed.current,closed.closed,closed.weeksLeft],[2,false,true,2]);assert.equal(closed.rows.find(r=>r.rosterId===1).wins,2);assert.deepEqual(closed.projectedWeeks,[3]);assert.equal(asked,1);
+ const playoffs=leagueOutlook({league,players,past,future:[],currentWeek:15,projections:{},games:{},runs:50});
+ assert.deepEqual([playoffs.regular,playoffs.weeksLeft,playoffs.current],[false,0,false]);
+});

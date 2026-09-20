@@ -45,7 +45,7 @@ export async function leagueDetails(l,userId,week,options={}){const [rosters,use
  const mine=rosters.find(r=>r.owner_id===userId||(r.co_owners||[]).includes(userId));if(!mine)throw Error('No roster found for this user.');
  return {...l,rosters,users,matchups,mine,enabled:l.status!=='complete',syncedAt:Date.now()};}
 const teamAlias=t=>({WSH:'WAS',WSN:'WAS',LA:'LAR',JAC:'JAX'}[t]||t);
-export function scoreboard(season,week,options={}){return cache.get(`games:${season}:${week}`,async()=>{const d=await json(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=${season}&seasontype=2&week=${week}&limit=100`);const games={};for(const e of d.events||[]){const c=e.competitions?.[0];if(!c)continue;for(const team of c.competitors||[]){const other=c.competitors.find(x=>x.id!==team.id);games[teamAlias(team.team.abbreviation)]={id:e.id,state:e.status.type.state,detail:e.status.type.shortDetail,start:e.date,opponent:teamAlias(other?.team?.abbreviation),home:team.homeAway==='home',score:team.score,oppScore:other?.score,channel:c.broadcasts?.flatMap(b=>b.names||[]).join(' / ')||null};}}return games;},{ttl:30000,...options});}
+export function scoreboard(season,week,options={}){return cache.get(`games:${season}:${week}`,async()=>{const d=await json(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=${season}&seasontype=2&week=${week}&limit=100`);const games={};for(const e of d.events||[]){const c=e.competitions?.[0];if(!c)continue;for(const team of c.competitors||[]){const other=c.competitors.find(x=>x.id!==team.id);games[teamAlias(team.team.abbreviation)]={id:e.id,state:e.status.type.state,detail:e.status.type.shortDetail,start:e.date,opponent:teamAlias(other?.team?.abbreviation),home:team.homeAway==='home',score:team.score,oppScore:other?.score,channel:c.broadcasts?.flatMap(b=>b.names||[]).join(' / ')||null,period:e.status.period??null,clock:e.status.displayClock??null};}}return games;},{ttl:30000,...options});}
 export function projections(season,week,options={}){return cache.get(`projections:${season}:${week}`,async()=>{
  const d=await json(`https://api.sleeper.app/projections/nfl/${season}/${week}?season_type=regular`);
  if(!Array.isArray(d))throw Error('Projection feed unavailable.');
@@ -57,6 +57,8 @@ export function stats(season,week,options={}){return cache.get(`stats:${season}:
  if(!Array.isArray(d))throw Error('Weekly results unavailable.');
  return Object.fromEntries(d.filter(r=>r.stats&&(r.stats.gp||r.stats.pts_ppr!==undefined||r.stats.pts_std!==undefined)).map(r=>[r.player_id,{stats:r.stats,team:r.team,opponent:r.opponent}]));
  },{ttl:24*HOUR,...options});}
+// One week of a league's matchups. Finished weeks hold the scores; weeks ahead hold only who plays whom.
+export function leagueWeek(leagueId,week,options={}){return sleeper(`/league/${leagueId}/matchups/${week}`,{ttl:6*HOUR,...options});}
 export function trends(options={}){return sleeper('/players/nfl/trending/add?lookback_hours=24&limit=100',{ttl:15*MINUTE,...options});}
 
 export async function tradeOutlook(season,weeks,onProgress=()=>{},force=false){
