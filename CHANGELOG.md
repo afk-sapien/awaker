@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Shop one player from Auto trades. Choose someone on your roster to see which teams he would
+  start for, how much he adds to each lineup, how far he sits above a free agent, and the best
+  returns from every team. The other team gains in each offer, and a cost to you is shown as one.
 - Keep waiver advice and alerts working when a lineup has a hole. An injured or bye-week starter,
   or one league that has not drafted, used to mark everything incomplete, which hid every waiver
   suggestion in that league and paused background alerts for all leagues.

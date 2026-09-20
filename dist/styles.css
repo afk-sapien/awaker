@@ -13,6 +13,11 @@
 .player-portrait .jersey{position:absolute;right:-2px;bottom:0;min-width:33px;padding:3px 7px;border:2px solid white;border-radius:7px;background:var(--team);color:white;font-size:26px;line-height:1;letter-spacing:0;text-align:center}
 .player-identity{min-width:0}.player-identity .player-name{overflow-wrap:break-word}
 @media(min-width:431px) and (max-width:760px){.player-portrait{width:60px;height:70px;flex-basis:60px}.photo-fallback,.player-headshot{width:60px;height:60px}.player-portrait .jersey{font-size:22px;min-width:29px;padding:3px 5px}}
+/* Shop a player */
+.shop-picker{display:inline-flex;align-items:center;gap:10px;margin-left:14px;font-size:14px;color:var(--muted)}
+.shop-summary .shop-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 24px;margin-bottom:10px}
+.shop-summary .trade-detail-metrics{margin:0}.shop-summary table{margin:6px 0 14px}.shop-summary h3{margin:0}
+@media(max-width:760px){.shop-picker{margin:10px 0 0;display:flex;flex-wrap:wrap}}
 /* Compact portrait for lists and tables: the same face and jersey badge as the watchroom, at text scale. */
 .player-chip{display:flex;align-items:center;gap:10px;min-width:0;text-align:left}
 .player-chip-text{min-width:0}.player-chip-text h3{margin:0}

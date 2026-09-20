@@ -71,3 +71,29 @@ export async function findTradeIdeas(data,league,model,prefs={}, {limit=20,maxPa
  ideas.sort(rank);nearMisses.sort(rank);
  return {ideas:ideas.slice(0,limit),nearMisses:nearMisses.slice(0,3),diagnostics,truncated,checked};
 }
+// Shopping one player: what would each other team give for him, and do they even want him? Unlike the
+// trade search this does not require the trade to help you. Moving a player you are done with can cost
+// a little, and the page shows that honestly. The other team must still gain, or they have no reason to say yes.
+export async function shopPlayer(data,league,model,playerId,prefs={}, {perPartner=3,limit=12,cancelled=()=>false}={}){
+ const excluded=prefs.tradeExcluded||{give:['DEF'],get:['DEF']},offers=[],market=[];let checked=0;
+ const name=partner=>{const user=(league.users||[]).find(u=>u.user_id===partner.owner_id);return user?.metadata?.team_name||user?.display_name||`Team ${partner.roster_id}`};
+ for(const partner of league.rosters.filter(r=>r.roster_id!==league.mine.roster_id)){
+  const incoming=tradeCandidateIds(playableIds(partner),data.players,excluded.get).filter(id=>Number.isFinite(model.totals[id])&&model.totals[id]>0&&!unavailable.includes(data.players[id]?.injury_status));
+  const found=[];let interest=null;
+  for(const b of incoming){
+   if(cancelled())return {cancelled:true};
+   if(++checked%40===0)await new Promise(r=>setTimeout(r,0));
+   let result;try{result=model.evaluate(league.mine,partner,[playerId],[b])}catch{continue}
+   if(!result.complete)continue;
+   // How much he helps them is judged against the player they would miss least.
+   interest=Math.max(interest??-Infinity,result.gainB);
+   if(result.gainB<=.25)continue;
+   if(model.assessWaivers)result=model.assessWaivers(result,league.mine,partner,{protectedA:prefs.waiverProtected?.[`${data.user?.user_id}:${league.league_id}`]||[]});
+   found.push({...result,partnerId:partner.roster_id,partner:name(partner)});
+  }
+  if(interest!==null)market.push({partnerId:partner.roster_id,partner:name(partner),interest,offers:found.length});
+  offers.push(...found.sort((a,b)=>tradeGains(b).a-tradeGains(a).a).slice(0,perPartner));
+ }
+ offers.sort((a,b)=>tradeGains(b).a-tradeGains(a).a);
+ return {playerId,offers:offers.slice(0,limit),market:market.sort((a,b)=>b.interest-a.interest),value:model.valueAboveReplacement?.[playerId]??null,total:model.totals[playerId]??null,weeks:model.weeks?.length??null};
+}

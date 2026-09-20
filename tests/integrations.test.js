@@ -349,3 +349,15 @@ test('bench alerts scan without waiver alerts, and saved reports stay small',asy
  h.config=alerting({trades:false,waivers:false});h.at=Date.parse('2026-09-19T08:01:00Z');await h.worker.tick();
  assert.ok(JSON.stringify(h.store.get('worker').reports).length<2000);h.store.close();
 });
+test('shopping a player lists who wants him and what comes back, without requiring that it helps you',async()=>{
+ const {shopPlayer}=await import('../dist/analysis.js');
+ const data=fixture(Date.now()),league=data.leagues[0],model=buildSeasonModel({league,players:data.players,outlook:data.outlook});
+ const mine=league.mine.players.filter(id=>Number.isFinite(model.totals[id])&&model.totals[id]>0).sort((a,b)=>model.totals[b]-model.totals[a]);
+ const star=await shopPlayer(data,league,model,mine[0]);
+ assert.equal(star.playerId,mine[0]);assert.ok(star.market.length>0,'every other team is asked');
+ assert.deepEqual(star.market.map(m=>m.interest),[...star.market.map(m=>m.interest)].sort((a,b)=>b-a),'teams he helps most come first');
+ for(const offer of star.offers){assert.deepEqual(offer.give,[mine[0]]);assert.ok(offer.gainB>.25,'the other team always gains');assert.ok(offer.partner)}
+ const perPartner={};for(const o of star.offers)perPartner[o.partnerId]=(perPartner[o.partnerId]||0)+1;
+ assert.ok(Object.values(perPartner).every(n=>n<=3));
+ assert.equal((await shopPlayer(data,league,model,mine[0],{}, {cancelled:()=>true})).cancelled,true);
+});
