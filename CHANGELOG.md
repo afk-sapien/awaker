@@ -10,6 +10,12 @@
   The page also shows all-play record, luck, the schedule left, where each team's points come from
   by position (for the season so far or the roster ahead), results plotted against roster strength,
   and every weekly score against the league average.
+- League outlook draws team shapes: a radar with one corner per position and the league average as
+  a ring, so strengths stick out and holes cave in. Your team is always drawn, up to four others
+  can be laid over it in their own colors, and everyone else can sit behind in grey. A table beside
+  it gives the same numbers. Below it, a depth chart shows every team's QB, RB1, RB2, WR1 and so
+  on, with the player and his points a game, colored by where that spot ranks in the league. Both
+  follow the same switch between the season so far and the roster ahead.
 - Add an Around the league page: every matchup in a league this week with the live score, where
   it is heading, each side's chance to win, who is still to play, the median line in leagues that
   use one, and the standings with playoff odds.

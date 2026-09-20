@@ -124,3 +124,29 @@ test('league outlook ties it together, and closes a week only when every game is
  const playoffs=leagueOutlook({league,players,past,future:[],currentWeek:15,projections:{},games:{},runs:50});
  assert.deepEqual([playoffs.regular,playoffs.weeksLeft,playoffs.current],[false,0,false]);
 });
+
+import {positionRadar,depthSlots,depthChart,playerAverages} from '../dist/league.js';
+test('team shapes are ratios to the league average on one capped scale',()=>{
+ const row=(rosterId,QB,RB,WR)=>({rosterId,by:{QB,RB,WR,TE:0}}),rows=[row(1,30,40,20),row(2,10,40,40),{rosterId:3,by:null}];
+ const radar=positionRadar(rows,r=>r.by);
+ assert.deepEqual(radar.axes,[{position:'QB',average:20},{position:'RB',average:40},{position:'WR',average:30}],'a position nobody scores at is not an axis');
+ assert.deepEqual(radar.teams.map(t=>t.ratios),[[1.5,1,.667],[.5,1,1.333]]);assert.deepEqual([radar.low,radar.high],[.5,1.5]);
+ const wild=positionRadar([row(1,100,40,20),row(2,0,40,40)],r=>r.by);assert.deepEqual([wild.low,wild.high],[.4,1.6],'an outlier cannot stretch the scale past 160%');
+ assert.equal(positionRadar([row(1,1,1,1)],r=>r.by),null,'one team has nobody to compare with');assert.equal(positionRadar([{rosterId:1,by:{QB:1,RB:1}},{rosterId:2,by:{QB:1,RB:1}}],r=>r.by),null,'two axes make no shape');
+});
+test('depth spots follow the lineup: a flex adds a back and a receiver, superflex a quarterback',()=>{
+ const labels=roster_positions=>depthSlots({roster_positions}).map(c=>c.label).join(' ');
+ assert.equal(labels(['QB','RB','RB','WR','WR','TE','FLEX','K','DEF','BN','IR']),'QB RB1 RB2 RB3 WR1 WR2 WR3 TE K DEF');
+ assert.equal(labels(['QB','RB','WR','TE','SUPER_FLEX']),'QB1 QB2 RB1 RB2 WR1 WR2 TE');assert.equal(labels(['QB','RB','WR']),'QB RB WR');
+});
+test('depth chart ranks every team’s best players spot by spot',()=>{
+ const players={q1:P('QB'),q2:P('QB'),r1:P('RB'),r2:P('RB'),r3:P('RB'),r4:P('RB'),taxi:P('RB')},value=id=>({q1:20,q2:25,r1:15,r2:9,r3:18,r4:null,taxi:30})[id];
+ const league={roster_positions:['QB','RB','RB'],rosters:[{roster_id:1,players:['q1','r2','r1']},{roster_id:2,players:['q2','r3','r4','taxi'],taxi:['taxi']}]};
+ const chart=depthChart({league,players,value});
+ assert.deepEqual(chart.columns.map(c=>[c.label,c.average]),[['QB',22.5],['RB1',16.5],['RB2',9]]);
+ assert.deepEqual(chart.cells[1].map(c=>c&&[c.id,c.rank,c.tone]),[['q1',2,'poor'],['r1',2,'poor'],['r2',1,'neutral']]);
+ assert.deepEqual(chart.cells[2].map(c=>c&&c.id),['q2','r3',null],'no projection and the taxi squad do not count');
+});
+test('player averages skip the weeks a player did not score',()=>{
+ assert.deepEqual(playerAverages([{matchups:[{players_points:{a:10,b:0}}]},{matchups:[{players_points:{a:20}},{players_points:{b:7,c:-1}}]}]),{a:15,b:7,c:-1});
+});

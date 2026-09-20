@@ -118,3 +118,13 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
 .league-split .section-bar{flex-wrap:wrap}.league-split .section-bar .filters{flex-shrink:0}
 .league-panel .season-table th.season-player{color:var(--ink);font-size:14px;letter-spacing:0;font-weight:400}
 .trade-drops{margin:10px 0 12px;font-size:13px;color:var(--muted)}
+.basis-bar{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin:34px 0 16px}.basis-bar h2{margin-bottom:6px}.basis-bar p{margin:0;max-width:760px}
+.radar-layout{display:grid;grid-template-columns:minmax(0,460px) minmax(0,1fr);gap:28px;align-items:start}.radar{margin:0}.radar svg{width:100%;height:auto;display:block;font-family:inherit}
+.radar-grid polygon{fill:none;stroke:#e3e9e9;stroke-width:1}.radar-grid polygon.radar-average{stroke:#93a1a5;stroke-width:1.5}.radar-grid line{stroke:#e3e9e9;stroke-width:1}.radar-grid text{font-size:10px;fill:#8d9a9e}.radar-axis{font-size:13px;font-weight:700;fill:var(--ink)}.radar-axis-note{font-size:10px;font-weight:400;fill:var(--muted)}
+.radar-ghost{fill:none;stroke:#aab6b8;stroke-width:1;stroke-linejoin:round}.radar-team polygon{fill:var(--team);fill-opacity:.1;stroke:var(--team);stroke-width:2;stroke-linejoin:round}.radar-team circle{fill:var(--team);stroke:#fff;stroke-width:2}
+.radar-chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}.radar-chip{display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--muted);font-size:13px;font-weight:500}.radar-chip i{width:10px;height:10px;border-radius:50%;border:1px solid #b9c5c8}.radar-chip.active{color:var(--ink);border-color:var(--ink);font-weight:600}.radar-chip.active i{border-color:transparent}.radar-chip:hover{border-color:#9aa8ac}
+.radar-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px}.radar-actions .filter{border-color:var(--line)}
+.radar-table{font-variant-numeric:tabular-nums;font-size:13px}.radar-table td,.radar-table th{padding:8px 10px}.radar-table thead th{white-space:nowrap}.radar-table thead th i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}.radar-table td.num{text-align:center;white-space:nowrap}.radar-table .small{font-size:12px}
+.depth-table tr.mine th.season-player{background:var(--theme-soft,#eff7e3)}.depth-cell{min-width:86px}.depth-cell>strong{font-size:15px}.depth-cell .small{font-size:11px;white-space:nowrap}
+@media(max-width:1000px){.radar-layout{grid-template-columns:1fr}.radar{max-width:460px;margin:0 auto}}
+.depth-table th.season-player{min-width:170px}.depth-table .depth-cell{min-width:72px;padding:10px 6px}

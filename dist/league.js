@@ -1,4 +1,4 @@
-import {projected,optimize,activeSlots,playableIds} from './engine.js';
+import {projected,optimize,activeSlots,playableIds,SLOT_POSITIONS} from './engine.js';
 
 // The whole league at once: what every team has scored, what every roster projects to score,
 // how this week is going, and a simulation of the rest of the schedule for playoff odds.
@@ -73,6 +73,49 @@ export function rosterOutlook({league,players,projections,weeks}){
   out[roster.roster_id]=usable.length?{points:round(total/usable.length),byPosition:Object.fromEntries(POSITIONS.map(p=>[p,round(byPosition[p]/usable.length)])),weeks:usable}:null;
  }
  return out;
+}
+
+// Each team's points by position against the league average, for a radar chart. 1 is average.
+// The scale is the same on every axis. It stops at 40% and 160% so one wild kicker week cannot
+// flatten the positions that matter; anything beyond is drawn at the edge.
+export function positionRadar(rows,pick){
+ const teams=rows.filter(r=>pick(r)),axes=POSITIONS.map(position=>({position,average:round(mean(teams.map(r=>pick(r)[position]||0)))})).filter(a=>a.average>0);
+ if(teams.length<2||axes.length<3)return null;
+ const shaped=teams.map(r=>({rosterId:r.rosterId,values:axes.map(a=>pick(r)[a.position]||0),ratios:axes.map(a=>round((pick(r)[a.position]||0)/a.average,3))}));
+ const reach=Math.min(.6,Math.max(.3,...shaped.flatMap(t=>t.ratios.map(v=>Math.abs(v-1)))));
+ return {axes,teams:shaped,low:round(1-reach,3),high:round(1+reach,3)};
+}
+// How many of each position a lineup can use: its own slots, plus one for a flex it can fill.
+export function depthSlots(league){
+ const slots=activeSlots(league),out=[];
+ for(const position of ['QB','RB','WR','TE','K','DEF']){
+  const own=slots.filter(s=>s===position).length,flex=slots.some(s=>SLOT_POSITIONS[s]?.includes(position))&&(position==='QB'?slots.includes('SUPER_FLEX'):position!=='TE');
+  for(let i=1;i<=own+(own&&flex?1:0);i++)out.push({position,depth:i,label:`${position}${own+(flex?1:0)>1?i:''}`});
+ }
+ return out;
+}
+// Every roster's best player at each of those spots and where he ranks in the league.
+// value(id) is points a week, or null when there is nothing to go on.
+export function depthChart({league,players,value}){
+ const columns=depthSlots(league),cells={};
+ for(const roster of league.rosters){
+  const byPosition={};
+  for(const id of (roster.players||[]).filter(id=>players[id]&&!(roster.taxi||[]).includes(id))){const v=value(id);if(Number.isFinite(v))(byPosition[players[id].position]||=[]).push({id,points:round(v)})}
+  for(const list of Object.values(byPosition))list.sort((a,b)=>b.points-a.points);
+  cells[roster.roster_id]=columns.map(c=>byPosition[c.position]?.[c.depth-1]||null);
+ }
+ columns.forEach((column,i)=>{
+  const ranked=league.rosters.map(r=>cells[r.roster_id][i]).filter(Boolean).sort((a,b)=>b.points-a.points);
+  column.average=ranked.length?round(mean(ranked.map(c=>c.points))):null;
+  ranked.forEach((cell,place)=>{cell.rank=place+1;cell.of=ranked.length;const share=ranked.length>1?place/(ranked.length-1):.5;cell.tone=share<=.2?'strong':share<=.4?'good':share<.6?'neutral':share<.8?'weak':'poor'});
+ });
+ return {columns,cells};
+}
+// Points a game for every player, from the weeks he was on someone's roster and scored.
+export function playerAverages(weeks){
+ const sums={};
+ for(const {matchups} of weeks)for(const m of matchups||[])for(const [id,points]of Object.entries(m.players_points||{})){if(!Number.isFinite(points)||points===0)continue;const row=sums[id]||={total:0,games:0};row.total+=points;row.games++}
+ return Object.fromEntries(Object.entries(sums).map(([id,r])=>[id,round(r.total/r.games)]));
 }
 
 // One team's scores swing about 25 points a week, so a few results say little about how good it is.
@@ -177,6 +220,10 @@ export function leagueOutlook({league,players,past=[],future=[],currentWeek,proj
  const closed=regular&&live.complete,season=closed?seasonSoFar({league,players,weeks:[...past,{week:currentWeek,matchups:league.matchups}]}):first;
  const spread=weeklySpread(season),ahead=Object.keys(projections).map(Number).filter(w=>w>=currentWeek+(closed?1:0)&&w<=18).sort((a,b)=>a-b);
  const outlook=rosterMemo(ahead,()=>rosterOutlook({league,players,projections,weeks:ahead})),rating=ratings({season,outlook});
+// Depth charts: what each player has scored a game, and what he projects to score in the weeks he plays.
+ const finished=closed?[...past,{week:currentWeek,matchups:league.matchups}]:past,scored=playerAverages(finished);
+ const planned=id=>{const list=ahead.map(w=>projected(projections[w]?.[id]?.stats,league.scoring_settings)).filter(Number.isFinite);return list.length?mean(list):null};
+ const depth={season:season.games?depthChart({league,players,value:id=>scored[id]??null}):null,roster:ahead.length?depthChart({league,players,value:planned}):null};
  const schedule=future.filter(w=>w.week>currentWeek&&w.week<shape.playoffStart).map(w=>({week:w.week,pairs:pairings(w.matchups)}));
  const current=regular&&!closed&&live.games.length?live:null;
  const standing=Object.fromEntries(league.rosters.map(r=>[r.roster_id,{...season.rows[r.roster_id],division:r.settings?.division}]));
@@ -189,5 +236,5 @@ export function leagueOutlook({league,players,past=[],future=[],currentWeek,proj
  const by=(key,pick)=>[...rows].sort((a,b)=>pick(b)-pick(a)).forEach((row,i)=>{row[key]=i+1});
  by('powerRank',r=>r.rating);by('seasonRank',r=>r.average??-1);by('rosterRank',r=>r.roster?.points??-1);by('scheduleRank',r=>-(r.schedule??Infinity));
  rows.sort((a,b)=>b.odds.playoff-a.odds.playoff||b.wins+b.ties/2-(a.wins+a.ties/2)||b.pf-a.pf||b.rating-a.rating);
- return {shape,rows,weeks:season.weeks,games:season.games,live,current:!!current,closed,regular,spread,weeksLeft:schedule.length+(current?1:0),scheduledGames:schedule.reduce((n,w)=>n+w.pairs.length,current?current.games.length:0),projectedWeeks:ahead,runs};
+ return {shape,rows,depth,weeks:season.weeks,games:season.games,live,current:!!current,closed,regular,spread,weeksLeft:schedule.length+(current?1:0),scheduledGames:schedule.reduce((n,w)=>n+w.pairs.length,current?current.games.length:0),projectedWeeks:ahead,runs};
 }
