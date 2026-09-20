@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Keep alerting when a new NFL week begins. The first check of each week used to be silent,
+  which hid waiver pickups exactly when they are actionable. Only the first check after alerts are
+  turned on is silent now.
+- Back off after a failed background run, from two minutes up to an hour, instead of retrying every minute.
+- Hide Switch account and Disconnect in My leagues when the server sets the account, where they
+  only led to another page.
 - Show a team defense with its team logo instead of initials, everywhere a player portrait appears.
 - Stop treating scoring that projections never itemise as an error. It put a warning listing
   scoring keys at the top of every page and marked the data incomplete, which made every

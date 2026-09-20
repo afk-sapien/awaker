@@ -308,3 +308,16 @@ test('scoring that projections never itemise is a footnote, not an error that pa
  const store=openStore(':memory:'),at=Date.now(),data={...fixture(at),notes:['League: not projected fgm_50_59']},service=createService({store,provider:async()=>data,now:()=>at});service.saveSettings({username:'example'});
  const result=await service.opportunities();assert.equal(result.complete,true);assert.deepEqual(result.warnings,[]);store.close();
 });
+test('a new week keeps alerting: pickups found right after the week turns are sent, and old ones are not repeated',async()=>{
+ const h=harness();let week=2;h.service.opportunities=async()=>({season:'2026',week,complete:true,demo:false,warnings:[],generatedAt:h.at,opportunities:[{leagueId:'1',league:'League',waivers:h.rows}]});
+ h.config=alerting({trades:false,waivers:true,waiverMinGain:2});h.rows=[pickup(5,'old')];await h.worker.tick();assert.equal(h.calls,0,'the first scan ever is the silent starting point');
+ week=3;h.rows=[pickup(5,'old'),pickup(6,'tuesday','d2')];h.at+=hour;await h.worker.tick();
+ assert.equal(h.calls,1);assert.match(h.deliveries[0].message,/add TUESDAY/);assert.doesNotMatch(h.deliveries[0].message,/OLD/);h.store.close();
+});
+test('a failed background run backs off instead of retrying every minute, and Scan now still works',async()=>{
+ const h=harness();let attempts=0,down=true;h.service.opportunities=async()=>{attempts++;if(down)throw Error('provider down');return {season:'2026',week:2,complete:true,demo:false,warnings:[],generatedAt:h.at,opportunities:[]}};
+ h.config=alerting({trades:false,waivers:true});await h.worker.tick();assert.equal(attempts,1);assert.equal(h.worker.status().failures,1);
+ h.at+=60000;await h.worker.tick();assert.equal(attempts,1,'one minute later is inside the two minute backoff');
+ h.at+=90000;await h.worker.tick();assert.equal(attempts,2);assert.equal(h.worker.status().failures,2);
+ down=false;await h.worker.scan();assert.equal(attempts,3,'a manual scan ignores the backoff');assert.equal(h.worker.status().failures,0);h.store.close();
+});

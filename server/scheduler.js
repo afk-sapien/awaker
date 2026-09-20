@@ -55,6 +55,8 @@ export function createWorker({store,service,ntfy=null,publish=null,now=Date.now,
   try{
    const settings=service.settings(),revision=JSON.stringify(settings),state=store.get('worker',initial()),at=now();
    if(!settings.username)return;
+   // A failed run waits 2, 4, 8 … up to 60 minutes, so an outage is not polled every minute.
+   if(!manual&&at<(state.retryAt||0))return;
    // State written before waiver alerts existed tracked one trade baseline.
    state.baselines??=state.baselined&&state.scope?{trade:state.scope}:{};
    const reset=store.get('scheduleReset',0);
@@ -82,7 +84,9 @@ export function createWorker({store,service,ntfy=null,publish=null,now=Date.now,
      const result=await candidates(kind,settings);
      if(!result.ok){scan.kinds[kind]={skipped:true,warning:result.warning};continue}
      for(const v of Object.values(fresh))if((v.kind||'trade')===kind)v.active=false;
-     const baseline=state.baselines[kind]===result.scope;let fresher=0;generatedAt=result.generatedAt||at;
+     // Only the very first scan is silent. A new week keeps its baseline, because waiver pickups
+     // matter most right after the week turns and each opportunity is already sent once per key.
+     const baseline=state.baselines[kind]!=null;let fresher=0;generatedAt=result.generatedAt||at;
      for(const c of result.items){
       const previous=state.events[c.key],qualified=!previous?.active||previous.deferred||c.gain-previous.notifiedGain>=settings.alerts.improvement;
       fresh[c.key]={kind,active:true,lastSeen:at,gain:c.gain,notifiedGain:previous?.notifiedGain??c.gain,lastSent:previous?.lastSent||0};
@@ -127,8 +131,8 @@ export function createWorker({store,service,ntfy=null,publish=null,now=Date.now,
     try{await notifier.publish(item);item.status='accepted';item.acceptedAt=now();item.error=null;const report=state.reports.find(r=>r.id===item.id);if(report)report.delivery='accepted'}catch{item.attempts++;item.error='Notification provider did not confirm acceptance.';item.status=item.attempts>=5?'failed':'pending';item.nextAttempt=at+Math.min(3600000,60000*2**item.attempts);const report=state.reports.find(r=>r.id===item.id);if(report)report.delivery=item.status}
     save();
    }
-   state.failures=0;state.lastRun=at;state.lastError=null;save();
-  }catch(e){const s=store.get('worker',initial());s.failures++;s.lastError={at:now(),message:'Background run failed. Check data availability and service configuration.'};store.set('worker',s)}finally{running=false;forced=false}
+   state.failures=0;state.retryAt=0;state.lastRun=at;state.lastError=null;save();
+  }catch(e){const s=store.get('worker',initial());s.failures++;s.retryAt=now()+Math.min(3600000,60000*2**Math.min(s.failures,6));s.lastError={at:now(),message:'Background run failed. Check data availability and service configuration.'};store.set('worker',s)}finally{running=false;forced=false}
  }
  // Runs the same scan the schedule would, right now. Baseline, quiet hours and the daily cap still apply.
  async function scan(){
