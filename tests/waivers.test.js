@@ -55,3 +55,25 @@ test('a pickup that would not start is a bench upgrade only over a bench player 
  const covered=buildWaiverOutlook({league,players,outlook,starterIds:['star']}).evaluate('stash');
  assert.equal(covered.status,'upgrade');assert.equal(covered.gain,5);
 });
+test('a starting slot nobody can fill does not hide the pickup that would fill it',async()=>{
+ const {waiverRows,futureWaiverRows}=await import('../dist/analysis.js');
+ const P=(position,team,extra={})=>({position,fantasy_positions:[position],team,active:true,...extra});
+ const players={qb:P('QB','BUF'),rb:P('RB','BUF'),te:P('TE','LV',{injury_status:'Out'}),wrb:P('WR','KC'),faTE:P('TE','DAL'),faTE2:P('TE','NYJ')};
+ const stats=v=>({stats:{pts:v}}),proj={qb:stats(20),rb:stats(15),te:stats(9),wrb:stats(6),faTE:stats(11),faTE2:stats(7)};
+ const games=Object.fromEntries(['BUF','LV','KC','DAL','NYJ'].map(t=>[t,{state:'pre'}]));
+ const mine={roster_id:1,players:['qb','rb','te','wrb'],starters:['qb','rb','te'],reserve:[],taxi:[]};
+ const league={league_id:'L',roster_positions:['QB','RB','TE','BN'],scoring_settings:{pts:1},rosters:[mine],mine,matchups:[]};
+ const data={week:2,user:{user_id:'u'},players,projections:{2:proj},games,trends:[]};
+ const now=waiverRows(data,league,{samePositionDrops:false});
+ assert.deepEqual(now.filter(r=>r.id==='faTE').map(r=>[r.status,r.gain]),[['upgrade',11]]);
+ const future={...proj};delete future.te;const outlook={weeks:[3,4],data:{3:{projections:future,games},4:{projections:future,games}}};
+ assert.deepEqual(futureWaiverRows(data,league,outlook,{samePositionDrops:false}).filter(r=>r.id==='faTE').map(r=>[r.status,r.gain]),[['upgrade',22]]);
+});
+test('bench upgrades compare like with like, and a near-tie drops the weaker player',async()=>{
+ const {waiverMove}=await import('../dist/engine.js');
+ const P=position=>({position,fantasy_positions:[position],team:'BUF'});
+ const players={qb:P('QB'),rb:P('RB'),cuff:P('RB'),qb2:P('QB'),rb9:P('RB')},values={qb:20,rb:15,cuff:4,qb2:15,rb9:7};
+ const base={roster:['qb','rb','cuff'],slots:['QB','RB'],players,value:id=>values[id],capacity:3,samePosition:false};
+ assert.equal(waiverMove({...base,id:'qb2'}).status,'no_gain','a second quarterback is not an upgrade on a running back handcuff');
+ assert.deepEqual(waiverMove({...base,id:'rb9'}),{drop:'cuff',gain:null,benchGain:3,status:'bench'});
+});

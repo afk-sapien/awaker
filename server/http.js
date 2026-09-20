@@ -126,11 +126,11 @@ export function createHttpServer({service, worker, ntfy, adminToken, agentToken,
           return
         }
         if (path === '/api/v1/client' && req.method === 'GET') {
-          json(res, 200, await compute(res, () => service.client()))
+          json(res, 200, await compute(res, () => service.client(false, new URL(req.url, origin).searchParams.get('players'))))
           return
         }
         if (path === '/api/v1/refresh' && req.method === 'POST') {
-          json(res, 200, await compute(res, () => service.client(true)))
+          json(res, 200, await compute(res, () => service.client(true, new URL(req.url, origin).searchParams.get('players'))))
           return
         }
         // The ntfy token is write-only. Responses describe the connection without it.

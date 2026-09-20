@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Keep waiver advice and alerts working when a lineup has a hole. An injured or bye-week starter,
+  or one league that has not drafted, used to mark everything incomplete, which hid every waiver
+  suggestion in that league and paused background alerts for all leagues.
+- Never lose an alert to a short outage. A push that cannot be delivered, or whose recheck cannot
+  run, is offered again by the next check, and an opportunity that drops out and returns is not repeated.
+- Changing a filter or threshold no longer silently swallows everything that now qualifies.
+- Send the dashboard about fifty times less data on each refresh: a trimmed player directory that
+  is not resent when unchanged, no unused season outlook, and compressed responses. The service no
+  longer rewrites its state every minute or stores multi-megabyte snapshots.
+- Shortlist waiver candidates at every position, so quarterbacks and defenses cannot crowd out the
+  tight end who would start. Bench upgrades compare like with like, near-equal drops prefer the
+  weaker player, and the upgrade bar scales with the window.
+- Leagues switched off in My leagues can be switched back on, undrafted leagues are listed as such,
+  a signed-out session goes to the sign-in page, a failed first load keeps retrying, and bench alerts
+  no longer need waiver alerts to be on.
 - Keep alerting when a new NFL week begins. The first check of each week used to be silent,
   which hid waiver pickups exactly when they are actionable. Only the first check after alerts are
   turned on is silent now.

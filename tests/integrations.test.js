@@ -264,8 +264,8 @@ test('opportunities that disappear and return still honor cooldown',async()=>{
  await h.worker.tick();h.ideas=[idea()];h.at+=hour;await h.worker.tick();assert.equal(h.calls,1);
  h.ideas=[];h.at+=hour;await h.worker.tick();h.ideas=[idea()];h.at+=hour;await h.worker.tick();assert.equal(h.calls,1);h.store.close();
 });
-test('preference-only changes preserve schedule occurrence state',()=>{
- const store=openStore(':memory:');let at=100;const s=createService({store,provider:async()=>fixture(),now:()=>at});s.saveSettings({username:'example',daily:{enabled:true}});const reset=store.get('scheduleReset');at=200;s.saveSettings({preferences:{tradeMinGain:3}});assert.equal(store.get('scheduleReset'),reset);assert.equal(store.get('eventReset'),200);store.close();
+test('preference-only changes preserve schedule state and the alert baseline',()=>{
+ const store=openStore(':memory:');let at=100;const s=createService({store,provider:async()=>fixture(),now:()=>at});s.saveSettings({username:'example',daily:{enabled:true}});const reset=store.get('scheduleReset');at=200;s.saveSettings({preferences:{tradeMinGain:3}});assert.equal(store.get('scheduleReset'),reset);assert.equal(store.get('eventReset',0),0,'changing a filter or threshold must not silently swallow everything that now qualifies');store.close();
 });
 test('alert horizons validate, and the waiver horizon reaches the same engine as the waiver view',async()=>{
  assert.deepEqual([defaults.alerts.tradeHorizon,defaults.alerts.waiverHorizon],['season','current']);
@@ -320,4 +320,32 @@ test('a failed background run backs off instead of retrying every minute, and Sc
  h.at+=60000;await h.worker.tick();assert.equal(attempts,1,'one minute later is inside the two minute backoff');
  h.at+=90000;await h.worker.tick();assert.equal(attempts,2);assert.equal(h.worker.status().failures,2);
  down=false;await h.worker.scan();assert.equal(attempts,3,'a manual scan ignores the backoff');assert.equal(h.worker.status().failures,0);h.store.close();
+});
+test('one league with an injured starter or no draft does not pause alerts for the others',async()=>{
+ const store=openStore(':memory:'),at=Date.now(),data=fixture(at),league=data.leagues[0];
+ data.players[league.mine.starters.find(id=>id!=='0')].injury_status='Out';
+ const service=createService({store,provider:async()=>data,now:()=>at});service.saveSettings({username:'example'});
+ const result=await service.opportunities();
+ assert.equal(result.dataComplete,true,'the data is fine, only a lineup has a hole');assert.ok(result.opportunities.length>=1);
+ assert.ok(Number.isFinite(result.opportunities[0].lineup.gain),'an unavailable starter counts as zero, not as unknown');store.close();
+});
+test('an alert that never reaches the phone is offered again, and a flapping opportunity is not repeated',async()=>{
+ const h=harness();h.config=alerting({trades:false,waivers:true,waiverMinGain:2,cooldownHours:1});h.waivers=[];await h.worker.tick();
+ let down=true;const original=h.publish;h.worker=createWorker({store:h.store,service:h.service,publish:async item=>{if(down)throw Error('offline');return original(item)},now:()=>h.at});
+ h.waivers=[pickup(5,'gem','d2')];h.at+=hour;await h.worker.tick();
+ for(let i=0;i<4;i++){h.at+=20*60000;await h.worker.tick()}
+ assert.equal(h.worker.status().outbox.at(-1).status,'failed','five attempts over about half an hour');assert.equal(h.calls,0);
+ down=false;h.at+=hour;await h.worker.tick();assert.equal(h.calls,1,'the next scan sends it once the connection is back');
+ // Dropping under the bar and coming back is not news.
+ for(let i=0;i<4;i++){h.waivers=i%2?[pickup(5,'gem','d2')]:[];h.at+=2*hour;await h.worker.tick()}
+ assert.equal(h.calls,1);h.store.close();
+});
+test('bench alerts scan without waiver alerts, and saved reports stay small',async()=>{
+ const h=harness(),bench=(perWeek,id,drop)=>({...pickup(null,id,drop),gain:null,status:'bench',benchGain:perWeek,benchPerWeek:perWeek});
+ h.config=alerting({trades:false,waivers:false,bench:true,benchMinGain:2});h.waivers=[];await h.worker.tick();
+ h.waivers=[pickup(9,'starter','d1'),bench(4,'stash','d2')];h.at+=hour;await h.worker.tick();
+ assert.equal(h.calls,1);assert.match(h.deliveries[0].message,/bench upgrade, add STASH/);assert.doesNotMatch(h.deliveries[0].message,/STARTER/);
+ h.service.digest=async({period})=>({period,text:'Report',actions:[{text:'a',huge:'x'.repeat(50000)}],demo:false,leagues:['x'.repeat(50000)]});
+ h.config=alerting({trades:false,waivers:false});h.at=Date.parse('2026-09-19T08:01:00Z');await h.worker.tick();
+ assert.ok(JSON.stringify(h.store.get('worker').reports).length<2000);h.store.close();
 });

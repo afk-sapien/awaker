@@ -67,6 +67,8 @@ a.nav-btn{text-decoration:none;box-sizing:border-box}
 #reports details{border-top:1px solid var(--line);padding:10px 0}#reports summary{cursor:pointer;font-size:14px}
 .notify-page pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:14px;background:#edf1f2;padding:16px;border-radius:8px;margin:12px 0 0}
 
+/* Wide controls squeezed the label to one word per line on tablets, so rows stack sooner than the page does. */
+@media(max-width:1000px){.setting{grid-template-columns:1fr}.setting-control{justify-content:flex-start}}
 @media(max-width:760px){
  .status-strip{grid-template-columns:1fr 1fr}.status-tile{border-bottom:1px solid var(--line)}.status-tile:nth-child(2){border-right:0}
  .status-tile:nth-child(3){grid-column:1/-1;border-right:0}.status-actions{grid-column:1/-1;justify-content:stretch}.status-actions button{flex:1}

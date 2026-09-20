@@ -31,7 +31,8 @@ let ticking = false
 const tick = () => {
   if (ticking) return
   ticking = true
-  activeTick = worker.tick().finally(() => { ticking = false })
+  // tick() reports its own failures. This only guards the reporting itself, such as a full disk.
+  activeTick = worker.tick().catch(error => console.error('Background run could not record its result:', error?.message || error)).finally(() => { ticking = false })
 }
 const interval = setInterval(tick, 60000)
 server.listen(settings.port, settings.host, () => {

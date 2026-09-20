@@ -17,6 +17,8 @@ export function nextRun(at,schedule,zone,period){
 }
 export function quiet(at,settings){const t=localParts(at,settings.timezone).time,{quietStart:a,quietEnd:b}=settings.alerts;return a===b?false:a<b?t>=a&&t<b:t>=a||t<b}
 // Each alert kind reads its own toggle and threshold, and links to its own view.
+// Bench upgrades ride on the waiver scan, so either switch turns that scan on.
+const alertOn=(settings,kind)=>kind==='waiver'?settings.alerts.waivers||settings.alerts.bench:settings.alerts[kinds[kind].on];
 const kinds={trade:{on:'trades',min:'minGain',view:'trades'},waiver:{on:'waivers',min:'waiverMinGain',view:'waivers'}};
 const eventKey=t=>JSON.stringify([t.leagueId,t.partnerId,t.give,t.get]);
 const count=(n,one)=>`${n} ${one}${n===1?'':'s'}`;
@@ -31,16 +33,16 @@ export function createWorker({store,service,ntfy=null,publish=null,now=Date.now,
  async function candidates(kind,settings,query={},options={}){
   const result=kind==='trade'?await service.trades({...query,limit:50},options):await service.opportunities({...query,horizon:settings.alerts.waiverHorizon},options),drops=new Set();
   // A trade is always searched over the rest of the season. "Next week" judges it by its first week alone.
-  const nextWeek=settings.alerts.tradeHorizon==='next',tradeGain=t=>nextWeek?t.weekly?.[0]?.gainA??0:t.gain,span=result.weeks?.length>1?`points/week over weeks ${result.weeks[0]}–${result.weeks.at(-1)}`:result.horizon==='next'?`points in week ${result.weeks?.[0]}`:'points this week';
+  const nextWeek=settings.alerts.tradeHorizon==='next',tradeGain=t=>nextWeek?t.weekly?.[0]?.gainA??0:t.gain,span=result.weeks?.length>1?`points/week over weeks ${result.weeks[0]}–${result.weeks.at(-1)}`:result.horizon&&result.horizon!=='current'?`points in week ${result.weeks?.[0]}`:'points this week';
   const items=kind==='trade'?result.ideas.map(t=>({kind,key:eventKey(t),leagueId:t.leagueId,gain:tradeGain(t),line:`${t.league}: ${t.send.join(' + ')} for ${t.receive.join(' + ')}. Projected +${tradeGain(t).toFixed(1)} ${nextWeek?`points in week ${t.weekly?.[0]?.week}`:'points/week'}; partner +${(nextWeek?t.weekly?.[0]?.gainB??0:t.gainB/t.weeks).toFixed(1)}.`}))
    :result.opportunities.flatMap(l=>{
     const free=w=>!drops.has(`${l.leagueId}:${w.drop}`)&&drops.add(`${l.leagueId}:${w.drop}`);
-    const starters=l.waivers.filter(w=>w.status==='upgrade'&&free(w)).map(w=>({kind,key:JSON.stringify(['waiver',l.leagueId,w.id,w.drop]),leagueId:l.leagueId,gain:w.perWeek??w.gain,line:`${l.league}: add ${w.name}${w.dropName?`, drop ${w.dropName}`:''}. Projected +${(w.perWeek??w.gain).toFixed(1)} ${span}.`}));
+    const starters=(settings.alerts.waivers?l.waivers:[]).filter(w=>w.status==='upgrade'&&free(w)).map(w=>({kind,key:JSON.stringify(['waiver',l.leagueId,w.id,w.drop]),leagueId:l.leagueId,gain:w.perWeek??w.gain,line:`${l.league}: add ${w.name}${w.dropName?`, drop ${w.dropName}`:''}. Projected +${(w.perWeek??w.gain).toFixed(1)} ${span}.`}));
     // Bench moves have their own bar, and only the best one per league is worth a push.
     const bench=settings.alerts.bench?l.waivers.filter(w=>w.status==='bench'&&w.benchPerWeek>=settings.alerts.benchMinGain&&free(w)).slice(0,1).map(w=>({kind,bench:true,key:JSON.stringify(['bench',l.leagueId,w.id,w.drop]),leagueId:l.leagueId,gain:w.benchPerWeek,line:`${l.league}: bench upgrade, add ${w.name}${w.dropName?` over ${w.dropName}`:''}. Projects +${w.benchPerWeek.toFixed(1)} more ${span}; would not start.`})):[];
     return [...starters,...bench];
    });
-  return {ok:result.complete&&!result.demo,scope:`${result.season}:${result.week}`,generatedAt:result.generatedAt,warning:result.warnings?.[0]||null,items:items.filter(i=>i.bench||i.gain>=settings.alerts[kinds[kind].min])};
+  return {ok:(result.dataComplete??result.complete)&&!result.demo,scope:`${result.season}:${result.week}`,generatedAt:result.generatedAt,warning:result.warnings?.[0]||null,items:items.filter(i=>i.bench||i.gain>=settings.alerts[kinds[kind].min])};
  }
  // One push per scan: a single opportunity reads as before, several become a short digest.
  function compose(items,generatedAt){
@@ -53,7 +55,7 @@ export function createWorker({store,service,ntfy=null,publish=null,now=Date.now,
  async function tick(){
   if(running)return;running=true;
   try{
-   const settings=service.settings(),revision=JSON.stringify(settings),state=store.get('worker',initial()),at=now();
+   const settings=service.settings(),revision=JSON.stringify(settings),state=store.get('worker',initial()),loaded=JSON.stringify(state),at=now();
    if(!settings.username)return;
    // A failed run waits 2, 4, 8 … up to 60 minutes, so an outage is not polled every minute.
    if(!manual&&at<(state.retryAt||0))return;
@@ -70,12 +72,12 @@ export function createWorker({store,service,ntfy=null,publish=null,now=Date.now,
     if(state.runs[period]>=key)continue;
     const report=await service.digest({period});
     state.runs[period]=key;
-    const send=notifier.configured()&&!report.demo,entry={...report,id:key,createdAt:at,delivery:send?'pending':'archived'};state.reports.unshift(entry);
+    const send=notifier.configured()&&!report.demo,entry={id:key,period,createdAt:at,demo:report.demo,delivery:send?'pending':'archived',text:report.text,actions:(report.actions||[]).map(a=>({text:a.text}))};state.reports.unshift(entry);
     if(send)state.outbox.push({id:key,type:'digest',title:`Awaker ${period} report`,message:report.text,url:link('settings'),status:'pending',attempts:0,nextAttempt:at,expiresAt:at+86400000});
     save();
    }
    const day=localParts(at,settings.timezone).date;if(state.day!==day){state.day=day;state.count=0}
-   const enabled=Object.keys(kinds).filter(kind=>settings.alerts[kinds[kind].on]);
+   const enabled=Object.keys(kinds).filter(kind=>alertOn(settings,kind));
    // A scan held back by quiet hours runs again as soon as they end, rather than a full interval later.
    if(enabled.length&&(manual||at-state.lastScan>=settings.alerts.scanHours*3600000||state.deferred&&!quiet(at,settings))){
     const fresh=Object.fromEntries(Object.entries(state.events).filter(([,v])=>at-(v.lastSeen||0)<7*86400000).map(([k,v])=>[k,{...v}])),picked=[],found=[],scan={at,manual,sent:0,held:null,kinds:{}};
@@ -88,7 +90,7 @@ export function createWorker({store,service,ntfy=null,publish=null,now=Date.now,
      // matter most right after the week turns and each opportunity is already sent once per key.
      const baseline=state.baselines[kind]!=null;let fresher=0;generatedAt=result.generatedAt||at;
      for(const c of result.items){
-      const previous=state.events[c.key],qualified=!previous?.active||previous.deferred||c.gain-previous.notifiedGain>=settings.alerts.improvement;
+      const previous=state.events[c.key],qualified=!previous||previous.deferred||!previous.lastSent&&!previous.active||c.gain-previous.notifiedGain>=settings.alerts.improvement;
       fresh[c.key]={kind,active:true,lastSeen:at,gain:c.gain,notifiedGain:previous?.notifiedGain??c.gain,lastSent:previous?.lastSent||0};
       if(!baseline||!qualified)continue;
       if(at-(previous?.lastSent||0)<settings.alerts.cooldownHours*3600000)continue;
@@ -105,43 +107,49 @@ export function createWorker({store,service,ntfy=null,publish=null,now=Date.now,
      for(const c of picked)Object.assign(fresh[c.key],{lastSent:at,notifiedGain:c.gain});
      state.count++;scan.sent=picked.length;
     }
+    if(enabled.every(kind=>scan.kinds[kind]?.skipped))state.lastScan=at-settings.alerts.scanHours*3600000+900000;
     scan.top=found.sort((a,b)=>b.gain-a.gain).slice(0,3).map(i=>i.line);state.deferred=scan.held==='quiet';state.scan=scan;
     state.events=Object.fromEntries(Object.entries(fresh).sort((a,b)=>b[1].lastSeen-a[1].lastSeen).slice(0,500));
     save();
    }
+   // Marked as sent when queued, so a push that never arrives must hand its opportunities back.
+   const release=item=>{for(const i of item.items||[])if(state.events[i.key])state.events[i.key].deferred=true};
    for(const item of state.outbox.filter(o=>o.status==='pending'&&o.nextAttempt<=at)){
-    if(item.expiresAt<=at){item.status='expired';const report=state.reports.find(r=>r.id===item.id);if(report)report.delivery='expired';continue}
+    if(item.expiresAt<=at){item.status='expired';release(item);const report=state.reports.find(r=>r.id===item.id);if(report)report.delivery='expired';continue}
     // Alerts queued by an earlier version cannot be rechecked in this format.
     if(item.type==='trade'){item.status='expired';continue}
     if(item.type==='alert'){
      if(quiet(at,settings))continue;
      // Recheck every league behind the digest and keep only what still qualifies.
-     const kept=[];let generatedAt=at;
+     const kept=[];let generatedAt=at,unchecked=false;
      for(const kind of enabled)for(const leagueId of new Set(item.items.filter(i=>i.kind===kind).map(i=>i.leagueId))){
       try{
        const check=await candidates(kind,settings,{leagueId},forced?{}:{force:true});forced=true;
+       if(!check.ok)unchecked=true;
        if(check.ok){generatedAt=check.generatedAt||at;kept.push(...check.items.filter(c=>item.items.some(i=>i.key===c.key&&i.scope===check.scope)).map(c=>({...c,scope:check.scope})))}
-      }catch{}
+      }catch{unchecked=true}
      }
-     if(!kept.length){item.status=enabled.length?'expired':'cancelled';continue}
+     // A recheck that could not run proves nothing. Try again shortly instead of discarding the alert.
+     if(unchecked){item.nextAttempt=at+300000;continue}
+     if(!kept.length){item.status=enabled.length?'expired':'cancelled';release(item);continue}
      Object.assign(item,{items:kept},compose(kept,generatedAt));
     }
     if(JSON.stringify(service.settings())!==revision)throw Error('Settings changed before delivery');
     if(!notifier.configured())continue;
-    try{await notifier.publish(item);item.status='accepted';item.acceptedAt=now();item.error=null;const report=state.reports.find(r=>r.id===item.id);if(report)report.delivery='accepted'}catch{item.attempts++;item.error='Notification provider did not confirm acceptance.';item.status=item.attempts>=5?'failed':'pending';item.nextAttempt=at+Math.min(3600000,60000*2**item.attempts);const report=state.reports.find(r=>r.id===item.id);if(report)report.delivery=item.status}
+    try{await notifier.publish(item);item.status='accepted';item.acceptedAt=now();item.error=null;const report=state.reports.find(r=>r.id===item.id);if(report)report.delivery='accepted'}catch{item.attempts++;item.error='Notification provider did not confirm acceptance.';item.status=item.attempts>=5?'failed':'pending';if(item.status==='failed')release(item);item.nextAttempt=at+Math.min(3600000,60000*2**item.attempts);const report=state.reports.find(r=>r.id===item.id);if(report)report.delivery=item.status}
     save();
    }
-   state.failures=0;state.retryAt=0;state.lastRun=at;state.lastError=null;save();
-  }catch(e){const s=store.get('worker',initial());s.failures++;s.retryAt=now()+Math.min(3600000,60000*2**Math.min(s.failures,6));s.lastError={at:now(),message:'Background run failed. Check data availability and service configuration.'};store.set('worker',s)}finally{running=false;forced=false}
+   state.failures=0;state.retryAt=0;state.lastError=null;if(JSON.stringify(state)!==loaded)save();store.set('workerLastRun',at);
+  }catch(e){if(/^Settings changed/.test(e?.message||''))return;const s=store.get('worker',initial());s.failures++;s.retryAt=now()+Math.min(3600000,60000*2**Math.min(s.failures,6));s.lastError={at:now(),message:'Background run failed. Check data availability and service configuration.'};store.set('worker',s)}finally{running=false;forced=false}
  }
  // Runs the same scan the schedule would, right now. Baseline, quiet hours and the daily cap still apply.
  async function scan(){
   const alerts=service.settings().alerts;
-  if(!alerts.trades&&!alerts.waivers)throw bad('Turn on trade or waiver alerts, save, then scan.',409);
+  if(!alerts.trades&&!alerts.waivers&&!alerts.bench)throw bad('Turn on trade or waiver alerts, save, then scan.',409);
   if(running)throw bad('A background run is in progress. Try again in a moment.',409);
   manual=true;try{await tick()}finally{manual=false}
   return status();
  }
- function status(){const s=store.get('worker',initial()),config=service.settings(),on=config.alerts.trades||config.alerts.waivers;return {...s,events:undefined,outbox:s.outbox.map(({idea,items,...o})=>o),nextDaily:nextRun(now(),config.daily,config.timezone,'daily'),nextWeekly:nextRun(now(),config.weekly,config.timezone,'weekly'),nextScan:on?(s.lastScan||now())+(s.lastScan?config.alerts.scanHours*3600000:0):null,ntfyConfigured:notifier.configured(),injuryAlertsAvailable:false}}
+ function status(){const s=store.get('worker',initial()),config=service.settings(),on=config.alerts.trades||config.alerts.waivers||config.alerts.bench;return {...s,lastRun:store.get('workerLastRun',s.lastRun),events:undefined,outbox:s.outbox.map(({idea,items,...o})=>o),nextDaily:nextRun(now(),config.daily,config.timezone,'daily'),nextWeekly:nextRun(now(),config.weekly,config.timezone,'weekly'),nextScan:on?(s.lastScan||now())+(s.lastScan?config.alerts.scanHours*3600000:0):null,ntfyConfigured:notifier.configured(),injuryAlertsAvailable:false}}
  return {tick,scan,status};
 }

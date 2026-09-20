@@ -8,7 +8,7 @@ export function preferences(input){
  if(!object(input))throw bad('Preferences must be an object.');
  const out={};
  for(const k of ['protectStarters','samePositionDrops','waiverUpgradesOnly','requireBenefit'])if(k in input){if(typeof input[k]!=='boolean')throw bad(`Invalid ${k}`);out[k]=input[k]}
- for(const [k,min,max]of [['tradeMinGain',0,10],['tradeMaxGap',0,1],['tradePenalty',0,1],['tradeOwnBias',0,1],['tradeEndWeek',17,18]])if(k in input){if(!Number.isFinite(input[k])||input[k]<min||input[k]>max||(k==='tradeEndWeek'&&!Number.isInteger(input[k])))throw bad(`Invalid ${k}`);out[k]=input[k]}
+ for(const [k,min,max]of [['tradeMinGain',0,10],['tradeMaxGap',0,1],['tradePenalty',0,1],['tradeOwnBias',0,1],['tradeEndWeek',17,18],['waiverEndWeek',17,18]])if(k in input){if(!Number.isFinite(input[k])||input[k]<min||input[k]>max||(k.endsWith('EndWeek')&&!Number.isInteger(input[k])))throw bad(`Invalid ${k}`);out[k]=input[k]}
  for(const [key,sides]of [['tradeExcluded',['give','get']],['waiverExcluded',['add','drop']]])if(key in input){if(!object(input[key])||sides.some(s=>!strings(input[key][s])))throw bad(`Invalid ${key}`);out[key]=Object.fromEntries(sides.map(s=>[s,input[key][s]]))}
  if(out.tradeMinGain!==undefined&&![0,.5,1,2,3,5,10].includes(out.tradeMinGain))throw bad('Unsupported minimum gain.');
  if(out.tradeMaxGap!==undefined&&![.15,.25,.4,1].includes(out.tradeMaxGap))throw bad('Unsupported value gap.');

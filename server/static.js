@@ -1,3 +1,4 @@
+import {gzipSync} from 'node:zlib'
 import {readFile, realpath} from 'node:fs/promises'
 import {resolve, extname, sep} from 'node:path'
 import {bad} from './settings.js'
@@ -22,8 +23,11 @@ export const securityHeaders = {
 }
 
 export function json(res, status, value) {
-  res.writeHead(status, {...securityHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store'})
-  res.end(JSON.stringify(value))
+  const body = Buffer.from(JSON.stringify(value))
+  // League data is a few megabytes of repetitive JSON, and it is fetched every 45 seconds.
+  const gzip = body.length > 4096 && /\bgzip\b/.test(String(res.req?.headers['accept-encoding'] || ''))
+  res.writeHead(status, {...securityHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store', Vary: 'Accept-Encoding', ...(gzip ? {'Content-Encoding': 'gzip'} : {})})
+  res.end(gzip ? gzipSync(body, {level: 4}) : body)
 }
 
 export async function serveStatic(req, res, dist, path) {
