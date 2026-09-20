@@ -38,6 +38,10 @@
   the weakest, and never one of your protected players. The trade builder and the evaluate API
   accept uneven packages the same way, and alerts name your drop.
 - The watchroom shows your benched players by default, tagged BN. Untick Show my bench to hide them.
+- Open any matchup into both lineups, the way Sleeper shows one: starters slot by slot facing each
+  other, then the benches, with each player's points, his projection before kickoff, the game clock
+  and where he is heading while he plays, and how he finished against projection once he is done.
+  Click a game on Around the league, or one of your league cards in the watchroom.
 - Waiver pickups show what the add and its drop do to your playoff odds.
 - Auto trades can be sorted by what is best for both teams, your points, their points, combined
   points, or the lift to your playoff odds. Offers are numbered and the list says how it is ranked.

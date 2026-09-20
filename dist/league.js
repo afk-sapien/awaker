@@ -178,6 +178,27 @@ export function liveWeek({league,players,projections={},games={},spread=24}){
   complete:known&&list.length>0&&list.some(t=>t.points>0)&&list.every(t=>!t.counts.live&&!t.counts.pre)};
 }
 
+// Both lineups of one matchup, slot by slot, the way Sleeper lays a matchup out: starters in lineup
+// order, then the bench, each with points so far, the pregame projection and where he is heading.
+export const SLOT_LABELS={FLEX:'FLX',SUPER_FLEX:'SF',REC_FLEX:'W/T',WRRB_FLEX:'W/R',IDP_FLEX:'IDP'};
+export function matchupDetail({league,players,projections={},games={},rosterIds}){
+ const slots=activeSlots(league),known=Object.keys(games).length>0;
+ const line=(m,id)=>{
+  if(!id||id==='0'||!players[id])return {id:null,points:0,projection:null,heading:0,state:'empty',game:null};
+  const points=Number(m.players_points?.[id])||0,projection=projected(projections[id]?.stats,league.scoring_settings),game=games[players[id].team]||null;
+  const state=!known?'unknown':!game?'bye':game.state==='post'?'done':game.state==='pre'?'pre':'live',left=state==='pre'||state==='unknown'?1:state==='live'?gameRemaining(game):0;
+  return {id,points:round(points),projection:Number.isFinite(projection)?round(projection):null,heading:round(points+Math.max(0,projection||0)*left),state,game};
+ };
+ const sides=rosterIds.map(rosterId=>{
+  const m=(league.matchups||[]).find(x=>x.roster_id===rosterId),roster=(league.rosters||[]).find(r=>r.roster_id===rosterId);if(!m)return null;
+  const starting=m.starters||[],reserve=new Set([...(roster?.reserve||[]),...(roster?.taxi||[])]);
+  const starters=slots.map((slot,i)=>({slot,label:SLOT_LABELS[slot]||slot,...line(m,starting[i])}));
+  const bench=(m.players||roster?.players||[]).filter(id=>!starting.includes(id)&&players[id]).map(id=>({slot:reserve.has(id)?'IR':'BN',label:reserve.has(id)?'IR':'BN',...line(m,id)})).sort((a,b)=>(a.slot==='IR')-(b.slot==='IR')||b.points-a.points||(b.projection||0)-(a.projection||0));
+  return {rosterId,points:round(score(m)),heading:round(score(m)+starters.reduce((s,p)=>s+p.heading-p.points,0)),projection:round(starters.reduce((s,p)=>s+(p.projection||0),0)),starters,bench,benchPoints:round(bench.filter(p=>p.slot==='BN').reduce((s,p)=>s+p.points,0))};
+ });
+ return sides.includes(null)?null:{slots,sides};
+}
+
 function random(seed){let a=seed>>>0;const next=()=>{a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
  let spare=null;return ()=>{if(spare!==null){const s=spare;spare=null;return s}let u;do u=next();while(u<1e-12);const r=Math.sqrt(-2*Math.log(u)),angle=2*Math.PI*next();spare=r*Math.sin(angle);return r*Math.cos(angle)}}
 // Seed order for a bracket of 2, 4, 8, 16: 1 meets the lowest seed, and 1 and 2 can only meet in the final.

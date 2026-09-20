@@ -183,3 +183,17 @@ test('a week is final only when every starter’s game is over',()=>{
  const unprojected=liveWeek({league,players,projections:{...projections,qb2:undefined},games:{...over,T2:{state:'in',period:1,clock:'12:00'}}});
  assert.equal(unprojected.complete,false);assert.ok(unprojected.teams[2].share>.5&&unprojected.teams[2].sd>0,'a live starter with no projection keeps the score uncertain');
 });
+
+import {matchupDetail} from '../dist/league.js';
+test('a matchup opens into both lineups in slot order, with the bench and where each player is heading',()=>{
+ const all={q:P('QB','A'),r:P('RB','B'),b1:P('RB','C'),ir:P('WR','D'),q2:P('QB','E'),r2:P('RB','F')};
+ const league={scoring_settings:{pts:1},roster_positions:['QB','RB','FLEX','BN','IR'],rosters:[{roster_id:1,players:['q','r','b1','ir'],reserve:['ir']},{roster_id:2,players:['q2','r2']}],
+  matchups:[{roster_id:1,matchup_id:1,points:30,starters:['q','r','0'],players:['q','r','b1','ir'],players_points:{q:20,r:10,b1:7,ir:0}},{roster_id:2,matchup_id:1,points:5,starters:['q2','r2','0'],players:['q2','r2'],players_points:{q2:5}}]};
+ const projections=Object.fromEntries(Object.keys(all).map(id=>[id,{stats:{pts:16}}])),games={A:{state:'post'},B:{state:'in',period:3,clock:'15:00'},E:{state:'pre'},C:{state:'post'}};
+ const {sides:[mine,theirs]}=matchupDetail({league,players:all,projections,games,rosterIds:[1,2]});
+ assert.deepEqual(mine.starters.map(p=>[p.label,p.id,p.state,p.points,p.heading]),[['QB','q','done',20,20],['RB','r','live',10,18],['FLX',null,'empty',0,0]]);
+ assert.deepEqual([mine.points,mine.heading,mine.projection,mine.benchPoints],[30,38,32,7]);
+ assert.deepEqual(mine.bench.map(p=>[p.id,p.label]),[['b1','BN'],['ir','IR']],'injured reserve lists after the bench and does not count as bench points');
+ assert.deepEqual(theirs.starters.map(p=>[p.id,p.state,p.heading]),[['q2','pre',21],['r2','bye',0],[null,'empty',0]]);
+ assert.equal(matchupDetail({league,players:all,projections,games,rosterIds:[1,9]}),null);
+});
