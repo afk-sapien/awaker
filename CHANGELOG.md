@@ -42,6 +42,13 @@
   other, then the benches, with each player's points, his projection before kickoff, the game clock
   and where he is heading while he plays, and how he finished against projection once he is done.
   Click a game on Around the league, or one of your league cards in the watchroom.
+- Every page now opens with its answer. Start / sit says whether your lineup is set or names the
+  swaps and what they are worth, and no longer prints every unchanged starter twice. The waiver wire
+  leads with the best move, or says you are set, and fades players who are not a move. The defense
+  planner gives a pick for every week, a pickup only when it clearly beats yours, and lists your
+  defenses, then the free ones, then the ones you cannot have. Season review names who is carrying
+  you and who is letting you down. League outlook starts with your own odds, power rank, projected
+  wins and how much this week matters. Watchroom league cards show whether you are ahead or behind.
 - Waiver pickups show what the add and its drop do to your playoff odds.
 - Auto trades can be sorted by what is best for both teams, your points, their points, combined
   points, or the lift to your playoff odds. Offers are numbered and the list says how it is ranked.

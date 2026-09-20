@@ -175,3 +175,17 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
 .lu-slot{text-align:center;font-size:11px;font-weight:700;letter-spacing:.5px;color:#52646a;background:#eef2f2;border-radius:5px;padding:5px 0}
 .lu-total{background:#f7f9f9}.lu-total .lu-score strong{font-size:28px}.lu-total .lu-slot{background:var(--dark);color:var(--on-primary,#fff)}
 @media(max-width:760px){.lu-row{grid-template-columns:minmax(0,1fr) 58px 34px 58px minmax(0,1fr);gap:0 6px;padding:8px 10px}.lu-head{padding:10px}.lu-player .player-portrait{display:none}.lu-player{margin-left:-6px;padding-left:5px}.lu-player.flip{margin-right:-6px;padding-right:5px}.lu-player .player-chip-text strong{font-size:13px;white-space:normal}.lu-score strong{font-size:19px}.lu-total .lu-score strong{font-size:21px}.lu-score small{font-size:10px;white-space:normal}.lu-slot{font-size:10px}.lu-when{white-space:normal}}
+
+/* Start / sit: the verdict first, and only real swaps in color. */
+.lineup-summary.verdict-set{box-shadow:inset 4px 0 0 var(--green)}.lineup-summary.verdict-act{box-shadow:inset 4px 0 0 #d99a2b;background:#fffaf0}.lineup-summary.verdict-unsure{box-shadow:inset 4px 0 0 #b9c5c8}
+.lineup-table tr.lineup-swap>td{background:#f1faf3}.lineup-table tr.lineup-locked>td{color:#6c7a7e}.lineup-table tr.lineup-locked .player-chip{opacity:.75}.pill.locked{background:#eef2f2;color:#6c7a7e}
+
+/* Defense planner: an answer for every week, then the evidence. */
+.defense-plan{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:0 0 20px}.defense-plan-week{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:2px;min-width:0}.defense-plan-week.stream{border-color:#a9d9bd;background:#f1faf3}.defense-plan-week .eyebrow{margin:0;font-size:11px}.defense-plan-week strong{font-size:20px}.defense-plan-week strong .num{font-family:'Barlow Condensed',sans-serif;font-weight:600;color:var(--muted);margin-left:4px}.defense-plan-week .small{font-size:12px}
+.defense-table tr.defense-row-other>td{opacity:.62}.defense-table tr.defense-row-other+tr.defense-row-other>*,.defense-table tr.defense-row-available+tr.defense-row-available>*{border-top:0}.defense-table tr.defense-row-mine+tr.defense-row-available>*,.defense-table tr.defense-row-available+tr.defense-row-other>*,.defense-table tr.defense-row-mine+tr.defense-row-other>*{border-top:3px solid var(--ink)}
+
+/* Headline tiles say good or bad with an edge, never with colored text alone. */
+.league-tile.tile-good{box-shadow:inset 0 3px 0 var(--green)}.league-tile.tile-warn{box-shadow:inset 0 3px 0 #d99a2b}.league-tile.tile-bad{box-shadow:inset 0 3px 0 var(--orange)}.league-tile strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.waiver-table tr.waiver-upgrade>td:first-child{box-shadow:inset 3px 0 0 var(--green)}.waiver-table tr.waiver-none>td{opacity:.6}.waiver-table tr.waiver-none>td:last-child{opacity:1}
+.league-card.winning{box-shadow:inset 0 3px 0 var(--green)}.league-card.trailing{box-shadow:inset 0 3px 0 var(--orange)}.league-card.winning .card-standing{color:var(--green)}.league-card.trailing .card-standing{color:#a3401a}
+.league-tile .tile-text{font-family:'DM Sans',system-ui,sans-serif;font-size:19px;font-weight:700;letter-spacing:-.3px;line-height:1.75}
