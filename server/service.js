@@ -1,6 +1,7 @@
 import {aggregateWatch,activeSlots,optimize,playableIds} from '../dist/engine.js';
 import {buildSeasonModel,realismReasons,compareTradeIdeas,tradeGains} from '../dist/trades.js';
-import {findTradeIdeas,waiverRows,lockedLineup,usableValue} from '../dist/analysis.js';
+import {findTradeIdeas,waiverRows,futureWaiverRows,lockedLineup,usableValue} from '../dist/analysis.js';
+import {waiverWeeks} from '../dist/waivers.js';
 import {defaults,validateSettings,bad} from './settings.js';
 const name=(data,id)=>data.players[id]?.full_name||id;
 export function createService({store,provider,now=Date.now,username:pinned=''}){
@@ -39,15 +40,19 @@ export function createService({store,provider,now=Date.now,username:pinned=''}){
   const d=await load({outlook:true}),l=leagues(d,leagueId)[0],p=l.rosters.find(r=>String(r.roster_id)===String(partnerId)&&r.roster_id!==l.mine.roster_id);if(!p)throw bad('Unknown trade partner.');
   try{const season=model(d,l),pref=settings().preferences,result=season.assessWaivers(season.evaluate(l.mine,p,give,get),l.mine,p,{protectedA:pref.waiverProtected?.[`${d.user.user_id}:${l.league_id}`]||[]});return envelope(d,{result,filters:pref,realismWarnings:realismReasons(result,{minGain:pref.tradeMinGain??0,maxGap:pref.tradeMaxGap??1})},result.complete?[]:['Incomplete starting-lineup projections.'])}catch(e){throw bad(e.message,e.status||422)}
  }
- async function opportunities({leagueId}={},options={}){
-  const d=await load(options),results=[],warnings=[],prefs=settings().preferences;
+ // horizon 'current' ranks pickups for this week. 'next' and 'season' hold one pickup and drop across
+ // future weeks, as the waiver view does, and report the gain per week so one threshold fits all three.
+ async function opportunities({leagueId,horizon='current'}={},options={}){
+  const future=horizon!=='current',d=await load({...options,outlook:future}),results=[],warnings=[],prefs=settings().preferences;
+  const weeks=future?waiverWeeks(d.week,horizon,prefs.waiverEndWeek||17).filter(w=>d.outlook?.weeks.includes(w)):[d.week];
+  if(future&&(!weeks.length||d.outlook.errors.length))return envelope(d,{opportunities:[],horizon,weeks},[weeks.length?'Future projections or schedules are incomplete.':'No future weeks remain for waiver alerts.']);
   for(const l of leagues(d,leagueId)){try{
    const {ids,locks}=lockedLineup(d,l),value=id=>usableValue(d,l,id,Object.values(locks)),best=optimize(playableIds(l.mine),activeSlots(l),d.players,value,locks,ids);
    const complete=best.complete&&ids.every(id=>id==='0'||Number.isFinite(value(id))),gain=complete?best.total-ids.reduce((sum,id)=>sum+(value(id)||0),0):null;
    if(!complete)warnings.push(`${l.name}: incomplete lineup projections`);
-   results.push({leagueId:l.league_id,league:l.name,lineup:{...best,current:ids,gain,complete},waivers:waiverRows(d,l,prefs).map(r=>({...r,name:name(d,r.id),dropName:r.drop?name(d,r.drop):null}))});
+   results.push({leagueId:l.league_id,league:l.name,lineup:{...best,current:ids,gain,complete},waivers:(future?futureWaiverRows(d,l,{...d.outlook,weeks},prefs):waiverRows(d,l,prefs)).map(r=>({...r,perWeek:r.gain===null?null:r.gain/weeks.length,name:name(d,r.id),dropName:r.drop?name(d,r.drop):null}))});
   }catch(e){warnings.push(`${l.name}: ${e.message}`)}}
-  return envelope(d,{opportunities:results},warnings);
+  return envelope(d,{opportunities:results,horizon,weeks},warnings);
  }
  async function digest({period='daily'}={}){
   const [state,opps,trade]=await Promise.all([status(),opportunities(),trades({limit:3})]);

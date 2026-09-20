@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Save notification settings as you change them. The Save box is gone, and the page only writes
+  the settings it owns, so it can no longer overwrite filters changed on the dashboard.
+- Choose how alerts judge a move: trades by the average week over the rest of the season or by
+  next week alone, and waiver pickups by this week, next week or the rest of the season.
+- Remove the button that copied filters from the browser and the separate league exclusion box.
+  Alerts already follow the Auto trades and Waiver wire filters and the leagues turned on in My leagues.
 - Give notifications their own page in the sidebar, inside the dashboard's layout. Settings are
   short rows with switches, a status strip shows where pushes go and when the last and next
   checks are, and one Save covers the phone, alerts and summaries.

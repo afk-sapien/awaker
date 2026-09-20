@@ -29,9 +29,11 @@ export function createWorker({store,service,ntfy=null,publish=null,now=Date.now,
  // Waiver rows come from the same engine as the waiver view. Several pickups that cost the
  // same drop are one decision, so only the best add for each drop counts as an opportunity.
  async function candidates(kind,settings,query={},options={}){
-  const result=kind==='trade'?await service.trades({...query,limit:50},options):await service.opportunities(query,options),drops=new Set();
-  const items=kind==='trade'?result.ideas.map(t=>({kind,key:eventKey(t),leagueId:t.leagueId,gain:t.gain,line:`${t.league}: ${t.send.join(' + ')} for ${t.receive.join(' + ')}. Projected +${t.gain.toFixed(1)} points/week; partner +${(t.gainB/t.weeks).toFixed(1)}.`}))
-   :result.opportunities.flatMap(l=>l.waivers.filter(w=>w.status==='upgrade'&&!drops.has(`${l.leagueId}:${w.drop}`)&&drops.add(`${l.leagueId}:${w.drop}`)).map(w=>({kind,key:JSON.stringify(['waiver',l.leagueId,w.id,w.drop]),leagueId:l.leagueId,gain:w.gain,line:`${l.league}: add ${w.name}${w.dropName?`, drop ${w.dropName}`:''}. Projected +${w.gain.toFixed(1)} points this week.`})));
+  const result=kind==='trade'?await service.trades({...query,limit:50},options):await service.opportunities({...query,horizon:settings.alerts.waiverHorizon},options),drops=new Set();
+  // A trade is always searched over the rest of the season. "Next week" judges it by its first week alone.
+  const nextWeek=settings.alerts.tradeHorizon==='next',tradeGain=t=>nextWeek?t.weekly?.[0]?.gainA??0:t.gain,span=result.weeks?.length>1?`points/week over weeks ${result.weeks[0]}–${result.weeks.at(-1)}`:result.horizon==='next'?`points in week ${result.weeks?.[0]}`:'points this week';
+  const items=kind==='trade'?result.ideas.map(t=>({kind,key:eventKey(t),leagueId:t.leagueId,gain:tradeGain(t),line:`${t.league}: ${t.send.join(' + ')} for ${t.receive.join(' + ')}. Projected +${tradeGain(t).toFixed(1)} ${nextWeek?`points in week ${t.weekly?.[0]?.week}`:'points/week'}; partner +${(nextWeek?t.weekly?.[0]?.gainB??0:t.gainB/t.weeks).toFixed(1)}.`}))
+   :result.opportunities.flatMap(l=>l.waivers.filter(w=>w.status==='upgrade'&&!drops.has(`${l.leagueId}:${w.drop}`)&&drops.add(`${l.leagueId}:${w.drop}`)).map(w=>({kind,key:JSON.stringify(['waiver',l.leagueId,w.id,w.drop]),leagueId:l.leagueId,gain:w.perWeek??w.gain,line:`${l.league}: add ${w.name}${w.dropName?`, drop ${w.dropName}`:''}. Projected +${(w.perWeek??w.gain).toFixed(1)} ${span}.`})));
   return {ok:result.complete&&!result.demo,scope:`${result.season}:${result.week}`,generatedAt:result.generatedAt,warning:result.warnings?.[0]||null,items:items.filter(i=>i.gain>=settings.alerts[kinds[kind].min])};
  }
  // One push per scan: a single opportunity reads as before, several become a short digest.

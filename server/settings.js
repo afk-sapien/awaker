@@ -1,4 +1,4 @@
-export const defaults={username:'',disabled:[],preferences:{},timezone:'America/Los_Angeles',daily:{enabled:false,time:'08:00'},weekly:{enabled:false,time:'08:00',day:2},alerts:{trades:false,waivers:false,minGain:3,waiverMinGain:3,improvement:2,cooldownHours:6,dailyCap:3,scanHours:6,quietStart:'22:00',quietEnd:'08:00'}};
+export const defaults={username:'',disabled:[],preferences:{},timezone:'America/Los_Angeles',daily:{enabled:false,time:'08:00'},weekly:{enabled:false,time:'08:00',day:2},alerts:{tradeHorizon:'season',waiverHorizon:'current',trades:false,waivers:false,minGain:3,waiverMinGain:3,improvement:2,cooldownHours:6,dailyCap:3,scanHours:6,quietStart:'22:00',quietEnd:'08:00'}};
 export const scanIntervals=[1,3,6,12,24];
 export function bad(message,status=400){return Object.assign(new Error(message),{status})}
 const object=v=>v&&typeof v==='object'&&!Array.isArray(v);
@@ -33,6 +33,7 @@ export function validateSettings(input,previous=defaults){
   s.alerts = {...s.alerts, ...input.alerts}
  }
  const a=s.alerts;
+ if(!['season','next'].includes(a.tradeHorizon)||!['current','next','season'].includes(a.waiverHorizon))throw bad('Invalid alert horizon.');
  if(typeof a.trades!=='boolean'||typeof a.waivers!=='boolean'||!time(a.quietStart)||!time(a.quietEnd))throw bad('Invalid alert settings.');
  for(const [key,min,max]of [['minGain',1,100],['waiverMinGain',.5,100],['improvement',.1,100],['cooldownHours',1,168],['dailyCap',1,20]])if(!Number.isFinite(a[key])||a[key]<min||a[key]>max)throw bad(`Invalid ${key}`);
  if(!Number.isInteger(a.dailyCap))throw bad('Daily cap must be a whole number.');

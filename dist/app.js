@@ -1,5 +1,5 @@
 import {lineupComparisons} from './lineup.js?v=21';
-import {lockedLineup as sharedLocks,usableValue as sharedValue,waiverRows as sharedWaivers,findTradeIdeas} from './analysis.js?v=26';
+import {lockedLineup as sharedLocks,usableValue as sharedValue,waiverRows as sharedWaivers,futureWaiverRows as sharedFutureWaivers,findTradeIdeas} from './analysis.js?v=27';
 const icon=(name)=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${({watch:'<rect x="3" y="4" width="18" height="14" rx="2"/><path d="m8 22 4-4 4 4M8 10h8M12 6v8"/>',waivers:'<path d="m3 17 6-6 4 3 8-10M15 4h6v6"/>',lineup:'<path d="M9 5h12M9 12h12M9 19h12M3 5h1M3 12h1M3 19h1"/>',trades:'<path d="M3 7h18m-5-5 5 5-5 5M21 17H3m5-5-5 5 5 5"/>','trade-builder':'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 12h8m-4-4v8"/>',defenses:'<path d="m12 2 8 4v6c0 5-8 10-8 10S4 17 4 12V6z"/>',notifications:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10 21a2 2 0 0 0 4 0"/>',settings:'<path d="M3 6h18M3 12h18M3 18h18"/><circle cx="8" cy="6" r="2" fill="currentColor"/><circle cx="16" cy="12" r="2" fill="currentColor"/><circle cx="10" cy="18" r="2" fill="currentColor"/>'})[name]}</svg>`;
 const nav=[['watch','Awaker watchroom'],['waivers','Waiver wire'],['lineup','Start / sit'],['trades','Auto trades'],['trade-builder','Trade builder'],['defenses','Defense planner'],['notifications','Notifications'],['settings','My leagues']];
 import {createMemo,identity,rosterKey} from './cache.js';
@@ -204,13 +204,7 @@ function waiverRows(){
  const key=JSON.stringify([...weeklyAnalysisKey(l),waiverHorizon,identity(outlook),identity(data.trends),waiverExcluded,protectedPlayers(l),protectStarters,samePositionDrops]);
  return waiverResults.get(key,()=>future?futureWaiverRows(l,outlook):computeWaiverRows());
 }
-function futureWaiverRows(l,outlook){
- const trending=new Map(data.trends.map(t=>[t.player_id,t.count])),slots=activeSlots(l);
- const model=buildWaiverOutlook({league:l,players:data.players,outlook,protectedIds:protectedPlayers(l),starterIds:protectStarters?lockedLineup(l).ids:[],excludedDropPositions:waiverExcluded.drop,samePosition:samePositionDrops});
- const free=tradeCandidateIds(availableIds(l,data.players),data.players,waiverExcluded.add).filter(id=>slots.some(slot=>eligible(data.players[id],slot)));
- const candidates=[...new Set([...free.filter(id=>trending.has(id)).sort((a,b)=>trending.get(b)-trending.get(a)).slice(0,30),...free.filter(id=>model.totals[id]>0).sort((a,b)=>model.totals[b]-model.totals[a]).slice(0,35)])];
- return candidates.map(id=>({id,count:trending.get(id)||0,projection:model.totals[id],...model.evaluate(id)})).sort((a,b)=>(b.gain??-999)-(a.gain??-999)||b.count-a.count).slice(0,20);
-}
+function futureWaiverRows(l,outlook){return sharedFutureWaivers(data,l,outlook,{...prefs,waiverExcluded,protectStarters,samePositionDrops,waiverProtected:{[`${data.user?.user_id}:${l.league_id}`]:protectedPlayers(l)}})}
 function computeWaiverRows(){try{return sharedWaivers(data,league(),{...prefs,waiverExcluded,protectStarters,samePositionDrops})}catch{return []}}
 function waiverFilterPositions(l){
  const slots=activeSlots(l);

@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#141d21"><title>Awaker · Notifications</title><link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/styles.css?v=27"><link rel="stylesheet" href="/integrations.css?v=2"></head>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#141d21"><title>Awaker · Notifications</title><link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/styles.css?v=27"><link rel="stylesheet" href="/integrations.css?v=3"></head>
 <body><div id="app">
 <aside class="sidebar"><div class="brand">awaker<em>／</em><small>HQ</small></div><div class="nav-label">YOUR PLAYBOOK</div><nav aria-label="Main navigation" id="side-nav"></nav><div class="sidebar-bottom"><p>Less switching.<br>More football.</p></div></aside>
 <main class="main"><header class="topbar"><div class="mobile-brand">awaker／</div><div class="crumb">Fantasy football <span class="crumb-gap">/</span> <strong>Notifications</strong></div><div class="top-actions"><span class="pill" id="account-pill" hidden></span><button id="logout" type="button" class="secondary" hidden>Sign out</button></div></header>
 <div class="content notify-page">
-<div class="page-head"><div><div class="eyebrow">WHILE YOU’RE AWAY</div><h1>Notifications</h1><p>Awaker keeps checking your leagues and tells your phone when something is worth a look.</p></div></div>
+<div class="page-head"><div><div class="eyebrow">WHILE YOU’RE AWAY</div><h1>Notifications</h1><p>Awaker keeps checking your leagues and tells your phone when something is worth a look.</p></div><span id="notice" class="save-state" role="status" aria-live="polite"></span></div>
 
 <p id="page-notice" class="note warn" role="alert" hidden></p>
 <section id="login-panel" class="panel" hidden><h2>Owner sign-in</h2><p class="muted">This server protects its settings with an owner token.</p><form id="login" class="inline-form"><input id="owner-token" type="password" autocomplete="current-password" placeholder="Owner token" aria-label="Owner token" required><button class="primary">Connect</button></form></section>
@@ -19,7 +19,7 @@
 <ul id="scan-found" class="found-list"></ul>
 
 <form id="settings-form" novalidate>
-<section class="panel"><header class="card-head"><h2>Your phone</h2><p class="muted">Pushes go through <a href="https://ntfy.sh" target="_blank" rel="noreferrer">ntfy</a>, a free app. No account: choose a topic, save, then subscribe to the same topic in the ntfy app.</p></header>
+<section class="panel"><header class="card-head"><h2>Your phone</h2><p class="muted">Pushes go through <a href="https://ntfy.sh" target="_blank" rel="noreferrer">ntfy</a>, a free app. No account: choose a topic, then subscribe to the same topic in the ntfy app.</p></header>
  <div class="field-grid"><label class="field"><span>Server</span><input id="ntfy-url" type="url" placeholder="https://ntfy.sh" spellcheck="false"></label>
  <label class="field"><span>Topic</span><span class="input-action"><input id="ntfy-topic" pattern="[A-Za-z0-9_-]{1,100}" autocomplete="off" spellcheck="false" placeholder="awaker-…"><button type="button" class="secondary" id="ntfy-generate">Random</button></span></label></div>
  <p class="subscribe" id="ntfy-subscribe" hidden>Subscribe in the ntfy app to <code id="ntfy-subscribe-url"></code></p>
@@ -28,9 +28,9 @@
  <button type="button" class="link-button" id="ntfy-reset" hidden>Turn off phone notifications</button>
 </section>
 
-<section class="panel"><header class="card-head"><h2>Alerts</h2><p class="muted">One notification per check, listing only what is new.</p></header>
- <div class="setting"><div><strong>Trade ideas</strong><span class="muted small">Trades that help you and beat a waiver pickup.</span></div><div class="setting-control"><label class="unit">at least <input id="min-gain" type="number" min="1" max="100" step="0.5" required> pts / week</label><label class="switch"><input id="trade-alerts" type="checkbox"><span aria-hidden="true"></span><span class="sr">Trade alerts</span></label></div></div>
- <div class="setting"><div><strong>Waiver pickups</strong><span class="muted small">Free agents who would start for you.</span></div><div class="setting-control"><label class="unit">at least <input id="waiver-min-gain" type="number" min="0.5" max="100" step="0.5" required> pts this week</label><label class="switch"><input id="waiver-alerts" type="checkbox"><span aria-hidden="true"></span><span class="sr">Waiver alerts</span></label></div></div>
+<section class="panel"><header class="card-head"><h2>Alerts</h2><p class="muted">One notification per check, listing only what is new. Alerts follow the filters you set on the <a href="/?view=trades">Auto trades</a> and <a href="/?view=waivers">Waiver wire</a> pages.</p></header>
+ <div class="setting"><div><strong>Trade ideas</strong><span class="muted small">Trades that help both teams and beat a free pickup.</span></div><div class="setting-control"><label class="unit">at least <input id="min-gain" type="number" min="1" max="100" step="0.5" required> pts</label><select id="trade-horizon" class="select" aria-label="Judge trades by"><option value="season">per week, rest of season</option><option value="next">next week alone</option></select><label class="switch"><input id="trade-alerts" type="checkbox"><span aria-hidden="true"></span><span class="sr">Trade alerts</span></label></div></div>
+ <div class="setting"><div><strong>Waiver pickups</strong><span class="muted small">Free agents who would start for you, with who to drop.</span></div><div class="setting-control"><label class="unit">at least <input id="waiver-min-gain" type="number" min="0.5" max="100" step="0.5" required> pts</label><select id="waiver-horizon" class="select" aria-label="Judge pickups by"><option value="current">this week</option><option value="next">next week</option><option value="season">per week, rest of season</option></select><label class="switch"><input id="waiver-alerts" type="checkbox"><span aria-hidden="true"></span><span class="sr">Waiver alerts</span></label></div></div>
  <div class="setting"><div><strong>Check</strong><span class="muted small">How often Awaker looks for something new.</span></div><div class="setting-control"><select id="scan-hours" class="select"><option value="1">Every hour</option><option value="3">Every 3 hours</option><option value="6">Every 6 hours</option><option value="12">Every 12 hours</option><option value="24">Once a day</option></select></div></div>
  <div class="setting"><div><strong>Quiet hours</strong><span class="muted small">Anything found overnight arrives when they end. Same time twice turns them off.</span></div><div class="setting-control"><input id="quiet-start" type="time" required aria-label="Quiet hours start"><span class="muted">to</span><input id="quiet-end" type="time" required aria-label="Quiet hours end"></div></div>
  <details class="more"><summary>Advanced</summary>
@@ -47,17 +47,15 @@
  <pre id="preview-content" hidden></pre>
 </section>
 
-<details class="panel more-panel"><summary><h2>Leagues and agents</h2><span class="muted small">Account, excluded leagues, AI agent access</span></summary>
+<details class="panel more-panel"><summary><h2>Leagues and agents</h2><span class="muted small">Account, leagues covered, AI agent access</span></summary>
  <div class="setting"><div><strong>Sleeper account</strong><span class="muted small">Set when the server starts.</span></div><div class="setting-control"><span id="username-setting" class="account"></span></div></div>
- <label class="field"><span>Leagues to leave out (IDs, comma separated)</span><input id="excluded"></label><p id="league-list" class="muted small"></p>
- <button id="import" type="button" class="secondary">Use this browser’s trade and waiver filters</button>
+ <div class="setting"><div><strong>Leagues covered</strong><span class="muted small">Turn leagues on or off in <a href="/?view=settings">My leagues</a>.</span></div><div class="setting-control"><span id="league-list" class="muted small league-names"></span></div></div>
  <h3>Agents</h3><p class="muted small">AI agents can read your status, trades, waivers and lineups. They cannot change your team or send messages. Setup is in <code>docs/integrations.md</code>.</p>
 </details>
 
-<div class="save-bar"><span id="notice" role="status" aria-live="polite"></span><button class="primary" id="save">Save changes</button></div>
 </form>
 
 <section class="panel"><header class="card-head"><h2>Recent activity</h2><button type="button" class="link-button" id="reload">Refresh</button></header><p id="worker-status" class="muted small"></p><div id="delivery-status" class="activity-list"></div><div id="reports"></div></section>
 </div>
 </div></main></div>
-<script src="/boot.js"></script><script type="module" src="/integrations.js?v=2"></script></body></html>
+<script src="/boot.js"></script><script type="module" src="/integrations.js?v=3"></script></body></html>

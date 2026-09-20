@@ -54,14 +54,13 @@ a.nav-btn{text-decoration:none;box-sizing:border-box}
 .more-panel h3{margin:22px 0 6px;font-size:15px}
 .more-panel .field{margin:14px 0 6px}
 .account{font-weight:700}
+.league-names{max-width:420px;text-align:right}
 .link-button{background:none;border:0;padding:4px 2px;color:var(--muted);font:inherit;font-size:14px;font-weight:600;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
 .link-button:hover{color:var(--ink)}
 .inline-form{display:flex;gap:10px;flex-wrap:wrap}
 
-.save-bar{position:sticky;bottom:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 20px;padding:12px 16px;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 -6px 18px rgba(20,29,33,.06)}
-.save-bar #notice{font-size:14px;color:var(--muted);overflow-wrap:anywhere;min-width:0}
-.save-bar #notice.error{color:var(--orange)}
-.save-bar .primary{flex:none;padding:10px 18px;border-radius:7px;font-size:14px;font-weight:700}
+.save-state{align-self:flex-end;font-size:13px;font-weight:600;color:var(--muted);text-align:right;max-width:340px;overflow-wrap:anywhere}
+.save-state.saved{color:var(--green)}.save-state.error{color:var(--orange)}
 
 .activity-list p{display:flex;justify-content:space-between;gap:12px;margin:0;padding:10px 0;border-top:1px solid var(--line);font-size:14px}
 .activity-list .state{color:var(--muted);text-transform:capitalize;flex:none}
@@ -72,5 +71,5 @@ a.nav-btn{text-decoration:none;box-sizing:border-box}
  .status-strip{grid-template-columns:1fr 1fr}.status-tile{border-bottom:1px solid var(--line)}.status-tile:nth-child(2){border-right:0}
  .status-tile:nth-child(3){grid-column:1/-1;border-right:0}.status-actions{grid-column:1/-1;justify-content:stretch}.status-actions button{flex:1}
  .setting{grid-template-columns:1fr}.setting-control{justify-content:flex-start}
- .save-bar{flex-direction:column;align-items:stretch;text-align:center}
+ .save-state{align-self:flex-start;text-align:left}
 }

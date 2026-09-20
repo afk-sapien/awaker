@@ -1,5 +1,6 @@
 import {activeSlots,eligible,projected,optimize,availableIds,playableIds,tradeCandidateIds,waiverMove} from './engine.js';
 import {realismReasons,compareTradeIdeas,tradeGains} from './trades.js';
+import {buildWaiverOutlook} from './waivers.js';
 export const unavailable=['Out','IR','Suspended','PUP','Doubtful'];
 export function lockedLineup(data,league){
  const ids=league.matchups.find(m=>m.roster_id===league.mine.roster_id)?.starters||league.mine.starters||[],locks={};
@@ -20,6 +21,15 @@ export function waiverRows(data,league,prefs={}){
  const baseline=optimize(roster,slots,data.players,value,locks);
  const candidates=[...new Set([...free.filter(id=>trending.has(id)).sort((a,b)=>trending.get(b)-trending.get(a)).slice(0,30),...free.filter(id=>projection(id)!==null).sort((a,b)=>projection(b)-projection(a)).slice(0,25)])];
  return candidates.map(id=>({id,count:trending.get(id)||0,projection:projection(id),...waiverMove({id,roster,slots,players:data.players,value,locked:locks,protectedIds:prefs.waiverProtected?.[`${data.user.user_id}:${league.league_id}`]||[],starterIds:prefs.protectStarters!==false?ids:[],capacity:league.roster_positions.filter(s=>!['IR','TAXI'].includes(s)).length,samePosition:prefs.samePositionDrops!==false,excludedDropPositions:excluded.drop,baseline})})).sort((a,b)=>(b.gain??-999)-(a.gain??-999)||b.count-a.count).slice(0,20);
+}
+// The same pickup and drop held across a window of future weeks. Used by the waiver view and by
+// background alerts, so both rank a pickup the same way.
+export function futureWaiverRows(data,league,outlook,prefs={}){
+ const excluded=prefs.waiverExcluded||{add:['K'],drop:[]},slots=activeSlots(league),trending=new Map(data.trends.map(t=>[t.player_id,t.count]));
+ const model=buildWaiverOutlook({league,players:data.players,outlook,protectedIds:prefs.waiverProtected?.[`${data.user.user_id}:${league.league_id}`]||[],starterIds:prefs.protectStarters!==false?lockedLineup(data,league).ids:[],excludedDropPositions:excluded.drop,samePosition:prefs.samePositionDrops!==false});
+ const free=tradeCandidateIds(availableIds(league,data.players),data.players,excluded.add).filter(id=>slots.some(slot=>eligible(data.players[id],slot)));
+ const candidates=[...new Set([...free.filter(id=>trending.has(id)).sort((a,b)=>trending.get(b)-trending.get(a)).slice(0,30),...free.filter(id=>model.totals[id]>0).sort((a,b)=>model.totals[b]-model.totals[a]).slice(0,35)])];
+ return candidates.map(id=>({id,count:trending.get(id)||0,projection:model.totals[id],...model.evaluate(id)})).sort((a,b)=>(b.gain??-999)-(a.gain??-999)||b.count-a.count).slice(0,20);
 }
 export async function findTradeIdeas(data,league,model,prefs={}, {limit=20,maxPairs=10000,cancelled=()=>false}={}){
  const excluded=prefs.tradeExcluded||{give:['DEF'],get:['DEF']},minGain=prefs.tradeMinGain??0,maxGap=prefs.tradeMaxGap??1,bias=prefs.tradeOwnBias??.15;

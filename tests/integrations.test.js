@@ -14,7 +14,7 @@ import {createHttpServer} from '../server/http.js';
 import {contracts,validate} from '../server/contracts.js';
 import {demo} from '../dist/demo.js';
 import {buildSeasonModel} from '../dist/trades.js';
-import {findTradeIdeas,waiverRows} from '../dist/analysis.js';
+import {findTradeIdeas,waiverRows,futureWaiverRows} from '../dist/analysis.js';
 const owner='a'.repeat(40),agent='b'.repeat(40);
 function fixture(at=Date.now()){
  const d=demo();d.updatedAt=at;d.sources=[{name:'fixture',fetchedAt:at,maxAgeMs:3600000,sourceUpdatedAt:null}];
@@ -266,4 +266,27 @@ test('opportunities that disappear and return still honor cooldown',async()=>{
 });
 test('preference-only changes preserve schedule occurrence state',()=>{
  const store=openStore(':memory:');let at=100;const s=createService({store,provider:async()=>fixture(),now:()=>at});s.saveSettings({username:'example',daily:{enabled:true}});const reset=store.get('scheduleReset');at=200;s.saveSettings({preferences:{tradeMinGain:3}});assert.equal(store.get('scheduleReset'),reset);assert.equal(store.get('eventReset'),200);store.close();
+});
+test('alert horizons validate, and the waiver horizon reaches the same engine as the waiver view',async()=>{
+ assert.deepEqual([defaults.alerts.tradeHorizon,defaults.alerts.waiverHorizon],['season','current']);
+ assert.equal(validateSettings({alerts:{tradeHorizon:'next',waiverHorizon:'season'}}).alerts.waiverHorizon,'season');
+ for(const alerts of [{tradeHorizon:'current'},{waiverHorizon:'month'}])assert.throws(()=>validateSettings({alerts}),/horizon/);
+ const store=openStore(':memory:'),at=Date.now(),data=fixture(at),service=createService({store,provider:async()=>data,now:()=>at});service.saveSettings({username:'example'});
+ const league=data.leagues[0],weeks=data.outlook.weeks,season=await service.opportunities({leagueId:league.league_id,horizon:'season'});
+ const expected=futureWaiverRows(data,league,data.outlook,{});
+ assert.deepEqual(season.weeks,weeks);assert.deepEqual(season.opportunities[0].waivers.map(w=>[w.id,w.gain,w.drop]),expected.map(w=>[w.id,w.gain,w.drop]));
+ for(const row of season.opportunities[0].waivers)assert.equal(row.perWeek,row.gain===null?null:row.gain/weeks.length);
+ const next=await service.opportunities({leagueId:league.league_id,horizon:'next'});assert.deepEqual(next.weeks,[data.week+1]);
+ assert.deepEqual((await service.opportunities({leagueId:league.league_id})).weeks,[data.week]);store.close();
+});
+test('alerts judge trades by their first week and pickups per week when asked to',async()=>{
+ const h=harness(),weekly=[{week:3,gainA:6,gainB:2},{week:4,gainA:1,gainB:1}],seen=[];
+ h.service.opportunities=async query=>{seen.push(query.horizon);return {season:'2026',week:2,complete:true,demo:false,warnings:[],generatedAt:h.at,horizon:query.horizon,weeks:[3,4,5,6],opportunities:[{leagueId:'1',league:'League',waivers:[{...pickup(12,'new','d2'),perWeek:3}]}]}};
+ // 2.0 a week over the season misses a 3 point bar, but the same trade is worth 6 next week.
+ h.config=alerting({trades:true,waivers:true,minGain:3,waiverMinGain:2.5,tradeHorizon:'next',waiverHorizon:'season'});h.ideas=[{...idea(2),weekly}];
+ await h.worker.tick();assert.deepEqual(h.worker.status().scan.kinds,{trade:{found:1,fresh:0,baseline:true},waiver:{found:1,fresh:0,baseline:true}});assert.ok(seen.includes('season'));
+ h.ideas=[{...idea(2),weekly,give:['c'],send:['C']}];h.at+=hour;await h.worker.tick();
+ assert.equal(h.calls,1);assert.match(h.deliveries[0].message,/C for B\. Projected \+6\.0 points in week 3; partner \+2\.0\./);
+ h.config=alerting({trades:true,waivers:false,minGain:3,tradeHorizon:'season'});h.ideas=[{...idea(2),weekly,give:['e'],send:['E']}];h.at+=hour;await h.worker.tick();h.at+=hour;await h.worker.tick();
+ assert.equal(h.calls,1,'2.0 a week stays below the bar over the season');h.store.close();
 });
