@@ -301,3 +301,10 @@ test('bench upgrades alert only when asked, above their own bar, and never reuse
  assert.match(h.deliveries[0].message,/add STARTER, drop D1/);assert.match(h.deliveries[0].message,/bench upgrade, add STASH over D2\. Projects \+6\.0 more points this week; would not start\./);
  assert.doesNotMatch(h.deliveries[0].message,/TAKEN|SECOND|WEAK/);h.store.close();
 });
+test('scoring that projections never itemise is a footnote, not an error that pauses alerts',async()=>{
+ const source=(await import('node:fs')).readFileSync(new URL('../server/provider.js',import.meta.url),'utf8');
+ assert.match(source,/data\.notes\.push\(/);assert.doesNotMatch(source,/errors\.push\(`\$\{league\.name\}/);
+ // The envelope only degrades on errors, so notes never mark a scan incomplete.
+ const store=openStore(':memory:'),at=Date.now(),data={...fixture(at),notes:['League: not projected fgm_50_59']},service=createService({store,provider:async()=>data,now:()=>at});service.saveSettings({username:'example'});
+ const result=await service.opportunities();assert.equal(result.complete,true);assert.deepEqual(result.warnings,[]);store.close();
+});

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Stop treating scoring that projections never itemise as an error. It put a warning listing
+  scoring keys at the top of every page and marked the data incomplete, which made every
+  background check skip trades and waivers. It is now a line under Scoring details.
 - Suggest bench upgrades on the waiver wire: a free agent who would not start but projects at
   least a point a week above a bench player your lineup never needs, with the same drop
   protections as lineup pickups. Notifications can include the best one per league, with its own bar.
