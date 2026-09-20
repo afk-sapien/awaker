@@ -1,5 +1,73 @@
 # Changelog
 
+## 0.4.0
+
+- Add a League outlook page. The rest of the schedule is played out 4,000 times to give every team
+  its odds of making the playoffs, earning a bye and winning the title, its projected wins, what
+  winning or losing this week does to those odds, and its likely final seed. It follows the
+  league's own playoff size, median game and divisions. Power rankings blend results so far with
+  the best lineup each roster projects to field, and results earn more weight as weeks pile up.
+  The page also shows all-play record, luck, the schedule left, where each team's points come from
+  by position (for the season so far or the roster ahead), results plotted against roster strength,
+  and every weekly score against the league average.
+- League outlook draws team shapes: a radar with one corner per position and the league average as
+  a ring, so strengths stick out and holes cave in. Your team is always drawn, up to four others
+  can be laid over it in their own colors, and everyone else can sit behind in grey. A table beside
+  it gives the same numbers. Below it, a depth chart shows every team's QB, RB1, RB2, WR1 and so
+  on, with the player and his points a game, colored by where that spot ranks in the league. Both
+  follow the same switch between the season so far and the roster ahead.
+- Every trade, in Auto trades, the builder and when shopping a player, now shows what it does to
+  both teams' playoff odds. Only the two rosters are rated again, over the same weeks the trade was
+  judged on, and both seasons are played with the same random numbers, so the change is the trade
+  and not the dice.
+- Click one of your own spots in the League outlook depth chart to look for an upgrade there. Auto
+  trades opens showing only offers that bring back that position, says where your starter ranks,
+  names the teams sitting on a better one they cannot start, and says where you have the most to
+  offer.
+- Add an Around the league page, a scoreboard for the whole league. Your matchup leads, then every
+  other one, closest first, each head to head: the live score, where it is heading, a win-chance bar
+  that is green when you are ahead and orange when you are behind, a one-word read (Toss-up, Upset
+  brewing, Comfortable, Final), a meter of starters finished, playing and still to come, and the
+  median line in leagues that use one. Below, the standings show the result each team is heading
+  for and playoff odds colored by whether a team is in, on the bubble or out.
+- Auto trades now finds two-for-one and one-for-two packages, the deals where one player for one
+  player cannot work for both sides but a second player makes it fair. A package is only tried when
+  the side sending two players already gains from each swap alone, the most promising thousand are
+  evaluated, and the same deal with a different throw-in is listed once. Whoever receives two and
+  has a full roster must cut someone: the offer names the player who never starts, or failing that
+  the weakest, and never one of your protected players. The trade builder and the evaluate API
+  accept uneven packages the same way, and alerts name your drop.
+- The watchroom shows your benched players by default, tagged BN. Untick Show my bench to hide them.
+- Open any matchup into both lineups, the way Sleeper shows one: starters slot by slot facing each
+  other, then the benches, with each player's points, his projection before kickoff, the game clock
+  and where he is heading while he plays, and how he finished against projection once he is done.
+  Click a game on Around the league, or one of your league cards in the watchroom.
+- Every page now opens with its answer. Start / sit says whether your lineup is set or names the
+  swaps and what they are worth, and no longer prints every unchanged starter twice. The waiver wire
+  leads with the best move, or says you are set, and fades players who are not a move. The defense
+  planner gives a pick for every week, a pickup only when it clearly beats yours, and lists your
+  defenses, then the free ones, then the ones you cannot have. Season review names who is carrying
+  you and who is letting you down. League outlook starts with your own odds, power rank, projected
+  wins and how much this week matters. Watchroom league cards show whether you are ahead or behind.
+- Waiver pickups show what the add and its drop do to your playoff odds.
+- Auto trades can be sorted by what is best for both teams, your points, their points, combined
+  points, or the lift to your playoff odds. Offers are numbered and the list says how it is ranked.
+- The waiver wire keeps its position checkboxes and loses the preset menu that did the same job.
+- Fixes from a review of the whole app: this week's waiver list no longer fills up with free agents
+  whose games are over, hiding the Monday player who would help; an alert whose push failed is sent
+  once the cooldown ends instead of being forgotten when scans run more often than the cooldown;
+  Shop one player no longer waits forever after a league, week or roster change; a browser tab left
+  open picks up the daily injury and team updates; switching accounts during a refresh loads the new
+  account's data; a hung refresh in service mode times out; a league toggled off just as a refresh
+  lands is no longer lost; and a week is only called final when every starter's game is over.
+- The Season review now loads after reconnecting in the browser, where it could wait forever.
+
+- Add a Season review page. Every finished week shows what each of your players scored in your
+  league's scoring against Sleeper's projection for that week, colored from well under to well
+  over. Each player also gets his next three opponents rated Tough, Average or Easy from the points
+  they have actually allowed to his position, and a short read such as Rolling, Sell high? or Shop
+  or sit, with a shortcut to shop him. It needs two games before it judges anyone.
+
 ## 0.3.0
 
 - Shop one player from Auto trades. Choose someone on your roster to see which teams he would

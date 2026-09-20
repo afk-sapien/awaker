@@ -34,7 +34,7 @@ export function createWorker({store,service,ntfy=null,publish=null,now=Date.now,
   const result=kind==='trade'?await service.trades({...query,limit:50},options):await service.opportunities({...query,horizon:settings.alerts.waiverHorizon},options),drops=new Set();
   // A trade is always searched over the rest of the season. "Next week" judges it by its first week alone.
   const nextWeek=settings.alerts.tradeHorizon==='next',tradeGain=t=>nextWeek?t.weekly?.[0]?.gainA??0:t.gain,span=result.weeks?.length>1?`points/week over weeks ${result.weeks[0]}–${result.weeks.at(-1)}`:result.horizon&&result.horizon!=='current'?`points in week ${result.weeks?.[0]}`:'points this week';
-  const items=kind==='trade'?result.ideas.map(t=>({kind,key:eventKey(t),leagueId:t.leagueId,gain:tradeGain(t),line:`${t.league}: ${t.send.join(' + ')} for ${t.receive.join(' + ')}. Projected +${tradeGain(t).toFixed(1)} ${nextWeek?`points in week ${t.weekly?.[0]?.week}`:'points/week'}; partner +${(nextWeek?t.weekly?.[0]?.gainB??0:t.gainB/t.weeks).toFixed(1)}.`}))
+  const items=kind==='trade'?result.ideas.map(t=>({kind,key:eventKey(t),leagueId:t.leagueId,gain:tradeGain(t),line:`${t.league}: ${t.send.join(' + ')} for ${t.receive.join(' + ')}${t.drop?.length?`, dropping ${t.drop.join(' and ')}`:''}. Projected +${tradeGain(t).toFixed(1)} ${nextWeek?`points in week ${t.weekly?.[0]?.week}`:'points/week'}; partner +${(nextWeek?t.weekly?.[0]?.gainB??0:t.gainB/t.weeks).toFixed(1)}.`}))
    :result.opportunities.flatMap(l=>{
     const free=w=>!drops.has(`${l.leagueId}:${w.drop}`)&&drops.add(`${l.leagueId}:${w.drop}`);
     const starters=(settings.alerts.waivers?l.waivers:[]).filter(w=>w.status==='upgrade'&&free(w)).map(w=>({kind,key:JSON.stringify(['waiver',l.leagueId,w.id,w.drop]),leagueId:l.leagueId,gain:w.perWeek??w.gain,line:`${l.league}: add ${w.name}${w.dropName?`, drop ${w.dropName}`:''}. Projected +${(w.perWeek??w.gain).toFixed(1)} ${span}.`}));
@@ -91,7 +91,8 @@ export function createWorker({store,service,ntfy=null,publish=null,now=Date.now,
      const baseline=state.baselines[kind]!=null;let fresher=0;generatedAt=result.generatedAt||at;
      for(const c of result.items){
       const previous=state.events[c.key],qualified=!previous||previous.deferred||!previous.lastSent&&!previous.active||c.gain-previous.notifiedGain>=settings.alerts.improvement;
-      fresh[c.key]={kind,active:true,lastSeen:at,gain:c.gain,notifiedGain:previous?.notifiedGain??c.gain,lastSent:previous?.lastSent||0};
+      // An alert that was held, or whose delivery failed, stays owed through the cooldown until it is sent.
+      fresh[c.key]={kind,active:true,lastSeen:at,gain:c.gain,notifiedGain:previous?.notifiedGain??c.gain,lastSent:previous?.lastSent||0,...(previous?.deferred?{deferred:true}:{})};
       if(!baseline||!qualified)continue;
       if(at-(previous?.lastSent||0)<settings.alerts.cooldownHours*3600000)continue;
       fresher++;
@@ -104,7 +105,7 @@ export function createWorker({store,service,ntfy=null,publish=null,now=Date.now,
     }
     if(picked.length){
      state.outbox.push({id:`alert:${at}`,type:'alert',items:picked,...compose(picked,generatedAt),status:'pending',attempts:0,nextAttempt:at,expiresAt:at+6*3600000});
-     for(const c of picked)Object.assign(fresh[c.key],{lastSent:at,notifiedGain:c.gain});
+     for(const c of picked)Object.assign(fresh[c.key],{lastSent:at,notifiedGain:c.gain,deferred:false});
      state.count++;scan.sent=picked.length;
     }
     if(enabled.every(kind=>scan.kinds[kind]?.skipped))state.lastScan=at-settings.alerts.scanHours*3600000+900000;

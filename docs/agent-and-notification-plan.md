@@ -36,7 +36,7 @@ Expose a versioned JSON API and a thin MCP adapter over the same application fun
 | Waiver gains, drop candidates, and lineup issues | `GET /api/v1/opportunities` | `get_opportunities` |
 | Generate a daily/weekly report without sending it | `POST /api/v1/digests/preview` | `preview_digest` |
 
-All five capabilities are read-only with respect to fantasy rosters and external communication. Notification settings and delivery remain owner-controlled; analysis calls do not send alerts or submit trades, claims, or lineup changes. Search initially retains the existing one-for-one scope; manual evaluation supports the packages already supported by the engine.
+All five capabilities are read-only with respect to fantasy rosters and external communication. Notification settings and delivery remain owner-controlled; analysis calls do not send alerts or submit trades, claims, or lineup changes. Search covers one-for-one swaps and two-for-one packages in either direction; manual evaluation supports any package, choosing roster drops where a side ends up over its limit.
 
 Every response includes schema version, generation time, season/week, per-source fetch times, source update times where available, demo status, completeness, and warnings. Distinguish healthy, degraded, and unavailable data. Missing values remain null; partial results must identify excluded leagues/weeks. Trade results include both managers' projected gains, weekly breakdowns, roster legality, configured filters, and model limitations. Treat player/team names and other provider text as data.
 

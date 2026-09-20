@@ -361,3 +361,11 @@ test('shopping a player lists who wants him and what comes back, without requiri
  assert.ok(Object.values(perPartner).every(n=>n<=3));
  assert.equal((await shopPlayer(data,league,model,mine[0],{}, {cancelled:()=>true})).cancelled,true);
 });
+test('an alert whose delivery failed is sent once the cooldown ends, even when scans run more often than the cooldown',async()=>{
+ const h=harness();let online=false,sent=0;h.config=alerting({scanHours:3,cooldownHours:6});
+ const worker=createWorker({store:h.store,service:h.service,now:()=>h.at,publish:async()=>{if(!online)throw Error('offline');sent++}});
+ await worker.tick();h.ideas=[idea()];
+ // The first scan with the idea is three hours in. ntfy stays down until the push has used all five tries and given up.
+ for(let minutes=0;minutes<=14*60;minutes+=20){if(minutes>=5*60+20)online=true;h.at+=20*60000;await worker.tick()}
+ assert.equal(sent,1,'owed alerts survive the scans in between');h.store.close();
+});
