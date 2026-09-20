@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
 
 - Shop one player from Auto trades. Choose someone on your roster to see which teams he would
   start for, how much he adds to each lineup, how far he sits above a free agent, and the best

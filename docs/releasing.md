@@ -1,6 +1,6 @@
 # Releasing Awaker
 
-The package version is currently 0.2.0. Container publishing is configured, but creating a tag, publishing a GitHub release, changing visibility, and publishing to PyPI remain separate actions.
+The package version is currently 0.3.0. Container publishing is configured, but creating a tag, publishing a GitHub release, changing visibility, and publishing to PyPI remain separate actions.
 
 ## Try the container workflow
 

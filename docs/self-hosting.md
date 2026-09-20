@@ -32,7 +32,7 @@ docker run --rm node:24-alpine node -e "console.log(require('crypto').randomByte
 The image is `ghcr.io/afk-sapien/awaker`, for Linux AMD64 and ARM64. It is public, so pulls need no GitHub account or registry login.
 
 - `edge` follows successful manual publications from the default branch and is intended for previews.
-- Version tags such as `0.2.0` are created when that matching GitHub release is published. Use a tag that actually appears in Packages.
+- Version tags such as `0.3.0` are created when that matching GitHub release is published. Use a tag that actually appears in Packages.
 - `latest` is created or updated only for a stable GitHub release. Prereleases never replace it.
 - `sha-<full-commit>` identifies a publication's source commit. Pin `image@sha256:<digest>` when you need immutable deployment content.
 
