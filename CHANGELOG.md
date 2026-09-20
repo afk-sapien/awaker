@@ -20,6 +20,7 @@
   has a full roster must cut someone: the offer names the player who never starts, or failing that
   the weakest, and never one of your protected players. The trade builder and the evaluate API
   accept uneven packages the same way, and alerts name your drop.
+- The watchroom shows your benched players by default, tagged BN. Untick Show my bench to hide them.
 - The Season review now loads after reconnecting in the browser, where it could wait forever.
 
 - Add a Season review page. Every finished week shows what each of your players scored in your
