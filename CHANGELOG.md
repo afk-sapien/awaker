@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
 
 - Add a League outlook page. The rest of the schedule is played out 4,000 times to give every team
   its odds of making the playoffs, earning a bye and winning the title, its projected wins, what
