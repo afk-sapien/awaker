@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Show each player's face and jersey number beside their name on the waiver wire,
+  Start / sit, trade offers and the trade builder, using the watchroom's portrait.
 - Set up phone notifications in the browser with no ntfy account. **Agents & updates** now edits
   the ntfy server (default `https://ntfy.sh`), topic and an optional access token, generates a
   random topic, shows the address to subscribe to, and sends a test that reports why ntfy
