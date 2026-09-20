@@ -115,7 +115,7 @@ Everything above runs in your browser. Name the Sleeper account you want followe
 awaker service --username YOUR_SLEEPER_NAME
 ```
 
-With Docker, that is the `SLEEPER_USERNAME` in the command above. Same image, same address. Open [Agents & updates](http://127.0.0.1:4173/integrations.html) to pick schedules and alert thresholds, which start switched off. Every few hours (six by default) it compares trades and the waiver wire, and sends one notification when something new clears the projected gain you chose.
+With Docker, that is the `SLEEPER_USERNAME` in the command above. Same image, same address. Open [Notifications](http://127.0.0.1:4173/integrations.html) to pick schedules and alert thresholds, which start switched off. Every few hours (six by default) it compares trades and the waiver wire, and sends one notification when something new clears the projected gain you chose.
 
 Phone pushes go through [ntfy](https://ntfy.sh) and need no account: on the same page, generate a random topic, save it, subscribe to that topic in the ntfy app, and send a test. A self-hosted ntfy server and an access token are optional.
 

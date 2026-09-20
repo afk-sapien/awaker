@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Give notifications their own page in the sidebar, inside the dashboard's layout. Settings are
+  short rows with switches, a status strip shows where pushes go and when the last and next
+  checks are, and one Save covers the phone, alerts and summaries.
 - Show each player's face and jersey number beside their name on the waiver wire,
   Start / sit, trade offers and the trade builder, using the watchroom's portrait.
 - Set up phone notifications in the browser with no ntfy account. **Agents & updates** now edits

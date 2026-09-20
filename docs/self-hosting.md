@@ -109,7 +109,7 @@ For an agent's MCP configuration, use `awaker` as the command and `["mcp"]` as i
 | `AWAKER_AGENT_TOKEN` | Empty | Read-only analysis access for agents |
 | `AWAKER_DB` | `data/awaker.sqlite` | SQLite path. Existing `data/sunday.sqlite` takes precedence when unset |
 | `SLEEPER_USERNAME` | Required for the service | The account it reports on. Fixed at startup and not changeable through the browser or API |
-| `NTFY_URL`, `NTFY_TOPIC`, `NTFY_TOKEN` | `https://ntfy.sh`, empty, empty | Optional defaults for phone pushes. Only the topic is required, and the token is for access-controlled topics. Notification settings saved in **Agents & updates** take over |
+| `NTFY_URL`, `NTFY_TOPIC`, `NTFY_TOKEN` | `https://ntfy.sh`, empty, empty | Optional defaults for phone pushes. Only the topic is required, and the token is for access-controlled topics. Notification settings saved in **Notifications** take over |
 
 Legacy `SUNDAY_*` names still work. An explicitly set `AWAKER_*` value takes precedence, including an empty value. Tokens must be distinct and at least 32 printable ASCII characters. Generated tokens have 256 bits of randomness.
 
@@ -125,7 +125,7 @@ For nginx, configure the existing HTTPS virtual host to proxy `/` to `http://127
 
 Configure certificates and HTTPS redirects in the proxy. The application does not terminate TLS. Its API limits requests by direct peer IP, so clients behind one proxy share the 120-request-per-minute budget. Forwarded IP headers are deliberately not trusted. The public UI is accessible without a login. Service account data and owner settings require authentication. This is a single-owner service, not a multi-user hosting platform.
 
-`GET /healthz` checks service HTTP liveness and returns only `{"status":"ok"}`. It does not check provider freshness, schedule success, or notification delivery. The image includes a healthcheck. Inspect worker activity in **Agents & updates** for provider and delivery failures.
+`GET /healthz` checks service HTTP liveness and returns only `{"status":"ok"}`. It does not check provider freshness, schedule success, or notification delivery. The image includes a healthcheck. Inspect worker activity in **Notifications** for provider and delivery failures.
 
 ## Backups and upgrades
 
