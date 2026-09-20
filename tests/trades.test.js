@@ -181,3 +181,50 @@ test('the outgoing trade player cannot be the drop in the no-trade alternative',
  const keepBench=m.assessWaivers(m.evaluate(f.league.mine,f.partner,['send'],['partnerBench']),f.league.mine,f.partner);
  assert.equal(keepBench.waiverB.drop,'backup');
 });
+// A star for two starters: neither single swap helps the star's owner, the package does.
+function packageFixture(flip=false){
+ const position={a1:'RB',a2:'WR',a3:'RB',x1:'RB',x2:'WR',S:'RB',p2:'WR',p3:'RB',p4:'WR',p5:'RB'},points={a1:12,a2:12,a3:11,x1:9,x2:1,S:18,p2:4,p3:3,p4:1,p5:1};
+ const players=Object.fromEntries(Object.keys(position).map(id=>[id,{position:position[id],team:'BUF'}]));
+ const deep={roster_id:1,owner_id:'deep',players:['a1','a2','a3','x1','x2']},star={roster_id:2,owner_id:'star',players:['S','p2','p3','p4','p5']},[mine,partner]=flip?[star,deep]:[deep,star];
+ const league={league_id:'L',mine,rosters:[mine,partner],roster_positions:['RB','WR','FLEX','BN','BN'],scoring_settings:{rec:1}};
+ const outlook={weeks:[3,4],data:Object.fromEntries([3,4].map(week=>[week,{games:{BUF:{}},projections:Object.fromEntries(Object.entries(points).map(([id,rec])=>[id,{stats:{rec}}]))}]))};
+ return {players,league,outlook,partner};
+}
+test('an uneven package cuts a player who never starts, and respects protected players',()=>{
+ const f=packageFixture(),m=buildSeasonModel(f);
+ assert.throws(()=>m.evaluate(f.league.mine,f.partner,['a1','a3'],['S']),/roster drop/,'callers must ask for drops');
+ const r=m.evaluate(f.league.mine,f.partner,['a1','a3'],['S'],{autoDrop:true});
+ assert.deepEqual([r.gainA,r.gainB,r.complete],[8,4,true]);assert.deepEqual([r.dropA,r.dropB],[[],['p4']]);
+ assert.deepEqual(m.evaluate(f.league.mine,f.partner,['a1','a3'],['S'],{autoDrop:true,protectedB:['p4']}).dropB,['p5']);
+ const even=m.evaluate(f.league.mine,f.partner,['a1'],['S'],{autoDrop:true});assert.deepEqual([even.dropA,even.dropB],[[],[]]);
+ assert.equal(m.addValue(f.partner,'a1'),18,'a 12 point back replaces a 3 point flex for two weeks');assert.equal(m.addValue(f.league.mine,'p4'),0);
+});
+test('when everyone left would start, the weakest player is cut and the lineups are set again',()=>{
+ const f=packageFixture();f.league.roster_positions=['RB','WR','FLEX','FLEX','FLEX'];
+ const m=buildSeasonModel(f),r=m.evaluate(f.league.mine,f.partner,['a1','a3'],['S'],{autoDrop:true});
+ assert.equal(r.dropB.length,1);assert(['p4','p5'].includes(r.dropB[0]),'one of the two one-point players sits in every week, so he goes');
+ const other=r.dropB[0]==='p4'?'p5':'p4',forced=m.evaluate(f.league.mine,f.partner,['a1','a3'],['S'],{autoDrop:true,protectedB:r.dropB});
+ assert.deepEqual(forced.dropB,[other],'with the idle player protected, the weakest starter is cut');assert.equal(forced.gainB,r.gainB);assert.equal(r.gainB,2*(12+11-18-1));
+ assert.throws(()=>m.evaluate(f.league.mine,f.partner,['a1','a3'],['S'],{autoDrop:true,protectedB:['p2','p3','p4','p5']}),/no one on the roster can be cut/);
+});
+test('the search packages two players when no single swap works for both sides',async()=>{
+ const f=packageFixture(),data={players:f.players,user:{user_id:'u'}},m=buildSeasonModel(f);
+ const singles=await findTradeIdeas(data,f.league,m,{}, {packages:false});assert.equal(singles.ideas.length,0);assert.equal(singles.diagnostics.packages,0);
+ const found=await findTradeIdeas(data,f.league,m,{});
+ assert.deepEqual(found.ideas.map(i=>[i.give,i.get,i.dropB]),[[['a1','a3'],['S'],['p4']]]);assert.equal(found.diagnostics.packages,found.diagnostics.packageCandidates);assert(found.diagnostics.packages>=3,'at least the three ways to pair the players who gain alone');
+ assert.equal(found.checked,singles.checked+found.diagnostics.packages);
+ assert.equal((await findTradeIdeas(data,f.league,m,{}, {maxPackages:0})).ideas.length,0);
+ assert((await findTradeIdeas(data,f.league,m,{tradeMinGain:3})).ideas.length===0,'the weekly minimum still applies');
+});
+test('two for one works in the other direction, and my protected players are never the drop',async()=>{
+ const f=packageFixture(true),data={players:f.players,user:{user_id:'u'}},m=buildSeasonModel(f);
+ const found=await findTradeIdeas(data,f.league,m,{});
+ assert.deepEqual(found.ideas.map(i=>[i.give,i.get,i.dropA,i.dropB]),[[['S'],['a1','a3'],['p4'],[]]]);
+ const kept=await findTradeIdeas(data,f.league,m,{waiverProtected:{'u:L':['p4']}});assert.deepEqual(kept.ideas[0].dropA,['p5']);
+});
+test('one deal with different throw-ins is listed once, in its best version',async()=>{
+ const f=packageFixture();f.players.x3={position:'RB',team:'BUF'};f.league.mine.players.push('x3');f.league.roster_positions.push('BN');
+ for(const week of [3,4])f.outlook.data[week].projections.x3={stats:{rec:10.5}};
+ const found=await findTradeIdeas({players:f.players,user:{user_id:'u'}},f.league,buildSeasonModel(f),{});
+ assert(found.diagnostics.mutual>1,'several packages work');assert.equal(found.ideas.length,1);assert.deepEqual(found.ideas[0].get,['S']);
+});

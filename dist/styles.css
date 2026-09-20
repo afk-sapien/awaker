@@ -117,3 +117,4 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
 @media(max-width:760px){.matchup-grid{grid-template-columns:1fr;gap:10px}.league-tiles{gap:10px}.league-tile strong{font-size:26px}.league-panel{padding-top:18px}.league-panel>.section-bar{padding:0 18px}.league-table th.team-cell{min-width:150px}.odds{min-width:110px}.seed-strip i{width:10px}.matchup-points strong{font-size:26px}}
 .league-split .section-bar{flex-wrap:wrap}.league-split .section-bar .filters{flex-shrink:0}
 .league-panel .season-table th.season-player{color:var(--ink);font-size:14px;letter-spacing:0;font-weight:400}
+.trade-drops{margin:10px 0 12px;font-size:13px;color:var(--muted)}

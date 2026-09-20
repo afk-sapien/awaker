@@ -35,12 +35,33 @@ export function futureWaiverRows(data,league,outlook,prefs={}){
  const candidates=[...new Set([...free.filter(id=>trending.has(id)).sort((a,b)=>trending.get(b)-trending.get(a)).slice(0,30),...shortlist(free.filter(id=>model.totals[id]>0),data.players,id=>model.totals[id])])];
  return candidates.map(id=>({id,count:trending.get(id)||0,projection:model.totals[id],...model.evaluate(id)})).sort((a,b)=>moveRank(b)-moveRank(a)||b.count-a.count).slice(0,25);
 }
-export async function findTradeIdeas(data,league,model,prefs={}, {limit=20,maxPairs=10000,cancelled=()=>false}={}){
+export async function findTradeIdeas(data,league,model,prefs={}, {limit=20,maxPairs=10000,maxPackages=1000,packages=true,cancelled=()=>false}={}){
  const excluded=prefs.tradeExcluded||{give:['DEF'],get:['DEF']},minGain=prefs.tradeMinGain??0,maxGap=prefs.tradeMaxGap??1,bias=prefs.tradeOwnBias??.15;
  // Evaluate roster impact before value balance. A useful bench player can have
  // zero value above the single best free agent while still fixing another team.
  const candidate=(roster,side)=>tradeCandidateIds(playableIds(roster),data.players,excluded[side]).filter(id=>Number.isFinite(model.totals[id])&&model.totals[id]>0&&!unavailable.includes(data.players[id]?.injury_status));
- const own=candidate(league.mine,'give'),ideas=[],nearMisses=[],diagnostics={offeredPlayers:own.length,partners:0,incomplete:0,noMutualBenefit:0,waiverRejected:0,belowMinimum:0,valueFiltered:0,mutual:0};let checked=0,truncated=false;
+ const own=candidate(league.mine,'give'),ideas=[],nearMisses=[],diagnostics={offeredPlayers:own.length,partners:0,incomplete:0,noMutualBenefit:0,waiverRejected:0,belowMinimum:0,valueFiltered:0,mutual:0,packages:0};let checked=0,truncated=false;
+ const protectedA=prefs.waiverProtected?.[`${data.user?.user_id}:${league.league_id}`]||[],singles=new Map();
+ // Judges one evaluated offer the same way whatever its size. Returns true when it is listed.
+ const consider=(result,partner)=>{
+  if(!result.complete){diagnostics.incomplete++;return false}
+  // Even with a zero weekly minimum, both teams must gain > 0.25 season
+  // points: neutral offers give the other manager no projected incentive.
+  if(result.gainA<=.25||result.gainB<=.25){diagnostics.noMutualBenefit++;return false}
+  if(model.assessWaivers)result=model.assessWaivers(result,league.mine,partner,{protectedA});
+  const gains=tradeGains(result);
+  diagnostics.mutual++;
+  const user=(league.users||[]).find(u=>u.user_id===partner.owner_id),offer={...result,partnerId:partner.roster_id,partner:user?.metadata?.team_name||user?.display_name||`Team ${partner.roster_id}`};
+  if(gains.a<=.25||gains.b<=.25){
+   diagnostics.waiverRejected++;
+   nearMisses.push({...offer,filterReasons:[gains.a<=.25?'Your pickup alternative is as good or better.':'Their pickup alternative is as good or better.']});return false;
+  }
+  const below=gains.a/result.weeks+1e-8<minGain||gains.b/result.weeks+1e-8<minGain;
+  const valueBlocked=maxGap<1&&(result.valueGap===null||result.valueGap>maxGap);
+  if(below)diagnostics.belowMinimum++;if(valueBlocked)diagnostics.valueFiltered++;
+  if(!below&&!valueBlocked){ideas.push(offer);return true}
+  nearMisses.push({...offer,filterReasons:realismReasons(result,{minGain,maxGap})});return false;
+ };
  outer:for(const partner of league.rosters.filter(r=>r.roster_id!==league.mine.roster_id)){
   const incoming=candidate(partner,'get');if(incoming.length)diagnostics.partners++;
   for(const a of own)for(const b of incoming){
@@ -48,24 +69,38 @@ export async function findTradeIdeas(data,league,model,prefs={}, {limit=20,maxPa
    if(checked>=maxPairs){truncated=true;break outer}checked++;
    if(checked%50===0)await new Promise(r=>setTimeout(r,0));
    let result;try{result=model.evaluate(league.mine,partner,[a],[b])}catch{diagnostics.incomplete++;continue}
-   if(!result.complete){diagnostics.incomplete++;continue}
-   // Even with a zero weekly minimum, both teams must gain > 0.25 season
-   // points: neutral offers give the other manager no projected incentive.
-   if(result.gainA<=.25||result.gainB<=.25){diagnostics.noMutualBenefit++;continue}
-   if(model.assessWaivers)result=model.assessWaivers(result,league.mine,partner,{protectedA:prefs.waiverProtected?.[`${data.user?.user_id}:${league.league_id}`]||[]});
-   const gains=tradeGains(result);
-   diagnostics.mutual++;
-   const user=(league.users||[]).find(u=>u.user_id===partner.owner_id),offer={...result,partnerId:partner.roster_id,partner:user?.metadata?.team_name||user?.display_name||`Team ${partner.roster_id}`};
-   if(gains.a<=.25||gains.b<=.25){
-    diagnostics.waiverRejected++;
-    nearMisses.push({...offer,filterReasons:[gains.a<=.25?'Your pickup alternative is as good or better.':'Their pickup alternative is as good or better.']});continue;
-   }
-   const below=gains.a/result.weeks+1e-8<minGain||gains.b/result.weeks+1e-8<minGain;
-   const valueBlocked=maxGap<1&&(result.valueGap===null||result.valueGap>maxGap);
-   if(below)diagnostics.belowMinimum++;if(valueBlocked)diagnostics.valueFiltered++;
-   if(!below&&!valueBlocked)ideas.push(offer);
-   else nearMisses.push({...offer,filterReasons:realismReasons(result,{minGain,maxGap})});
+   const listed=consider(result,partner);
+   if(result.complete)singles.set(`${partner.roster_id}:${a}:${b}`,{gainA:result.gainA,gainB:result.gainB,listed});
   }
+ }
+ // Two for one, either way. Sending a second player can only cost the sender, so a package is worth
+ // trying only when the side sending two already gains from each swap on its own. What the second
+ // player buys is the other side's yes. Swaps that are listed by themselves need no sweetener.
+ // The sender's smaller single gain caps what the package can be worth to him, so the most
+ // promising packages are tried first and the long tail is never evaluated.
+ if(packages&&!truncated){
+  const queue=[],single=(partner,a,b)=>singles.get(`${partner.roster_id}:${a}:${b}`),floor=Math.max(.25,minGain*(model.weeks?.length||1));
+  for(const partner of league.rosters.filter(r=>r.roster_id!==league.mine.roster_id)){
+   const incoming=candidate(partner,'get');
+   // The receiver's side is guessed as the better single swap plus what the other player adds to his lineups alone.
+   const extra=(roster,id)=>model.addValue?model.addValue(roster,id):0;
+   const add=(give,get,[p,x],[q,y],sender,receiver,roster)=>{const mine=Math.min(x[sender],y[sender]),theirs=Math.max(x[receiver]+extra(roster,q),y[receiver]+extra(roster,p));queue.push({partner,give,get,promise:sender==='gainA'?mine+(1-bias)*theirs:theirs+(1-bias)*mine})};
+   for(const b of incoming){const able=own.map(a=>[a,single(partner,a,b)]).filter(([,s])=>s&&!s.listed&&s.gainA>floor);for(let i=0;i<able.length;i++)for(let k=i+1;k<able.length;k++)add([able[i][0],able[k][0]],[b],able[i],able[k],'gainA','gainB',partner)}
+   for(const a of own){const able=incoming.map(b=>[b,single(partner,a,b)]).filter(([,s])=>s&&!s.listed&&s.gainB>floor);for(let i=0;i<able.length;i++)for(let k=i+1;k<able.length;k++)add([a],[able[i][0],able[k][0]],able[i],able[k],'gainB','gainA',league.mine)}
+  }
+  diagnostics.packageCandidates=queue.length;
+  queue.sort((x,y)=>y.promise-x.promise);
+  const found=new Map();let tried=0;
+  for(const {partner,give,get} of queue.slice(0,maxPackages)){
+   if(cancelled())return {ideas:[],truncated:true,cancelled:true};
+   checked++;diagnostics.packages++;if(++tried%25===0)await new Promise(r=>setTimeout(r,0));
+   let result;try{result=model.evaluate(league.mine,partner,give,get,{autoDrop:true,protectedA})}catch{diagnostics.incomplete++;continue}
+   if(!consider(result,partner))continue;
+   // The same deal with a different throw-in is one idea, not five. The best version stays.
+   const offer=ideas.pop(),key=`${partner.roster_id}:${give.length===1?`give:${give[0]}`:`get:${get[0]}`}`,held=found.get(key);
+   if(!held||compareTradeIdeas(offer,held,bias)<0)found.set(key,offer);
+  }
+  ideas.push(...found.values());
  }
  const rank=(a,b)=>compareTradeIdeas(a,b,bias);
  ideas.sort(rank);nearMisses.sort(rank);

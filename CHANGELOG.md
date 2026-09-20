@@ -13,6 +13,13 @@
 - Add an Around the league page: every matchup in a league this week with the live score, where
   it is heading, each side's chance to win, who is still to play, the median line in leagues that
   use one, and the standings with playoff odds.
+- Auto trades now finds two-for-one and one-for-two packages, the deals where one player for one
+  player cannot work for both sides but a second player makes it fair. A package is only tried when
+  the side sending two players already gains from each swap alone, the most promising thousand are
+  evaluated, and the same deal with a different throw-in is listed once. Whoever receives two and
+  has a full roster must cut someone: the offer names the player who never starts, or failing that
+  the weakest, and never one of your protected players. The trade builder and the evaluate API
+  accept uneven packages the same way, and alerts name your drop.
 - The Season review now loads after reconnecting in the browser, where it could wait forever.
 
 - Add a Season review page. Every finished week shows what each of your players scored in your

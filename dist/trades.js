@@ -49,20 +49,34 @@ export function buildSeasonModel({league,players,outlook}){
  const baseline=new Map();
  const lineup=(ids,w)=>seasonLineup(ids,slots,players,id=>values[w][id]);
  function before(roster){const key=roster.roster_id;if(!baseline.has(key))baseline.set(key,weeks.map(w=>lineup(playableIds(roster),w)));return baseline.get(key)}
- function evaluate(roster,partner,give,get){
+ // What one more player would add to a roster's lineups over the window, ignoring the roster limit.
+ const additions=new Map();
+ function addValue(roster,id){const key=`${roster.roster_id}:${id}`;if(!additions.has(key)){const base=before(roster),ids=playableIds(roster).concat(id);additions.set(key,Number.isFinite(totals[id])?weeks.reduce((sum,w,i)=>sum+lineup(ids,w).total-base[i].total,0):0)}return additions.get(key)}
+ // autoDrop lets a team that ends up over its roster limit cut players to fit, which an uneven package needs.
+ function evaluate(roster,partner,give,get,{autoDrop=false,protectedA=[],protectedB=[]}={}){
   const a=playableIds(roster),b=playableIds(partner);
   if(!give.length||!get.length||new Set([...give,...get]).size!==give.length+get.length||give.some(id=>!a.includes(id))||get.some(id=>!b.includes(id)))throw Error('Choose distinct players from each team.');
   if([...give,...get].some(id=>totals[id]===null||totals[id]===undefined))throw Error('A traded player is missing future projections. No season estimate is available for this offer.');
   const newA=a.filter(id=>!give.includes(id)).concat(get),newB=b.filter(id=>!get.includes(id)).concat(give);
   const capacity=league.roster_positions.filter(s=>!['IR','TAXI'].includes(s)).length;
-  if(newA.length>Math.max(capacity,a.length)||newB.length>Math.max(capacity,b.length))throw Error('This package needs a roster drop. Use equal-size packages or free a roster spot first.');
+  const overA=newA.length-Math.max(capacity,a.length),overB=newB.length-Math.max(capacity,b.length);
+  if((overA>0||overB>0)&&!autoDrop)throw Error('This package needs a roster drop. Use equal-size packages or free a roster spot first.');
+  // Someone who starts in no week is a free cut. Failing that the weakest players go and the lineups are set again.
+  const fit=(ids,over,incoming,kept)=>{
+   const full=weeks.map(w=>lineup(ids,w));if(over<=0)return {lineups:full,drops:[]};
+   const starts=new Set(full.flatMap(l=>l.ids)),able=ids.filter(id=>!incoming.includes(id)&&!kept.includes(id)&&Number.isFinite(totals[id])).sort((x,y)=>totals[x]-totals[y]);
+   if(able.length<over)throw Error('This package needs a roster drop, and no one on the roster can be cut.');
+   const idle=able.filter(id=>!starts.has(id));if(idle.length>=over)return {lineups:full,drops:idle.slice(0,over)};
+   const drops=able.slice(0,over),rest=ids.filter(id=>!drops.includes(id));return {lineups:weeks.map(w=>lineup(rest,w)),drops};
+  };
+  const fitA=fit(newA,overA,get,protectedA),fitB=fit(newB,overB,give,protectedB);
   const beforeA=before(roster),beforeB=before(partner);
-  const weekly=weeks.map((week,i)=>{const afterA=lineup(newA,week),afterB=lineup(newB,week);return {week,gainA:afterA.total-beforeA[i].total,gainB:afterB.total-beforeB[i].total,complete:beforeA[i].complete&&beforeB[i].complete&&afterA.complete&&afterB.complete,incomingStarts:afterA.ids.filter(id=>get.includes(id)).length,partnerStarts:afterB.ids.filter(id=>give.includes(id)).length,outgoingStarts:beforeA[i].ids.filter(id=>give.includes(id)).length,partnerOutgoingStarts:beforeB[i].ids.filter(id=>get.includes(id)).length}});
+  const weekly=weeks.map((week,i)=>{const afterA=fitA.lineups[i],afterB=fitB.lineups[i];return {week,gainA:afterA.total-beforeA[i].total,gainB:afterB.total-beforeB[i].total,complete:beforeA[i].complete&&beforeB[i].complete&&afterA.complete&&afterB.complete,incomingStarts:afterA.ids.filter(id=>get.includes(id)).length,partnerStarts:afterB.ids.filter(id=>give.includes(id)).length,outgoingStarts:beforeA[i].ids.filter(id=>give.includes(id)).length,partnerOutgoingStarts:beforeB[i].ids.filter(id=>get.includes(id)).length}});
   const sumValue=ids=>ids.some(id=>valueAboveReplacement[id]===null)?null:ids.reduce((sum,id)=>sum+valueAboveReplacement[id],0);
   const offeredValue=sumValue(give),receivedValue=sumValue(get),largest=Math.max(offeredValue??0,receivedValue??0);
   // Two players who are both no better than a free agent are an even swap, not an unknown one.
   const valueGap=offeredValue===null||receivedValue===null?null:largest<=0?0:Math.abs(offeredValue-receivedValue)/largest;
-  return {give,get,weekly,gainA:weekly.reduce((s,r)=>s+r.gainA,0),gainB:weekly.reduce((s,r)=>s+r.gainB,0),complete:weekly.every(r=>r.complete),offeredValue,receivedValue,valueGap,weeks:weeks.length};
+  return {give,get,dropA:fitA.drops,dropB:fitB.drops,weekly,gainA:weekly.reduce((s,r)=>s+r.gainA,0),gainB:weekly.reduce((s,r)=>s+r.gainB,0),complete:weekly.every(r=>r.complete),offeredValue,receivedValue,valueGap,weeks:weeks.length};
  }
  // Cache fixed pickup/drop plans per roster and incoming position. Trades are
  // compared with a no-trade alternative, never credited with an assumed pickup.
@@ -100,7 +114,7 @@ export function buildSeasonModel({league,players,outlook}){
   const waiverA=pickupAlternative(roster,result.get,result.give,protectedA),waiverB=pickupAlternative(partner,result.give,result.get,protectedB);
   return {...result,waiverA,waiverB,adjustedGainA:result.gainA-waiverA.gain,adjustedGainB:result.gainB-waiverB.gain};
  }
- return {weeks,totals,valueAboveReplacement,evaluate,assessWaivers};
+ return {weeks,totals,valueAboveReplacement,evaluate,assessWaivers,addValue};
 }
 
 export function realismReasons(result,{minGain=2,maxGap=.25}={}){
