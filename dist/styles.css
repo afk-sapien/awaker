@@ -8,6 +8,8 @@
 .photo-fallback{display:grid;place-items:center;font-size:23px;font-weight:700;color:var(--team)}
 .player-headshot{object-fit:cover;object-position:center top;border:1px solid #e1e7e7}
 .player-headshot[hidden]{display:none}
+.player-headshot.team-logo{object-fit:contain;object-position:center;padding:12%;background:#fff}
+.player-portrait.compact .player-headshot.team-logo{padding:10%}
 .player-portrait .jersey{position:absolute;right:-2px;bottom:0;min-width:33px;padding:3px 7px;border:2px solid white;border-radius:7px;background:var(--team);color:white;font-size:26px;line-height:1;letter-spacing:0;text-align:center}
 .player-identity{min-width:0}.player-identity .player-name{overflow-wrap:break-word}
 @media(min-width:431px) and (max-width:760px){.player-portrait{width:60px;height:70px;flex-basis:60px}.photo-fallback,.player-headshot{width:60px;height:60px}.player-portrait .jersey{font-size:22px;min-width:29px;padding:3px 5px}}

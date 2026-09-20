@@ -129,10 +129,12 @@ function watchedPlayers(){
 }
 
 function playerPortrait(id,p,compact=false){
- const photoId=data.demo?p.photo_id:id;
- const initials=p.position==='DEF'?(p.team||'DEF'):pname(id).split(/\s+/).map(n=>n[0]).slice(0,2).join('');
- const photo=p.position!=='DEF'&&photoId&&!failedHeadshots.has(String(photoId));
- return `<div class="player-portrait${compact?' compact':''}"><span class="photo-fallback" aria-hidden="true">${esc(initials)}</span>${photo?`<img class="player-headshot" src="https://sleepercdn.com/content/nfl/players/${encodeURIComponent(photoId)}.jpg" alt="${compact?'':`${esc(pname(id))} headshot`}" width="80" height="80" loading="lazy" decoding="async" data-photo-id="${esc(photoId)}">`:''}<span class="jersey" title="${p.position==='DEF'?'Team defense':'Jersey number'}">${esc(p.number??(p.position==='DEF'?'D':'—'))}</span></div>`;
+ // A defense has no face, so it wears its team's logo. Both fall back to initials if the image fails.
+ const defense=p.position==='DEF',photoId=defense?(p.team?`logo-${p.team}`:null):data.demo?p.photo_id:id;
+ const initials=defense?(p.team||'DEF'):pname(id).split(/\s+/).map(n=>n[0]).slice(0,2).join('');
+ const photo=photoId&&!failedHeadshots.has(String(photoId));
+ const src=defense?`https://sleepercdn.com/images/team_logos/nfl/${encodeURIComponent(String(p.team).toLowerCase())}.png`:`https://sleepercdn.com/content/nfl/players/${encodeURIComponent(photoId)}.jpg`;
+ return `<div class="player-portrait${compact?' compact':''}"><span class="photo-fallback" aria-hidden="true">${esc(initials)}</span>${photo?`<img class="player-headshot${defense?' team-logo':''}" src="${src}" alt="${compact?'':`${esc(pname(id))} ${defense?'logo':'headshot'}`}" width="80" height="80" loading="lazy" decoding="async" data-photo-id="${esc(photoId)}">`:''}<span class="jersey" title="${defense?'Team defense':'Jersey number'}">${esc(p.number??(defense?'D':'—'))}</span></div>`;
 }
 // Face, jersey number and name for lists and tables. The name beside it labels the photo, so the image is decorative.
 function playerChip(id,detail='',heading='strong'){

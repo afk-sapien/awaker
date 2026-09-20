@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Show a team defense with its team logo instead of initials, everywhere a player portrait appears.
 - Stop treating scoring that projections never itemise as an error. It put a warning listing
   scoring keys at the top of every page and marked the data incomplete, which made every
   background check skip trades and waivers. It is now a line under Scoring details.
