@@ -67,7 +67,13 @@ export function buildSeasonModel({league,players,outlook}){
    const starts=new Set(full.flatMap(l=>l.ids)),able=ids.filter(id=>!incoming.includes(id)&&!kept.includes(id)&&Number.isFinite(totals[id])).sort((x,y)=>totals[x]-totals[y]);
    if(able.length<over)throw Error('This package needs a roster drop, and no one on the roster can be cut.');
    const idle=able.filter(id=>!starts.has(id));if(idle.length>=over)return {lineups:full,drops:idle.slice(0,over)};
-   const drops=able.slice(0,over),rest=ids.filter(id=>!drops.includes(id));return {lineups:weeks.map(w=>lineup(rest,w)),drops};
+   // Everyone left starts somewhere. The cheapest cut is whoever's starts are worth least, which is
+   // rarely the lowest season total: that is usually the kicker. For a single cut the few cheapest
+   // are tried for real, since a replacement may cover most of what is lost.
+   const cost=id=>weeks.reduce((sum,w,i)=>sum+(full[i].ids.includes(id)?values[w][id]||0:0),0),cheapest=[...able].sort((x,y)=>cost(x)-cost(y)||totals[x]-totals[y]);
+   const without=drops=>{const rest=ids.filter(id=>!drops.includes(id)),lineups=weeks.map(w=>lineup(rest,w));return {drops,lineups,filled:lineups.filter(l=>l.complete).length,total:lineups.reduce((s,l)=>s+l.total,0)}};
+   const tries=over===1?cheapest.slice(0,3).map(id=>without([id])):[without(cheapest.slice(0,over))];
+   return tries.sort((x,y)=>y.filled-x.filled||y.total-x.total)[0];
   };
   const fitA=fit(newA,overA,get,protectedA),fitB=fit(newB,overB,give,protectedB);
   const beforeA=before(roster),beforeB=before(partner);

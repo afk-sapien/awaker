@@ -1,5 +1,6 @@
 import {activeSlots,eligible,projected,optimize,availableIds,playableIds,tradeCandidateIds,waiverMove} from './engine.js';
 import {realismReasons,compareTradeIdeas,tradeGains} from './trades.js';
+import {teamName} from './league.js';
 import {buildWaiverOutlook} from './waivers.js';
 export const unavailable=['Out','IR','Suspended','PUP','Doubtful'];
 export function lockedLineup(data,league){
@@ -23,7 +24,9 @@ export function waiverRows(data,league,prefs={}){
  const value=id=>{if(!values.has(id))values.set(id,usableValue(data,league,id,fixed));return values.get(id)};
  const projection=id=>projected(data.projections[data.week]?.[id]?.stats,league.scoring_settings);
  const baseline=optimize(roster,slots,data.players,value,locks);
- const candidates=[...new Set([...free.filter(id=>trending.has(id)).sort((a,b)=>trending.get(b)-trending.get(a)).slice(0,30),...shortlist(free.filter(id=>projection(id)!==null),data.players,projection)])];
+ // Shortlisted by what a player can still score this week. By raw projection, players whose games are
+ // over fill every spot from Sunday night on and the Monday pickup that would help is never looked at.
+ const candidates=[...new Set([...free.filter(id=>trending.has(id)).sort((a,b)=>trending.get(b)-trending.get(a)).slice(0,30),...shortlist(free.filter(id=>value(id)!==null),data.players,value)])];
  return candidates.map(id=>({id,count:trending.get(id)||0,projection:projection(id),...waiverMove({id,roster,slots,players:data.players,value,locked:locks,protectedIds:prefs.waiverProtected?.[`${data.user.user_id}:${league.league_id}`]||[],starterIds:prefs.protectStarters!==false?ids:[],capacity:league.roster_positions.filter(s=>!['IR','TAXI'].includes(s)).length,samePosition:prefs.samePositionDrops!==false,excludedDropPositions:excluded.drop,baseline})})).sort((a,b)=>moveRank(b)-moveRank(a)||b.count-a.count).slice(0,25);
 }
 // The same pickup and drop held across a window of future weeks. Used by the waiver view and by
@@ -51,7 +54,7 @@ export async function findTradeIdeas(data,league,model,prefs={}, {limit=20,maxPa
   if(model.assessWaivers)result=model.assessWaivers(result,league.mine,partner,{protectedA});
   const gains=tradeGains(result);
   diagnostics.mutual++;
-  const user=(league.users||[]).find(u=>u.user_id===partner.owner_id),offer={...result,partnerId:partner.roster_id,partner:user?.metadata?.team_name||user?.display_name||`Team ${partner.roster_id}`};
+  const offer={...result,partnerId:partner.roster_id,partner:teamName(league,partner.roster_id).team};
   if(gains.a<=.25||gains.b<=.25){
    diagnostics.waiverRejected++;
    nearMisses.push({...offer,filterReasons:[gains.a<=.25?'Your pickup alternative is as good or better.':'Their pickup alternative is as good or better.']});return false;
@@ -81,6 +84,9 @@ export async function findTradeIdeas(data,league,model,prefs={}, {limit=20,maxPa
  if(packages&&!truncated){
   const queue=[],single=(partner,a,b)=>singles.get(`${partner.roster_id}:${a}:${b}`),floor=Math.max(.25,minGain*(model.weeks?.length||1));
   for(const partner of league.rosters.filter(r=>r.roster_id!==league.mine.roster_id)){
+   // Guessing what a player adds sets lineups too, so this loop yields like the search does.
+   if(cancelled())return {ideas:[],truncated:true,cancelled:true};
+   await new Promise(r=>setTimeout(r,0));
    const incoming=candidate(partner,'get');
    // The receiver's side is guessed as the better single swap plus what the other player adds to his lineups alone.
    const extra=(roster,id)=>model.addValue?model.addValue(roster,id):0;
@@ -111,7 +117,7 @@ export async function findTradeIdeas(data,league,model,prefs={}, {limit=20,maxPa
 // a little, and the page shows that honestly. The other team must still gain, or they have no reason to say yes.
 export async function shopPlayer(data,league,model,playerId,prefs={}, {perPartner=3,limit=12,cancelled=()=>false}={}){
  const excluded=prefs.tradeExcluded||{give:['DEF'],get:['DEF']},offers=[],market=[];let checked=0;
- const name=partner=>{const user=(league.users||[]).find(u=>u.user_id===partner.owner_id);return user?.metadata?.team_name||user?.display_name||`Team ${partner.roster_id}`};
+ const name=partner=>teamName(league,partner.roster_id).team;
  for(const partner of league.rosters.filter(r=>r.roster_id!==league.mine.roster_id)){
   const incoming=tradeCandidateIds(playableIds(partner),data.players,excluded.get).filter(id=>Number.isFinite(model.totals[id])&&model.totals[id]>0&&!unavailable.includes(data.players[id]?.injury_status));
   const found=[];let interest=null;

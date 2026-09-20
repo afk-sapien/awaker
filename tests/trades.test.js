@@ -228,3 +228,13 @@ test('one deal with different throw-ins is listed once, in its best version',asy
  const found=await findTradeIdeas({players:f.players,user:{user_id:'u'}},f.league,buildSeasonModel(f),{});
  assert(found.diagnostics.mutual>1,'several packages work');assert.equal(found.ideas.length,1);assert.deepEqual(found.ideas[0].get,['S']);
 });
+test('a forced cut is the cheapest player to lose, not the lowest season total',()=>{
+ // Nobody on the receiving roster is idle: the bench receiver covers a bye. The kicker has the lowest total and must not be the cut.
+ const position={w1:'WR',w2:'WR',k1:'K',r1:'RB',x1:'RB',x2:'WR',s1:'RB',x3:'WR',k2:'K'},players=Object.fromEntries(Object.keys(position).map(id=>[id,{position:position[id],team:id==='w1'?'BYE':'BUF'}]));
+ const mine={roster_id:1,players:['r1','w1','k1','w2']},partner={roster_id:2,players:['s1','x1','x2','x3','k2']};
+ const league={mine,rosters:[mine,partner],roster_positions:['RB','WR','K','BN'],scoring_settings:{rec:1}};
+ const points={r1:6,w1:14,w2:12,k1:8,x1:12,x2:11,s1:20,x3:5,k2:7};
+ const outlook={weeks:[3,4],data:{3:{games:{BUF:{},BYE:{}},projections:Object.fromEntries(Object.entries(points).map(([id,rec])=>[id,{stats:{rec}}]))},4:{games:{BUF:{}},projections:Object.fromEntries(Object.entries(points).filter(([id])=>id!=='w1').map(([id,rec])=>[id,{stats:{rec}}]))}}};
+ const m=buildSeasonModel({league,players,outlook}),r=m.evaluate(mine,partner,['r1'],['x1','x2'],{autoDrop:true});
+ assert.deepEqual(r.dropA,['w2'],'season totals say the bye-week receiver (14) or the kicker (16); losing the backup (24) costs least');assert.equal(r.complete,true);assert.ok(r.gainA>0,`an upgrade at running back and a better bye cover should help, got ${r.gainA}`);
+});

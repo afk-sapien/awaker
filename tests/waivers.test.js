@@ -77,3 +77,13 @@ test('bench upgrades compare like with like, and a near-tie drops the weaker pla
  assert.equal(waiverMove({...base,id:'qb2'}).status,'no_gain','a second quarterback is not an upgrade on a running back handcuff');
  assert.deepEqual(waiverMove({...base,id:'rb9'}),{drop:'cuff',gain:null,benchGain:3,status:'bench'});
 });
+test('this week’s shortlist is built from what players can still score, not from games already played',async()=>{
+ const {waiverRows}=await import('../dist/analysis.js');
+ const P=(position,team)=>({position,fantasy_positions:[position],team,active:true}),players={mine:P('WR','MON'),late:P('WR','MON')},projections={mine:{stats:{rec:4}},late:{stats:{rec:9}}};
+ // Eight free agents who out-project the Monday receiver and whose games are over.
+ for(let i=0;i<8;i++){players[`sun${i}`]=P('WR','SUN');projections[`sun${i}`]={stats:{rec:10+i}}}
+ const league={league_id:'L',scoring_settings:{rec:1},roster_positions:['WR','BN'],mine:{roster_id:1,players:['mine'],starters:['mine']},rosters:[{roster_id:1,players:['mine']}],matchups:[]};
+ const data={week:2,user:{user_id:'u'},players,projections:{2:projections},games:{SUN:{state:'post'},MON:{state:'pre'}},trends:[]};
+ const rows=waiverRows(data,league,{waiverExcluded:{add:[],drop:[]},protectStarters:false});
+ const late=rows.find(r=>r.id==='late');assert.ok(late,'the player who can still help is looked at');assert.deepEqual([late.status,late.gain,late.drop],['upgrade',5,null]);assert.equal(rows[0].id,'late');
+});

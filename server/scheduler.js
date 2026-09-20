@@ -91,7 +91,8 @@ export function createWorker({store,service,ntfy=null,publish=null,now=Date.now,
      const baseline=state.baselines[kind]!=null;let fresher=0;generatedAt=result.generatedAt||at;
      for(const c of result.items){
       const previous=state.events[c.key],qualified=!previous||previous.deferred||!previous.lastSent&&!previous.active||c.gain-previous.notifiedGain>=settings.alerts.improvement;
-      fresh[c.key]={kind,active:true,lastSeen:at,gain:c.gain,notifiedGain:previous?.notifiedGain??c.gain,lastSent:previous?.lastSent||0};
+      // An alert that was held, or whose delivery failed, stays owed through the cooldown until it is sent.
+      fresh[c.key]={kind,active:true,lastSeen:at,gain:c.gain,notifiedGain:previous?.notifiedGain??c.gain,lastSent:previous?.lastSent||0,...(previous?.deferred?{deferred:true}:{})};
       if(!baseline||!qualified)continue;
       if(at-(previous?.lastSent||0)<settings.alerts.cooldownHours*3600000)continue;
       fresher++;
@@ -104,7 +105,7 @@ export function createWorker({store,service,ntfy=null,publish=null,now=Date.now,
     }
     if(picked.length){
      state.outbox.push({id:`alert:${at}`,type:'alert',items:picked,...compose(picked,generatedAt),status:'pending',attempts:0,nextAttempt:at,expiresAt:at+6*3600000});
-     for(const c of picked)Object.assign(fresh[c.key],{lastSent:at,notifiedGain:c.gain});
+     for(const c of picked)Object.assign(fresh[c.key],{lastSent:at,notifiedGain:c.gain,deferred:false});
      state.count++;scan.sent=picked.length;
     }
     if(enabled.every(kind=>scan.kinds[kind]?.skipped))state.lastScan=at-settings.alerts.scanHours*3600000+900000;

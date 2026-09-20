@@ -1,10 +1,12 @@
-import {projected,optimize,activeSlots,playableIds,SLOT_POSITIONS} from './engine.js';
+import {projected,activeSlots,playableIds,SLOT_POSITIONS} from './engine.js';
+import {seasonLineup} from './trades.js';
 
 // The whole league at once: what every team has scored, what every roster projects to score,
 // how this week is going, and a simulation of the rest of the schedule for playoff odds.
 export const POSITIONS=['QB','RB','WR','TE','K','DEF','Other'];
 const round=(n,d=2)=>Math.round(n*10**d)/10**d;
 const mean=list=>list.length?list.reduce((s,n)=>s+n,0)/list.length:0;
+export const median=list=>{const sorted=[...list].sort((a,b)=>a-b),mid=sorted.length/2;return !sorted.length?0:sorted.length%2?sorted[Math.floor(mid)]:(sorted[mid-1]+sorted[mid])/2};
 export const score=m=>Number(m?.custom_points??m?.points)||0;
 const bucket=(players,id)=>POSITIONS.includes(players[id]?.position)?players[id].position:'Other';
 
@@ -35,14 +37,14 @@ export function seasonSoFar({league,players,weeks}){
   if(![...byId.values()].some(m=>score(m)>0)){for(const id of ids)rows[id].scores.push(null);continue}
   const scores=ids.filter(id=>byId.has(id)).map(id=>score(byId.get(id))),average=mean(scores),sorted=[...scores].sort((a,b)=>a-b);
   counted.push({week,average:round(average),high:sorted.at(-1),low:sorted[0]});
-  const mid=sorted.length/2,median=sorted.length%2?sorted[Math.floor(mid)]:(sorted[mid-1]+sorted[mid])/2;
+  const line=median(scores);
   for(const id of ids){
    const row=rows[id],m=byId.get(id);if(!m){row.scores.push(null);continue}
    const mine=score(m);row.scores.push({week,points:round(mine),diff:round(mine-average)});row.pf+=mine;row.games++;
    const beaten=scores.filter(s=>s<mine).length,level=scores.filter(s=>s===mine).length-1;
    row.allPlayWins+=beaten;row.allPlayLosses+=scores.length-1-beaten-level;
    if(scores.length>1)row.expectedWins+=(beaten+level/2)/(scores.length-1);
-   if(medianGame){if(mine>median)row.wins++;else if(mine<median)row.losses++;else row.ties++}
+   if(medianGame){if(mine>line)row.wins++;else if(mine<line)row.losses++;else row.ties++}
    for(const p of m.starters||[])if(players[p])row.byPosition[bucket(players,p)]+=Number(m.players_points?.[p])||0;
   }
   for(const [a,b] of pairings(matchups)){
@@ -67,7 +69,7 @@ export function rosterOutlook({league,players,projections,weeks}){
   const byPosition=Object.fromEntries(POSITIONS.map(p=>[p,0]));let total=0;
   for(const week of usable){
    const value=id=>projected(projections[week][id]?.stats,league.scoring_settings);
-   let lineup;try{lineup=optimize(playableIds(roster),slots,players,value)}catch{lineup={ids:[],total:0}}
+   const lineup=seasonLineup(playableIds(roster),slots,players,value);
    total+=lineup.total;for(const id of lineup.ids)if(id)byPosition[bucket(players,id)]+=value(id)||0;
   }
   out[roster.roster_id]=usable.length?{points:round(total/usable.length),byPosition:Object.fromEntries(POSITIONS.map(p=>[p,round(byPosition[p]/usable.length)])),weeks:usable}:null;
@@ -165,13 +167,15 @@ export function liveWeek({league,players,projections={},games={},spread=24}){
    planned+=plan;open+=plan*left;remaining+=left;
    if(points>0&&(!top||points>top.points))top={id,points};
   }
-  const points=score(m),share=planned>0?open/planned:starters.length?remaining/starters.length:0;
+  // A starter with no projection still has football to play, so he keeps the score uncertain.
+  const points=score(m),share=planned>0&&(open>0||!remaining)?open/planned:starters.length?remaining/starters.length:0;
   // Bonuses and corrections live in the team total, so the projection builds on it, not on the starters' sum.
-  teams[m.roster_id]={rosterId:m.roster_id,matchupId:m.matchup_id,points:round(points),mean:round(points+open),sd:round(spread*Math.sqrt(Math.max(0,Math.min(1,share)))),share:round(share,3),counts,top};
+  teams[m.roster_id]={rosterId:m.roster_id,matchupId:m.matchup_id,points:round(points),mean:round(points+open),sd:round(spread*Math.sqrt(Math.max(0,Math.min(1,share)))),share:round(share,4),counts,top};
  }
  const games_=pairings(league.matchups).map(([a,b])=>({teams:[a,b],chance:round(winChance(teams[a],teams[b]),4),margin:round(Math.abs(teams[a].mean-teams[b].mean))}));
  const list=Object.values(teams);
- return {teams,games:games_,known,started:list.some(t=>t.points!==0||t.counts.live||t.counts.done),complete:known&&list.length>0&&list.some(t=>t.points>0)&&list.every(t=>t.share===0)};
+ return {teams,games:games_,known,started:list.some(t=>t.points!==0||t.counts.live||t.counts.done),// Final means every starter's game is over, not that little projection is left.
+  complete:known&&list.length>0&&list.some(t=>t.points>0)&&list.every(t=>!t.counts.live&&!t.counts.pre)};
 }
 
 function random(seed){let a=seed>>>0;const next=()=>{a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
@@ -199,7 +203,7 @@ export function simulate({league,rating,standing,current=null,future=[],spread=2
     for(const i of [a,b]){const live=week.live?.[ids[i]];points[i]=live?live.mean+normal()*live.sd:truth[i]+normal()*spread;pf[i]+=points[i];playing.push(i)}
     if(points[a]===points[b]){wins[a]+=.5;wins[b]+=.5}else{const won=points[a]>points[b]?a:b;wins[won]++;if(w===0&&current){result[won]=1;result[won===a?b:a]=-1}}
    }
-   if(shape.medianGame&&playing.length>1){const sorted=playing.map(i=>points[i]).sort((x,y)=>x-y),mid=sorted.length/2,median=sorted.length%2?sorted[Math.floor(mid)]:(sorted[mid-1]+sorted[mid])/2;for(const i of playing)wins[i]+=points[i]>median?1:points[i]===median?.5:0}
+   if(shape.medianGame&&playing.length>1){const line=median(playing.map(i=>points[i]));for(const i of playing)wins[i]+=points[i]>line?1:points[i]===line?.5:0}
   });
   const ranked=[...ids.keys()].sort((a,b)=>wins[b]-wins[a]||pf[b]-pf[a]);
   if(shape.divisions){const champs=new Set();for(const i of ranked)if(divisionOf[i]&&![...champs].some(c=>divisionOf[c]===divisionOf[i]))champs.add(i);ranked.sort((a,b)=>champs.has(b)-champs.has(a))}
@@ -219,11 +223,11 @@ export function leagueOutlook({league,players,past=[],future=[],currentWeek,proj
  const shape=leagueShape(league),regular=currentWeek<shape.playoffStart;
  const first=seasonSoFar({league,players,weeks:past}),live=liveWeek({league,players,projections:projections[currentWeek],games,spread:weeklySpread(first)});
  // Once every game is final the current week is a result like any other.
- const closed=regular&&live.complete,season=closed?seasonSoFar({league,players,weeks:[...past,{week:currentWeek,matchups:league.matchups}]}):first;
+ const closed=regular&&live.complete,finished=closed?[...past,{week:currentWeek,matchups:league.matchups}]:past,season=closed?seasonSoFar({league,players,weeks:finished}):first;
  const spread=weeklySpread(season),ahead=Object.keys(projections).map(Number).filter(w=>w>=currentWeek+(closed?1:0)&&w<=18).sort((a,b)=>a-b);
  const outlook=rosterMemo(ahead,()=>rosterOutlook({league,players,projections,weeks:ahead})),rating=ratings({season,outlook});
 // Depth charts: what each player has scored a game, and what he projects to score in the weeks he plays.
- const finished=closed?[...past,{week:currentWeek,matchups:league.matchups}]:past,scored=playerAverages(finished);
+ const scored=playerAverages(finished);
  const planned=id=>{const list=ahead.map(w=>projected(projections[w]?.[id]?.stats,league.scoring_settings)).filter(Number.isFinite);return list.length?mean(list):null};
  const depth={season:season.games?depthChart({league,players,value:id=>scored[id]??null}):null,roster:ahead.length?depthChart({league,players,value:planned}):null};
  const schedule=future.filter(w=>w.week>currentWeek&&w.week<shape.playoffStart).map(w=>({week:w.week,pairs:pairings(w.matchups)}));
@@ -244,20 +248,24 @@ export function leagueOutlook({league,players,past=[],future=[],currentWeek,proj
  return result;
 }
 
-// Playoff and title odds for both teams before and after a trade. Only the two rosters are rated
-// again, and both seasons are played with the same random numbers, so the difference is the trade
-// and not the dice. This week's live scores stay as they are: the players have already been set.
-export function tradeOdds(result,{partnerId,give,get,dropA=[],dropB=[]},{runs=2000,horizon=null}={}){
+// Playoff and title odds before and after rosters change: a trade, a pickup, a drop. Only the changed
+// rosters are rated again, and both seasons are played with the same random numbers, so the difference
+// is the move and not the dice. This week's live scores stay as they are: the lineups are already set.
+// changes: [{rosterId, add, remove}]. horizon: {key, projections, weeks} rates every roster over other
+// weeks than the page's own, such as the rest of the season a trade was judged on.
+export function rosterOdds(result,changes,{runs=2000,horizon=null,memo=(key,compute)=>compute()}={}){
  const c=result?.context;if(!c||!result.regular||!result.weeksLeft)return null;
- // horizon: {key, projections, weeks} rates every roster over the same weeks the trade was judged on.
  const key=`${runs}:${horizon?.key??'near'}`,projections=horizon?.projections||c.projections,weeks=horizon?.weeks||c.ahead;
  const play=outlook=>simulate({league:c.league,rating:ratings({season:c.season,outlook}),standing:c.standing,current:c.current,future:c.schedule,spread:c.spread,ratingSpread:c.ratingSpread,runs,seed:c.seed});
- if(!c.baselines.has(key)){const outlook=horizon?rosterOutlook({league:c.league,players:c.players,projections,weeks}):c.outlook;c.baselines.set(key,{outlook,odds:play(outlook)})}
- const base=c.baselines.get(key),mine=c.league.mine?.roster_id,a=c.league.rosters.find(r=>r.roster_id===mine),b=c.league.rosters.find(r=>r.roster_id===partnerId);
- if(!a||!b||!base.outlook[mine]||!base.outlook[partnerId])return null;
- const swap=(roster,out,incoming)=>({...roster,players:(roster.players||[]).filter(id=>!out.includes(id)).concat(incoming)});
- const moved=rosterOutlook({league:{...c.league,rosters:[swap(a,[...give,...dropA],get),swap(b,[...get,...dropB],give)]},players:c.players,projections,weeks});
- const after=play({...base.outlook,...moved}),side=id=>({playoff:[base.odds[id].playoff,after[id].playoff],title:[base.odds[id].title,after[id].title],roster:[base.outlook[id].points,moved[id].points]});
- return {mine:side(mine),partner:side(partnerId)};
+ // Rating every roster over the horizon does not depend on live scores, so the caller may keep it.
+ if(!c.baselines.has(key)){const outlook=horizon?memo(horizon.key,()=>rosterOutlook({league:c.league,players:c.players,projections,weeks})):c.outlook;c.baselines.set(key,{outlook,odds:play(outlook)})}
+ const base=c.baselines.get(key),rosters=changes.map(({rosterId,add=[],remove=[]})=>{const roster=c.league.rosters.find(r=>r.roster_id===rosterId);return roster&&base.outlook[rosterId]?{...roster,players:(roster.players||[]).filter(id=>!remove.includes(id)).concat(add)}:null});
+ if(!rosters.length||rosters.includes(null))return null;
+ const moved=rosterOutlook({league:{...c.league,rosters},players:c.players,projections,weeks}),after=play({...base.outlook,...moved});
+ return Object.fromEntries(changes.map(({rosterId:id})=>[id,{playoff:[base.odds[id].playoff,after[id].playoff],title:[base.odds[id].title,after[id].title],roster:[base.outlook[id].points,moved[id].points]}]));
+}
+export function tradeOdds(result,{partnerId,give,get,dropA=[],dropB=[]},options){
+ const mine=result?.context?.league.mine?.roster_id,odds=rosterOdds(result,[{rosterId:mine,add:get,remove:[...give,...dropA]},{rosterId:partnerId,add:give,remove:[...get,...dropB]}],options);
+ return odds&&{mine:odds[mine],partner:odds[partnerId]};
 }
 

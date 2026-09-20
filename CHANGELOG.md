@@ -24,9 +24,12 @@
   trades opens showing only offers that bring back that position, says where your starter ranks,
   names the teams sitting on a better one they cannot start, and says where you have the most to
   offer.
-- Add an Around the league page: every matchup in a league this week with the live score, where
-  it is heading, each side's chance to win, who is still to play, the median line in leagues that
-  use one, and the standings with playoff odds.
+- Add an Around the league page, a scoreboard for the whole league. Your matchup leads, then every
+  other one, closest first, each head to head: the live score, where it is heading, a win-chance bar
+  that is green when you are ahead and orange when you are behind, a one-word read (Toss-up, Upset
+  brewing, Comfortable, Final), a meter of starters finished, playing and still to come, and the
+  median line in leagues that use one. Below, the standings show the result each team is heading
+  for and playoff odds colored by whether a team is in, on the bubble or out.
 - Auto trades now finds two-for-one and one-for-two packages, the deals where one player for one
   player cannot work for both sides but a second player makes it fair. A package is only tried when
   the side sending two players already gains from each swap alone, the most promising thousand are
@@ -35,6 +38,17 @@
   the weakest, and never one of your protected players. The trade builder and the evaluate API
   accept uneven packages the same way, and alerts name your drop.
 - The watchroom shows your benched players by default, tagged BN. Untick Show my bench to hide them.
+- Waiver pickups show what the add and its drop do to your playoff odds.
+- Auto trades can be sorted by what is best for both teams, your points, their points, combined
+  points, or the lift to your playoff odds. Offers are numbered and the list says how it is ranked.
+- The waiver wire keeps its position checkboxes and loses the preset menu that did the same job.
+- Fixes from a review of the whole app: this week's waiver list no longer fills up with free agents
+  whose games are over, hiding the Monday player who would help; an alert whose push failed is sent
+  once the cooldown ends instead of being forgotten when scans run more often than the cooldown;
+  Shop one player no longer waits forever after a league, week or roster change; a browser tab left
+  open picks up the daily injury and team updates; switching accounts during a refresh loads the new
+  account's data; a hung refresh in service mode times out; a league toggled off just as a refresh
+  lands is no longer lost; and a week is only called final when every starter's game is over.
 - The Season review now loads after reconnecting in the browser, where it could wait forever.
 
 - Add a Season review page. Every finished week shows what each of your players scored in your

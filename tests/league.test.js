@@ -174,3 +174,12 @@ test('the depth chart knows each team’s best player who cannot start',()=>{
  const chart=depthChart({league:{roster_positions:['QB','RB','FLEX'],rosters:[{roster_id:1,players:['q1','q3','q2','r1']},{roster_id:2,players:[]}]},players:roster,value});
  assert.equal(chart.spare[1].QB.id,'q2');assert.equal(chart.spare[1].RB,null,'one back and two running back spots leaves nobody spare');assert.equal(chart.spare[2].QB,null);
 });
+
+test('a week is final only when every starter’s game is over',()=>{
+ const league={...four(),matchups:[entry(1,1,30,{starters:['qb1'],players_points:{qb1:30}}),entry(2,1,8,{starters:['qb2'],players_points:{qb2:8}}),entry(3,2,12,{starters:['qb3'],players_points:{qb3:12}}),entry(4,2,22,{starters:['qb4'],players_points:{qb4:22}})]};
+ const over={T1:{state:'post'},T3:{state:'post'},T4:{state:'post'}},projections=Object.fromEntries([1,2,3,4].map(id=>[`qb${id}`,{stats:{pts:20}}]));
+ const lastSeconds=liveWeek({league,players,projections,games:{...over,T2:{state:'in',period:4,clock:'0:08'}}});
+ assert.equal(lastSeconds.complete,false,'eight seconds left is not final');assert.ok(lastSeconds.teams[2].sd>0);
+ const unprojected=liveWeek({league,players,projections:{...projections,qb2:undefined},games:{...over,T2:{state:'in',period:1,clock:'12:00'}}});
+ assert.equal(unprojected.complete,false);assert.ok(unprojected.teams[2].share>.5&&unprojected.teams[2].sd>0,'a live starter with no projection keeps the score uncertain');
+});
