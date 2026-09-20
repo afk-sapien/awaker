@@ -1,12 +1,27 @@
+# Awaker. Without SLEEPER_USERNAME this serves the dashboard only. With it, the
+# same container also runs the API and scheduled reports for that account.
 services:
   awaker:
-    build: .
+    image: ${AWAKER_IMAGE:-ghcr.io/afk-sapien/awaker:latest}
+    container_name: awaker
     environment:
-      AWAKER_PUBLIC_URL: ${AWAKER_PUBLIC_URL:-http://127.0.0.1:4173}
+      AWAKER_HOST: 0.0.0.0
+      PORT: 4173
+      # SLEEPER_USERNAME: your-sleeper-name
+      # Schedules, alerts and phone notifications are set up in the browser.
+    env_file:
+      - path: .env
+        required: false
     ports:
       - "127.0.0.1:4173:4173"
+    volumes:
+      # Retained so existing deployments keep their data.
+      - sunday-data:/app/data
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     init: true
+    stop_grace_period: 15s
     restart: unless-stopped
+volumes:
+  sunday-data:

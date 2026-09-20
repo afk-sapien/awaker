@@ -1,4 +1,4 @@
-import {activeSlots,playableIds,waiverDropReason,eligible} from './engine.js';
+import {activeSlots,playableIds,waiverDropReason,eligible,benchMove,BENCH_MARGIN,filledSlots,betterMove} from './engine.js';
 import {futurePoints,seasonLineup} from './trades.js';
 
 export function waiverWeeks(week,horizon,endWeek=17){
@@ -19,17 +19,21 @@ export function buildWaiverOutlook({league,players,outlook,protectedIds=[],start
  const before=weeks.map((_,i)=>lineup(roster,i)),capacity=league.roster_positions.filter(s=>!['IR','TAXI'].includes(s)).length;
  const safeDrops=roster.filter(id=>!waiverDropReason(id,{players,value:id=>totals[id],protectedIds,starterIds,excludedDropPositions}));
  return {totals,values,evaluate(id){
-  if(!weeks.length||totals[id]===null||!Number.isFinite(totals[id])||before.some(r=>!r.complete)||['Out','IR','PUP','Suspended','Doubtful'].includes(players[id]?.injury_status))return {drop:null,gain:null,status:'unavailable'};
+  if(!weeks.length||totals[id]===null||!Number.isFinite(totals[id])||['Out','IR','PUP','Suspended','Doubtful'].includes(players[id]?.injury_status))return {drop:null,gain:null,status:'unavailable'};
   const drops=roster.length<capacity?[null]:safeDrops.filter(drop=>!samePosition||(players[id]?.fantasy_positions||[players[id]?.position]).some(pos=>eligible(players[drop],pos)));
   if(!drops.length)return {drop:null,gain:null,status:'no_safe_drop'};
-  let best=null;
+  let best=null;const spare=[];
   for(const drop of drops){
    const afterIds=roster.filter(p=>p!==drop).concat(id),after=weeks.map((_,i)=>lineup(afterIds,i));
-   if(after.some(r=>!r.complete))continue;
+   if(after.some((r,i)=>filledSlots(r)<filledSlots(before[i])))continue;
    const weekly=weeks.map((week,i)=>({week,gain:Math.round((after[i].total-before[i].total)*100)/100,starts:after[i].ids.includes(id)}));
    const gain=Math.round(weekly.reduce((sum,r)=>sum+r.gain,0)*100)/100;
-   if(gain>.25&&(!best||gain>best.gain||gain===best.gain&&(totals[drop]??0)<(totals[best.drop]??0)))best={drop,gain,weekly,starts:weekly.filter(r=>r.starts).length,status:'upgrade'};
+   if(weekly.every(r=>r.gain>=0))spare.push(drop);
+   // The bar scales with the window: a quarter point over ten weeks is noise, not an upgrade.
+   if(gain>.25*weeks.length&&betterMove(gain,totals[drop]??0,best,.5*weeks.length))best={drop,gain,dropValue:totals[drop]??0,weekly,starts:weekly.filter(r=>r.starts).length,status:'upgrade'};
   }
-  return best||{drop:null,gain:null,status:'no_gain'};
+  if(best){delete best.dropValue;return best}
+  const shares=drop=>drop===null||(players[drop]?.fantasy_positions||[players[drop]?.position]).some(pos=>(players[id]?.fantasy_positions||[players[id]?.position]).includes(pos));
+  return benchMove(id,spare,p=>totals[p],BENCH_MARGIN*weeks.length,shares)||{drop:null,gain:null,status:'no_gain'};
  }};
 }

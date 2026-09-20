@@ -42,8 +42,9 @@ export function buildSeasonModel({league,players,outlook}){
   replacement[week]=byPosition;
  }
  for(const id of allIds){const vals=weeks.map(w=>values[w][id]);totals[id]=vals.every(Number.isFinite)?vals.reduce((a,b)=>a+b,0):null;
-  const pos=players[id].position;
-  valueAboveReplacement[id]=totals[id]!==null&&weeks.every(w=>Number.isFinite(replacement[w][pos]))?weeks.reduce((sum,w)=>sum+Math.max(0,values[w][id]-replacement[w][pos]),0):null;
+  // Replacement levels are keyed by fantasy position, which differs from position for IDP players.
+  const level=w=>Math.min(...(players[id].fantasy_positions||[players[id].position]).map(pos=>replacement[w][pos]).filter(Number.isFinite));
+  valueAboveReplacement[id]=totals[id]!==null&&weeks.every(w=>Number.isFinite(level(w)))?weeks.reduce((sum,w)=>sum+Math.max(0,values[w][id]-level(w)),0):null;
  }
  const baseline=new Map();
  const lineup=(ids,w)=>seasonLineup(ids,slots,players,id=>values[w][id]);
@@ -59,7 +60,8 @@ export function buildSeasonModel({league,players,outlook}){
   const weekly=weeks.map((week,i)=>{const afterA=lineup(newA,week),afterB=lineup(newB,week);return {week,gainA:afterA.total-beforeA[i].total,gainB:afterB.total-beforeB[i].total,complete:beforeA[i].complete&&beforeB[i].complete&&afterA.complete&&afterB.complete,incomingStarts:afterA.ids.filter(id=>get.includes(id)).length,partnerStarts:afterB.ids.filter(id=>give.includes(id)).length,outgoingStarts:beforeA[i].ids.filter(id=>give.includes(id)).length,partnerOutgoingStarts:beforeB[i].ids.filter(id=>get.includes(id)).length}});
   const sumValue=ids=>ids.some(id=>valueAboveReplacement[id]===null)?null:ids.reduce((sum,id)=>sum+valueAboveReplacement[id],0);
   const offeredValue=sumValue(give),receivedValue=sumValue(get),largest=Math.max(offeredValue??0,receivedValue??0);
-  const valueGap=offeredValue===null||receivedValue===null||largest<=0?null:Math.abs(offeredValue-receivedValue)/largest;
+  // Two players who are both no better than a free agent are an even swap, not an unknown one.
+  const valueGap=offeredValue===null||receivedValue===null?null:largest<=0?0:Math.abs(offeredValue-receivedValue)/largest;
   return {give,get,weekly,gainA:weekly.reduce((s,r)=>s+r.gainA,0),gainB:weekly.reduce((s,r)=>s+r.gainB,0),complete:weekly.every(r=>r.complete),offeredValue,receivedValue,valueGap,weeks:weeks.length};
  }
  // Cache fixed pickup/drop plans per roster and incoming position. Trades are

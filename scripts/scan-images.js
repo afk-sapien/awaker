@@ -9,20 +9,20 @@ const reports = resolve('release/security')
 mkdirSync(reports, {recursive: true})
 const user = process.getuid ? ['--user', `${process.getuid()}:${process.getgid()}`] : []
 try {
- for (const mode of ['static', 'service']) {
-  const archive = join(folder, `${mode}.tar`)
-  execFileSync('docker', ['save', `awaker-smoke:${mode}`, '-o', archive], {stdio: 'inherit'})
-  const scan = spawnSync('docker', ['run', '--rm', ...user, '--read-only', '--cap-drop=ALL', '--security-opt=no-new-privileges',
-   '-e', 'TMPDIR=/scan', '-v', `${folder}:/scan`, '-v', `${reports}:/reports`, scanner, 'image',
-   '--cache-dir', '/scan/cache', '--input', `/scan/${mode}.tar`, '--scanners', 'vuln',
-   '--format', 'json', '--output', `/reports/${mode}.json`, '--quiet'], {stdio: 'inherit'})
-  if (scan.error || scan.status !== 0) throw Error(`Could not scan ${mode} image`)
-  const report = JSON.parse(readFileSync(join(reports, `${mode}.json`), 'utf8'))
-  const findings = (report.Results || []).flatMap(result => result.Vulnerabilities || [])
-  const blocking = findings.filter(item => ['HIGH', 'CRITICAL'].includes(item.Severity))
-  console.log(`${mode}: ${findings.length} known vulnerabilities, ${blocking.length} HIGH or CRITICAL`)
-  for (const item of findings) console.log(`${item.Severity}: ${item.VulnerabilityID} in ${item.PkgName} ${item.InstalledVersion}`)
-  if (blocking.length) process.exitCode = 1
-  rmSync(archive)
- }
+ // One application image, built by the smoke test or named by the caller.
+ const image = process.env.AWAKER_SCAN_IMAGE || 'awaker-smoke:local'
+ const archive = join(folder, 'image.tar')
+ execFileSync('docker', ['save', image, '-o', archive], {stdio: 'inherit'})
+ const scan = spawnSync('docker', ['run', '--rm', ...user, '--read-only', '--cap-drop=ALL', '--security-opt=no-new-privileges',
+  '-e', 'TMPDIR=/scan', '-v', `${folder}:/scan`, '-v', `${reports}:/reports`, scanner, 'image',
+  '--cache-dir', '/scan/cache', '--input', '/scan/image.tar', '--scanners', 'vuln',
+  '--format', 'json', '--output', '/reports/image.json', '--quiet'], {stdio: 'inherit'})
+ if (scan.error || scan.status !== 0) throw Error(`Could not scan ${image}`)
+ const report = JSON.parse(readFileSync(join(reports, 'image.json'), 'utf8'))
+ const findings = (report.Results || []).flatMap(result => result.Vulnerabilities || [])
+ const blocking = findings.filter(item => ['HIGH', 'CRITICAL'].includes(item.Severity))
+ console.log(`${image}: ${findings.length} known vulnerabilities, ${blocking.length} HIGH or CRITICAL`)
+ for (const item of findings) console.log(`${item.Severity}: ${item.VulnerabilityID} in ${item.PkgName} ${item.InstalledVersion}`)
+ if (blocking.length) process.exitCode = 1
+ rmSync(archive)
 } finally { rmSync(folder, {recursive: true, force: true}) }

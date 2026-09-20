@@ -129,6 +129,7 @@ class InstalledApplicationTests(unittest.TestCase):
 
     def test_service_persists_state_outside_package(self):
         self.assertEqual(self.run_cli("setup").returncode, 0)
+        self.environment["SLEEPER_USERNAME"] = "example"
         values = dict(line.split("=", 1) for line in (self.directory / "state" / ".env").read_text().splitlines())
         headers = {"Authorization": f"Bearer {values['AWAKER_ADMIN_TOKEN']}", "Content-Type": "application/json"}
         with self.server("service") as port:
@@ -144,10 +145,23 @@ class InstalledApplicationTests(unittest.TestCase):
     def test_explicit_environment_file_and_external_database(self):
         custom = self.directory / "custom.env"
         database = self.directory / "custom.sqlite"
-        custom.write_text(f"SUNDAY_ADMIN_TOKEN={'a' * 40}\nSUNDAY_AGENT_TOKEN={'b' * 40}\nAWAKER_DB={database.as_posix()}\n")
+        custom.write_text(f"SUNDAY_ADMIN_TOKEN={'a' * 40}\nSUNDAY_AGENT_TOKEN={'b' * 40}\nSLEEPER_USERNAME=example\nAWAKER_DB={database.as_posix()}\n")
         with self.server("service", ("--env-file", str(custom))) as port:
             self.assertEqual(self.request(port, "/healthz")[0], 200)
         self.assertTrue(database.is_file())
+
+    def test_service_runs_without_tokens_and_keeps_its_configured_account(self):
+        self.environment["SLEEPER_USERNAME"] = "example"
+        with self.server("service") as port:
+            status, _, payload = self.request(port, "/api/v1/settings")
+            self.assertEqual(status, 200)
+            body = json.loads(payload)
+            self.assertEqual(body["authRequired"], False)
+            self.assertEqual(body["settings"]["username"], "example")
+            headers = {"Content-Type": "application/json", "Origin": f"http://127.0.0.1:{port}"}
+            status, _, payload = self.request(port, "/api/v1/settings", "PUT", headers, json.dumps({"username": "someone-else"}))
+            self.assertEqual(status, 400)
+            self.assertIn("configuration", json.loads(payload)["error"])
 
     def test_mcp_has_clean_protocol_output(self):
         self.environment["AWAKER_AGENT_TOKEN"] = "a" * 40
@@ -157,7 +171,7 @@ class InstalledApplicationTests(unittest.TestCase):
         self.assertEqual(json.loads(result.stdout)["result"]["serverInfo"]["name"], "awaker")
 
     def test_configuration_errors_are_actionable(self):
-        self.assertIn("setup", self.run_cli("service").stderr)
+        self.assertIn("--username", self.run_cli("service").stderr)
         self.assertEqual(self.run_cli("--port", "65536").returncode, 1)
         self.assertIn("does not exist", self.run_cli("--env-file", "missing.env").stderr)
 

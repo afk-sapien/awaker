@@ -67,11 +67,12 @@ awaker
 ```sh
 docker run -d --name awaker --restart unless-stopped --init \
   --read-only --cap-drop=ALL --security-opt=no-new-privileges \
-  -p 127.0.0.1:4173:4173 \
+  -p 127.0.0.1:4173:4173 -v awaker-data:/app/data \
+  -e SLEEPER_USERNAME=your-sleeper-name \
   ghcr.io/afk-sapien/awaker:latest
 ```
 
-Same address. `docker stop awaker` and `docker start awaker` do what you'd expect. Images are public and cover Linux AMD64 and ARM64. `latest` follows stable releases, version tags like `0.2.0` pin one, and `edge` is the preview channel.
+Same address. That is the whole install: one container, no accounts, and schedules, alerts and phone notifications are set up in the browser. Leave out `SLEEPER_USERNAME` to get the dashboard alone. To reach it from another machine, publish `-p 4173:4173` and add `-e AWAKER_PUBLIC_URL=http://your-server:4173`, because Awaker only answers on the address it was told to expect. `docker stop awaker` and `docker start awaker` do what you'd expect. Images are public and cover Linux AMD64 and ARM64. `latest` follows stable releases, version tags like `0.2.0` pin one, and `edge` is the preview channel.
 
 <details>
 <summary>Prefer Docker Compose?</summary>
@@ -83,43 +84,51 @@ services:
   awaker:
     image: ghcr.io/afk-sapien/awaker:latest
     container_name: awaker
+    environment:
+      SLEEPER_USERNAME: your-sleeper-name
     ports:
       - "127.0.0.1:4173:4173"
+    volumes:
+      - awaker-data:/app/data
     restart: unless-stopped
     init: true
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
+volumes:
+  awaker-data:
 ```
 
-For the background service, use [compose.ghcr.service.yaml](compose.ghcr.service.yaml) from the
-repository instead. It keeps the database in a named volume and reads your tokens from `.env`.
-[Registry access, Compose and upgrades](docs/self-hosting.md#prebuilt-containers) has the details.
+[compose.yaml](compose.yaml) in the repository is the same thing with an optional `.env` and a
+pinnable image. [Registry access, Compose and upgrades](docs/self-hosting.md#prebuilt-containers)
+has the details, including [moving from the two 0.2.0 containers](docs/self-hosting.md#upgrading-from-020-two-containers-to-one).
 
 </details>
 
 **Then connect your leagues:** click **Connect Sleeper**, enter your public Sleeper username, and pick which leagues show up in **My leagues**. Roster moves still happen in Sleeper; Awaker only reads. Your preferences live in that browser, so come back to the same address each time (`localhost` and `127.0.0.1` count as different addresses).
 
-## The background service
+## Reports while you're away
 
-Optional, built for a single owner, and what you want if you'd like reports to arrive on their own:
+Everything above runs in your browser. Name the Sleeper account you want followed and the same app also runs in the background: scheduled reports, trade and waiver alerts, optional phone notifications, and read-only tools for an AI assistant.
 
 ```sh
-awaker service
+awaker service --username YOUR_SLEEPER_NAME
 ```
 
-Stop the dashboard first, since both use port 4173, then open [Agents & updates](http://127.0.0.1:4173/integrations.html). There's no login and nothing to set up. For Docker, use `ghcr.io/afk-sapien/awaker-service:latest` with the [service Compose file](compose.ghcr.service.yaml).
+With Docker, that is the `SLEEPER_USERNAME` in the command above. Same image, same address. Open [Notifications](http://127.0.0.1:4173/integrations.html) to pick schedules and alert thresholds, which start switched off. Every few hours (six by default) it compares trades and the waiver wire, and sends one notification when something new clears the projected gain you chose.
 
-Because there's no login, anyone who can reach the address can read your reports and change its settings, the same as any small self-hosted tool. Notification settings are the exception: where notifications go is read from the environment and can't be changed through the browser. If you're putting the service somewhere less private, run `awaker setup` once to generate an owner token and a read-only token for agents, and it will start asking for a sign-in.
+Phone pushes go through [ntfy](https://ntfy.sh) and need no account: on the same page, generate a random topic, save it, subscribe to that topic in the ntfy app, and send a test. A self-hosted ntfy server and an access token are optional.
 
-Schedules and notifications start switched off. Set up HTTPS before exposing it anywhere. [Self-hosting](docs/self-hosting.md) covers configuration and backups; [integrations](docs/integrations.md) covers agents, schedules and ntfy.
+There's no login. The account it reports on is read from the environment and can't be changed from the browser, so it can only ever report on your leagues. Schedules, thresholds and where notifications go are editable by anyone who can reach it, the same as any small self-hosted tool. Run `awaker setup` to generate an owner token and a read-only agent token if you want a sign-in, and set up HTTPS before exposing it anywhere.
+
+[Self-hosting](docs/self-hosting.md) covers configuration and backups; [integrations](docs/integrations.md) covers agents, schedules and ntfy.
 
 ## Honest limits
 
 Worth knowing before you trust it with a lineup decision:
 
 - **Projections are projections.** Advice ranks projected points. It doesn't model whether someone would accept a trade, dynasty picks, FAAB, deadlines, or every exotic scoring bonus. Missing estimates show up as unavailable rather than as a guess.
-- **Scores lag the broadcast.** Open tabs refresh every 45 seconds, and cached player details can be a day old, so this is not an injury alert system. Trade scans run every 15 minutes when enabled.
+- **Scores lag the broadcast.** Open tabs refresh every 45 seconds, and cached player details can be a day old, so this is not an injury alert system. Trade and waiver scans run every six hours by default, or as often as hourly.
 - **It leans on unofficial endpoints.** League data comes from the [documented Sleeper API](https://docs.sleeper.com/), but projections and ESPN game status use undocumented endpoints that can change or break.
 - **Your data stays with you.** Browser preferences stay in your browser. Service settings, caches and reports live in a local SQLite file that can contain private league strategy, so protect `.env`, the data volume and your backups. No analytics, no telemetry.
 
@@ -135,7 +144,7 @@ node scripts/container-smoke.js
 node scripts/scan-images.js
 ```
 
-The last two need Docker. CI covers Node 22 and 24, installed Python packages on Linux, macOS and Windows, and both containers on AMD64 and ARM64. It also scans history for secrets and images for known vulnerabilities, and blocks publishing on HIGH or CRITICAL findings. See [release instructions](docs/releasing.md).
+The last two need Docker. CI covers Node 22 and 24, installed Python packages on Linux, macOS and Windows, and the container on AMD64 and ARM64. It also scans history for secrets and images for known vulnerabilities, and blocks publishing on HIGH or CRITICAL findings. See [release instructions](docs/releasing.md).
 
 [Contributing](CONTRIBUTING.md) · [Code of conduct](CODE_OF_CONDUCT.md) · [Getting help](SUPPORT.md) · [Security reporting](SECURITY.md) · [Changelog](CHANGELOG.md)
 

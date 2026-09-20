@@ -12,7 +12,7 @@ if (!process.env.AWAKER_DB && !process.env.SUNDAY_DB) {
 if (overrides.PORT && !overrides.AWAKER_PUBLIC_URL) {
   process.env.AWAKER_PUBLIC_URL = `http://127.0.0.1:${overrides.PORT}`
 }
-const entry = {serve: 'preview.js', service: 'main.js', mcp: 'mcp.js'}[command]
+const entry = {serve: 'start.js', service: 'main.js', mcp: 'mcp.js'}[command]
 if (!entry) throw Error('Unknown Awaker command')
 const module = await import(pathToFileURL(resolve(root, 'server', entry)))
 if (command === 'mcp') await module.runMcp()
