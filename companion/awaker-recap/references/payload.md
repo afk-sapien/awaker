@@ -95,8 +95,9 @@ scored. It deserves the mention every time.
 
 ## `moves`
 
-`moves.summary` has `count`, `trades`, `spent` (total FAAB across the week) and `best` — the claim
-or pickup with the highest `net`, or null.
+`moves.summary` has `count`, `trades`, `spent` (total FAAB across the week), `pending` (how many are
+waiting on games) and `best` — the graded claim with the highest `net`, or null when none has been
+played yet.
 
 `moves.rows` is one entry per completed transaction, oldest first as Sleeper processed them. Failed
 and pending claims are already filtered out.
@@ -108,17 +109,31 @@ and pending claims are already filtered out.
 | `rosterIds`, `teams` | Who was involved, as ids and as resolved names. |
 | `bid` | FAAB spent, or null where the league does not use it. |
 | `adds`, `drops` | Players in and out. |
-| `net` | Added points minus dropped points, **for that week only**. |
+| `forWeek` | **The week this move is graded on — not always `recapWeek`.** See below. |
+| `played` | False when `forWeek`'s games have not all been played. Then `net` is null. |
+| `net` | Added points minus dropped points, in each player's own `forWeek`. Null when `played` is false. |
 | `label` | On waivers and free agents only. |
 | `sides` | On trades only: `{rosterId, received, sent, net}` per manager. |
 
-Each entry in `adds` and `drops` is `{id, name, position, rosterId, team, points, started}`.
-`started` says whether the player was in anyone's starting lineup that week — a pickup who never
+Each entry in `adds` and `drops` is `{id, name, position, rosterId, team, points, started, forWeek}`.
+`started` says whether the player was in a starting lineup in his own `forWeek` — a pickup who never
 started tells you the claim was a stash or a panic.
 
-Labels: `unused bid` (paid FAAB for someone who never started), `stashed` (same, but free),
-`backfired` (the drop outscored the add by 3+), `paid off` (the add won by 3+), `neutral`,
-`unknown` (no scoring data).
+**Why `forWeek` exists, and why it matters.** Sleeper files a transaction under the week it *cleared*
+in, not the week it affects. Waivers run on Tuesday or Wednesday, after that week's games are over,
+so most of a week's transactions are really moves for the following week. A player's points only
+count toward a move made before **his own game kicked off** — so a Sunday-evening pickup cannot take
+credit for the afternoon's scoring either. One move can straddle two weeks (claimed after the early
+games but before Monday night), in which case each player carries his own `forWeek` and the move
+stays ungraded until both weeks are on the board.
+
+This means a recap written the day after a week ends will often show every move as `not played yet`.
+That is correct, and it is the honest thing to print: those claims have not had a chance to pay off.
+Say so plainly rather than reaching for the raw points, which describe the week *before* the move.
+
+Labels: `not played yet` (the week it is graded on has not finished — no verdict is available),
+`unused bid` (paid FAAB for someone who never started), `stashed` (same, but free), `backfired` (the
+drop outscored the add by 3+), `paid off` (the add won by 3+), `neutral`, `unknown` (no scoring data).
 
 A trade gets `sides` instead of a label, because one week cannot say who won a trade and pretending
 otherwise is how recaps get a reputation.

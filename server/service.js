@@ -72,9 +72,9 @@ export function createService({store,provider,now=Date.now,username:pinned=''}){
    try{
     const history=await provider.history(d.nfl.season,l.league_id,[target]);
     if(!history.data[target])throw bad(`week ${target} is unavailable`,503);
-    const {matchups,transactions,stats,projections}=history.data[target];
+    const {matchups,transactions,stats,projections,games=null,next=null}=history.data[target];
     const review=weekReview({league:l,players:d.players,week:target,matchups,projections});
-    const made=moves({league:l,players:d.players,week:target,transactions,matchups,stats});
+    const made=moves({league:l,players:d.players,week:target,transactions,matchups,stats,games,next});
     const team=id=>teamName(l,id),named=p=>({...p,name:name(d,p.id),team:team(p.rosterId)});
     const rows=review.rows.map(r=>({...r,team:team(r.rosterId),opponent:r.opponentId==null?null:team(r.opponentId),
      decisions:r.decisions.map(x=>({...x,satName:name(d,x.sat),playedName:name(d,x.played)}))}));
@@ -88,7 +88,8 @@ export function createService({store,provider,now=Date.now,username:pinned=''}){
      names:Object.fromEntries([...ids].map(id=>[id,name(d,id)]))});
    }catch(e){warnings.push(`${l.name}: ${e.message}`)}
   }
-  return envelope(d,{recapWeek:target,recaps,limitations:['Graded on one week of results; a stash can look bad and age well.']},warnings);
+  return envelope(d,{recapWeek:target,recaps,limitations:['Graded on one week of results; a stash can look bad and age well.',
+   'A move that cleared after the week’s last kickoff is judged on the week it could first affect, and stays ungraded until those games are played.']},warnings);
  }
  async function digest({period='daily'}={}){
   const [state,opps,trade]=await Promise.all([status(),opportunities(),trades({limit:3})]);

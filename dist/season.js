@@ -114,37 +114,60 @@ export function weekReview({league,players,week,matchups=[],projections={}}){
 
 // Spending on someone who never entered a lineup, or cutting someone who then outscored his
 // replacement, are the moves worth revisiting. The rest is roster upkeep.
-export const moveLabel=({adds,net,bid})=>{
+export const moveLabel=({adds,net,bid,complete=true})=>{
+ if(!complete)return 'not played yet';
  if(adds.length&&adds.every(a=>!a.started))return bid?'unused bid':'stashed';
  if(!Number.isFinite(net))return 'unknown';
  return net<=-3?'backfired':net>=3?'paid off':'neutral';
 };
 
-// Waiver claims, free agents and trades from one week, graded by what the players involved scored
-// that same week. This is a week's verdict, not a season's: a stash can look bad and age well.
-export function moves({league,players,week,transactions=[],matchups=[],stats={}}){
- const scoring=league.scoring_settings,points=new Map(),started=new Set();
- for(const m of matchups){
-  for(const [id,value]of Object.entries(m.players_points||{})){const v=Number(value);if(Number.isFinite(v)&&!points.has(id))points.set(id,v)}
-  for(const id of m.starters||[])if(id&&id!=='0')started.add(id);
- }
- // Someone dropped and left unrostered has no players_points line anywhere, but he still has a stat line.
- const scored=id=>points.has(id)?points.get(id):projected(stats[id]?.stats,scoring);
- const side=(id,rosterId)=>({id,rosterId,points:scored(id),started:started.has(id),position:players[id]?.position||null});
+// Waiver claims, free agents and trades, graded by what the players involved scored in the week the
+// move could first affect. A player's points only count for a move made before his own game kicked
+// off: Sleeper files a transaction under the week it cleared in, so a Tuesday claim sits in a week
+// already over, and even a Sunday evening pickup cannot take credit for the afternoon games. Points
+// that were already on the board when the move cleared belong to the week after. A week's verdict,
+// never a season's. games is that week's kickoff times by NFL team; without it nothing is reweighted.
+export function moves({league,players,week,transactions=[],matchups=[],stats={},games=null,next=null}){
+ const scoring=league.scoring_settings;
+ const kickoff=id=>{const at=Date.parse(games?.[players[id]?.team||id]?.start??'');return Number.isFinite(at)?at:null};
+ // No kickoff for him, or no timestamp on the move, means no reason to move him off this week.
+ const ahead=(id,at)=>{const k=kickoff(id);return k===null||at===null?true:at<k};
+ const view=(weekNumber,rosters,lines,complete)=>{
+  const points=new Map(),started=new Set();
+  for(const m of rosters||[]){
+   for(const [id,value]of Object.entries(m.players_points||{})){const v=Number(value);if(Number.isFinite(v)&&!points.has(id))points.set(id,v)}
+   for(const id of m.starters||[])if(id&&id!=='0')started.add(id);
+  }
+  // Someone dropped and left unrostered has no players_points line anywhere, but he still has a stat line.
+  return {week:weekNumber,complete,scored:id=>points.has(id)?points.get(id):projected(lines?.[id]?.stats,scoring),started:id=>started.has(id)};
+ };
+ const during=view(week,matchups,stats,true),unknown={week:week+1,complete:false,scored:()=>null,started:()=>false};
+ const upcoming=next?view(next.week,next.matchups,next.stats,!!next.complete):unknown;
  const total=list=>{const known=list.map(s=>s.points).filter(Number.isFinite);return known.length?round(known.reduce((a,b)=>a+b,0)):null};
  const rows=transactions.filter(t=>t?.status==='complete'&&['waiver','free_agent','trade'].includes(t.type)).map(t=>{
+  const raw=Number(t.created),at=Number.isFinite(raw)?raw:null;
+  const side=(id,rosterId)=>{
+   const scope=ahead(id,at)?during:upcoming;
+   return {id,rosterId,forWeek:scope.week,points:scope.complete?scope.scored(id):null,started:scope.complete&&scope.started(id),position:players[id]?.position||null};
+  };
   const adds=Object.entries(t.adds||{}).map(([id,rosterId])=>side(id,rosterId)),drops=Object.entries(t.drops||{}).map(([id,rosterId])=>side(id,rosterId));
+  const involved=[...adds,...drops];
+  // One move can straddle two weeks - a Sunday night claim on a player who has played and one who
+  // has not - so it is only graded once every player in it has a week on the board.
+  const played=involved.every(p=>p.forWeek===during.week||upcoming.complete);
+  const forWeek=!involved.length||involved.some(p=>p.forWeek===during.week)?during.week:upcoming.week;
   const bid=Number(t.settings?.waiver_bid),gained=total(adds),lost=total(drops);
-  const net=gained===null&&lost===null?null:round((gained||0)-(lost||0));
-  const row={type:t.type,week,at:t.created??null,rosterIds:t.roster_ids||[],bid:Number.isFinite(bid)?bid:null,adds,drops,net};
+  const net=!played||(gained===null&&lost===null)?null:round((gained||0)-(lost||0));
+  const row={type:t.type,week,forWeek,played,at,rosterIds:t.roster_ids||[],bid:Number.isFinite(bid)?bid:null,adds,drops,net};
   // A trade has no single verdict, so each manager gets their own side of it.
   return t.type==='trade'?{...row,sides:(t.roster_ids||[]).map(rosterId=>{
    const received=adds.filter(a=>a.rosterId===rosterId),sent=drops.filter(d=>d.rosterId===rosterId);
    const [inPoints,outPoints]=[total(received),total(sent)];
-   return {rosterId,received:received.map(p=>p.id),sent:sent.map(p=>p.id),net:inPoints===null&&outPoints===null?null:round((inPoints||0)-(outPoints||0))};
-  })}:{...row,label:moveLabel({adds,net,bid:Number.isFinite(bid)?bid:null})};
+   return {rosterId,received:received.map(p=>p.id),sent:sent.map(p=>p.id),net:!played||(inPoints===null&&outPoints===null)?null:round((inPoints||0)-(outPoints||0))};
+  })}:{...row,label:moveLabel({adds,net,bid:Number.isFinite(bid)?bid:null,complete:played})};
  });
  const claims=rows.filter(r=>r.type!=='trade'&&Number.isFinite(r.net));
  return {week,rows,summary:{count:rows.length,trades:rows.filter(r=>r.type==='trade').length,
-  spent:round(rows.reduce((t,r)=>t+(r.bid||0),0)),best:claims.length?claims.reduce((a,b)=>b.net>a.net?b:a):null}};
+  pending:rows.filter(r=>!r.played).length,spent:round(rows.reduce((t,r)=>t+(r.bid||0),0)),
+  best:claims.length?claims.reduce((a,b)=>b.net>a.net?b:a):null}};
 }

@@ -1,4 +1,5 @@
 import {defenseWeeks} from '../dist/defenses.js';
+import {STAT_FALLBACKS} from '../dist/engine.js';
 import * as api from '../dist/api.js';
 // The dashboard reads a handful of fields for a few thousand relevant players. Sleeper's directory is
 // about 15 MB of everyone who ever played, and it used to ride along on every 45 second refresh.
@@ -37,7 +38,9 @@ export function createProvider(store){
   jobsExtra.push({name:'trends',key:'https://api.sleeper.app/v1/players/nfl/trending/add?lookback_hours=24&limit=100',ttl:900000,type:'trends',run:api.trends({force})});
   const results=await Promise.allSettled(jobsExtra.map(j=>j.run));
   results.forEach((r,i)=>{const j=jobsExtra[i];if(r.status==='rejected'){errors.push(`${j.name} unavailable`);return}source(j.name,j.key,j.ttl);if(j.type==='schedule'){data.schedules[j.week]=r.value;if(j.week===week)data.games=r.value}if(j.type==='projection'){data.projections[j.week]=r.value;const times=Object.values(r.value).map(p=>Number(p.updated_at)).filter(Number.isFinite);if(times.length)sources.at(-1).sourceUpdatedAt=Math.max(...times)}if(j.type==='trends')data.trends=r.value});
-  const projectedKeys=new Set(Object.values(data.projections[week]||{}).flatMap(p=>Object.keys(p.stats||{})));
+  const seenKeys=new Set(Object.values(data.projections[week]||{}).flatMap(p=>Object.keys(p.stats||{})));
+  // A category the projections bucket differently is still projected, so it is not a missing one.
+  const projectedKeys=new Set([...seenKeys,...Object.entries(STAT_FALLBACKS).filter(([,alts])=>alts.some(a=>seenKeys.has(a))).map(([key])=>key)]);
   // Rare-event scoring such as long field goals and points-allowed tiers is never itemised in
   // projections. Nearly every league has some, so it is a footnote and must not pause analysis.
   for(const league of details){const missing=Object.entries(league.scoring_settings||{}).filter(([key,value])=>value!==0&&!projectedKeys.has(key)).map(([key])=>key);if(missing.length)data.notes.push(`${league.name}: not projected ${missing.join(', ')}`)}

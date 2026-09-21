@@ -18,7 +18,10 @@ screens of scrolling before the first number, it is too long.
    claim quotes `gained` and `foreseen`, and anything `defensible` belongs in the luck section
    instead, if it appears at all.
 5. **The wire.** The week's `moves`: the best claim by `net`, anything that `backfired`, the biggest
-   `bid`, and any `unused bid`. Trades get both `sides` and no verdict.
+   `bid`, and any `unused bid`. Trades get both `sides` and no verdict. Check `played` first — a
+   recap written straight after the week ends will often find every move still `not played yet`,
+   because waivers clear after the games. Report the bids and the names, say the verdicts are not in
+   yet, and never substitute the points a player scored before he was claimed.
 6. **Footer.** `warnings`, the relevant `limitations`, and a line saying the numbers came from
    Awaker on `generatedAt`. If `demo` is true, say plainly that these are sample leagues.
 

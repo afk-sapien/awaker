@@ -104,3 +104,38 @@ test('moves are graded on the week they were made, and a dropped player still ha
  assert.equal(rows[2].label,undefined,'a trade has no single verdict');
  assert.deepEqual([summary.count,summary.trades,summary.spent,summary.best.net],[3,1,23,0]);
 });
+
+// Waivers clear after the week's last game, so Sleeper files a move for next week under this one,
+// and even a Sunday evening pickup cannot claim the afternoon's points.
+const sunday=Date.parse('2026-09-27T17:00:00Z'),monday=Date.parse('2026-09-28T20:15:00Z');
+const kickoffs={LAR:{start:new Date(sunday).toISOString()},MIA:{start:new Date(monday).toISOString()}};
+const claim=(at,bid,adds={wrX:1})=>({type:'waiver',status:'complete',roster_ids:[1],adds,settings:{waiver_bid:bid},created:at});
+const thisWeek=[{roster_id:1,matchup_id:1,starters:['rb1'],players:['rb1','wrX','rbM'],players_points:{rb1:5,wrX:3,rbM:8},points:5}];
+const nextWeek=[{roster_id:1,matchup_id:1,starters:['wrX'],players:['wrX'],players_points:{wrX:21},points:21}];
+const timedPlayers={...recapPlayers,wrX:P('WR','LAR'),rbM:P('RB','MIA')};
+const timing=(transactions,next={week:5,matchups:nextWeek,stats:{},complete:true})=>
+ moves({league:recapLeague,players:timedPlayers,week:4,matchups:thisWeek,stats:{},games:kickoffs,next,transactions});
+
+test('a move only claims the points of players whose game had not kicked off yet',()=>{
+ const {rows}=timing([claim(sunday-3600000,9),claim(sunday+3600000,9)]);
+ assert.deepEqual([rows[0].forWeek,rows[0].net,rows[0].label],[4,3,'unused bid'],'claimed before kickoff, so his week counts');
+ assert.deepEqual([rows[1].forWeek,rows[1].net,rows[1].label],[5,21,'paid off'],'claimed after it, so the credit waits for the week he could play');
+});
+test('a move straddling two weeks waits for the later one',()=>{
+ // Claimed after the Rams kicked off but before Miami did: one player has played, the other has not.
+ const both=[claim(sunday+3600000,9,{wrX:1,rbM:1})];
+ assert.deepEqual(timing(both).rows[0].adds.map(a=>a.forWeek),[5,4],'each player is placed on his own week');
+ const pending=timing(both,{week:5,matchups:[],stats:{},complete:false}).rows[0];
+ assert.deepEqual([pending.played,pending.net,pending.label],[false,null,'not played yet'],'ungraded until every player has a week on the board');
+});
+test('a move for a week nobody has played yet is reported without a verdict',()=>{
+ const {rows,summary}=timing([claim(sunday+3600000,40)],{week:5,matchups:[],stats:{},complete:false});
+ assert.deepEqual([rows[0].forWeek,rows[0].played,rows[0].net,rows[0].label],[5,false,null,'not played yet']);
+ assert.deepEqual([rows[0].adds[0].points,summary.pending,summary.spent],[null,1,40],'$40 spent is known; what it bought is not');
+ assert.equal(summary.best,null,'nothing to crown when nothing has been played');
+});
+test('without kickoff times every move stays on its own week',()=>{
+ const {rows,summary}=moves({league:recapLeague,players:timedPlayers,week:4,matchups:thisWeek,stats:{},
+  transactions:[claim(sunday+86400000,9)]});
+ assert.deepEqual([rows[0].forWeek,rows[0].played,summary.pending],[4,true,0]);
+});

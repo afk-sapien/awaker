@@ -132,3 +132,12 @@ test('everything except kickers still includes other positions and excludes mult
  assert.deepEqual(tradeCandidateIds(Object.keys(players),players,['K']),['qb','rb','te','def','lb']);
  assert.equal(waiverDropReason('multi',{players,value:()=>10,excludedDropPositions:['K']}),'Drop position excluded');
 });
+test('a coarse 50-plus projection bucket still scores where a league splits 50-59 from 60-plus',()=>{
+ // Sleeper projects one fgm_50p; nearly every league scores fgm_50_59 and fgm_60p separately, and
+ // without the fallback the whole category scored nothing and every kicker projected ~1.4 light.
+ const scoring={fgm_50_59:5,fgm_60p:6,xpm:1};
+ assert.equal(projected({fgm_50p:.32,xpm:2.79},scoring),4.39);
+ // A finished week itemises the real buckets, so the fallback must never double count.
+ assert.equal(projected({fgm_50_59:1,fgm_60p:1,fgm_50p:2,xpm:3},scoring),14);
+ assert.equal(projected({fgm_50p:1},{fgm_40_49:4}),null,'it fills only the bucket it belongs to');
+});

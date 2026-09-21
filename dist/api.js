@@ -68,13 +68,24 @@ export function transactions(leagueId,week,options={}){return sleeper(`/league/$
 // and the moves made that week. Only the recap needs this, so it is fetched on demand.
 export async function leagueHistory(season,leagueId,weeks,options={}){
  const data={},errors=[];let next=0;
+ const quiet=p=>p.catch(()=>null);
+ const finished=games=>{const list=Object.values(games||{});return list.length>0&&list.every(g=>g.state==='post')};
  async function worker(){while(next<weeks.length){const week=weeks[next++];
   try{
-   const [matchups,moves,results,expected]=await Promise.all([
+   // Sleeper files a transaction under the week it cleared in, so a Tuesday waiver sits in the week
+   // whose games are already over. Grading it needs this week's kickoff times, to tell which of its
+   // players could still play, and the week after: its scores, and whether it has been played at all.
+   const after=week+1,ahead=after<=18;
+   const [matchups,moves,results,expected,games,nextGames,nextResults,nextMatchups]=await Promise.all([
     leagueWeek(leagueId,week,options),transactions(leagueId,week,options),
-    stats(season,week,options),projections(season,week,options)]);
+    stats(season,week,options),projections(season,week,options),
+    quiet(scoreboard(season,week,{ttl:6*HOUR,...options})),
+    ahead?quiet(scoreboard(season,after,{ttl:HOUR,...options})):null,
+    ahead?quiet(stats(season,after,options)):null,
+    ahead?quiet(leagueWeek(leagueId,after,options)):null]);
    if(!Array.isArray(matchups)||!matchups.length)throw Error(`Week ${week} was never played.`);
-   data[week]={matchups,transactions:Array.isArray(moves)?moves:[],stats:results,projections:expected};
+   data[week]={matchups,transactions:Array.isArray(moves)?moves:[],stats:results,projections:expected,games:games||null,
+    next:ahead?{week:after,matchups:Array.isArray(nextMatchups)?nextMatchups:[],stats:nextResults||{},complete:finished(nextGames)}:null};
   }catch{errors.push(week)}
  }}
  await Promise.all(Array.from({length:3},worker));

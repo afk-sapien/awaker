@@ -436,12 +436,13 @@ async function ensureRecap(force=false){
   const history=data.demo?{data:{[week]:{matchups:l.matchups,transactions:[],stats:{},projections:data.projections[data.week]||{}}}}
    :await api.leagueHistory(data.nfl.season,l.league_id,[week],{force});
   if(!history.data[week])throw Error(`Week ${week} could not be loaded. Try again in a moment.`);
-  const {matchups,transactions,stats,projections}=history.data[week];
+  const {matchups,transactions,stats,projections,games=null,next=null}=history.data[week];
   state.review=weekReview({league:l,players:data.players,week,matchups,projections});
-  state.moves=weekMoves({league:l,players:data.players,week,transactions,matchups,stats});
+  state.moves=weekMoves({league:l,players:data.players,week,transactions,matchups,stats,games,next});
  }catch(e){state.error=e.message}finally{state.loading=false;if(recapState===state&&view==='season')render()}
 }
 const CALL_TONES={avoidable:'poor','toss-up':'neutral',defensible:'good'},MOVE_TONES={backfired:'poor','unused bid':'weak',stashed:'neutral',neutral:'neutral','paid off':'strong'};
+// 'not played yet' and 'unknown' are deliberately absent: no colour, because there is no verdict.
 const toneClass=(map,label)=>map[label]?` defense-${map[label]}`:'';
 function weekInReview(l){
  const week=recapTarget(),weeks=finishedWeeks(),state=recapState?.key===recapKey(l)?recapState:null;
@@ -480,10 +481,14 @@ function weekInReview(l){
   const who=[...new Set((r.rosterIds||[]).map(id=>teamName(l,id).team))].map(esc).join(' ⇄ ');
   const detail=r.type==='trade'?r.sides.map(x=>`${esc(teamName(l,x.rosterId).team)} ${x.net===null?'—':signed(x.net)}`).join(' · ')
    :[side(r.adds,'Added'),side(r.drops,'dropped')].filter(Boolean).join(', ');
-  return `<tr><th scope="row">${detail||'—'}${r.bid?`<div class="muted small">$${r.bid} of FAAB</div>`:''}</th><td>${who}</td><td class="num ${r.type==='trade'?'muted':r.net<-.05?'loss':r.net>.05?'gain':'muted'}">${r.type==='trade'?'—':r.net===null?'—':signed(r.net)}</td><td>${r.label?`<span class="pill${toneClass(MOVE_TONES,r.label)}">${esc(r.label)}</span>`:'<span class="muted small">one week says little</span>'}</td></tr>`;
+  // A claim that cleared after the last kickoff is for the week after, so it is scored on that week.
+  const impact=r.type==='trade'?'—':!r.played?'—':r.net===null?'—':signed(r.net);
+  const tone=r.type==='trade'||!r.played||r.net===null?'muted':r.net<-.05?'loss':r.net>.05?'gain':'muted';
+  return `<tr><th scope="row">${detail||'—'}${r.bid?`<div class="muted small">$${r.bid} of FAAB</div>`:''}</th><td>${who}</td><td class="num ${tone}">${impact}<div class="muted small">week ${r.forWeek}</div></td><td>${r.label?`<span class="pill${toneClass(MOVE_TONES,r.label)}">${esc(r.label)}</span>`:'<span class="muted small">one week says little</span>'}</td></tr>`;
  };
- const wire=made.rows.length?`<div class="panel table-wrap"><table class="week-table"><thead><tr><th scope="col">MOVE</th><th scope="col">TEAM</th><th scope="col">THAT WEEK</th><th scope="col">VERDICT</th></tr></thead><tbody>${made.rows.map(moveRow).join('')}</tbody></table></div>
-  <p class="muted small">${made.summary.count} move${made.summary.count===1?'':'s'} cleared${made.summary.trades?`, ${made.summary.trades} of them trade${made.summary.trades===1?'':'s'}`:''}${made.summary.spent?`, $${fmt(made.summary.spent,0)} of FAAB spent`:''}.</p>`
+ const pending=made.summary.pending;
+ const wire=made.rows.length?`<div class="panel table-wrap"><table class="week-table"><thead><tr><th scope="col">MOVE</th><th scope="col">TEAM</th><th scope="col">POINTS</th><th scope="col">VERDICT</th></tr></thead><tbody>${made.rows.map(moveRow).join('')}</tbody></table></div>
+  <p class="muted small">${made.summary.count} move${made.summary.count===1?'':'s'} cleared${made.summary.trades?`, ${made.summary.trades} of them trade${made.summary.trades===1?'':'s'}`:''}${made.summary.spent?`, $${fmt(made.summary.spent,0)} of FAAB spent`:''}. Waivers run after the week's last game, so a move is judged on the week it could first affect${pending?`; ${pending} of these are waiting on games that have not been played`:''}.</p>`
   :'<p class="muted">Nobody touched their roster this week.</p>';
  return head+tiles+swung+`<h3>The calls that were there to be made</h3>${decisions}<h3>Every team</h3>${table}<h3>The wire</h3>${wire}
  <details class="data-details"><summary>How this is judged</summary><p><strong>Left on bench</strong> is the gap to the best lineup that roster could have fielded, known only afterwards. It mixes bad luck with bad decisions, so on its own it is not a verdict on anybody.</p><p><strong>The calls</strong> is the gap to the lineup Sleeper's projections advised before kickoff, scored with what actually happened. A negative number means going against the projections cost points; a positive one means the manager out-picked them. A start/sit is only called <em>avoidable</em> when the projections favored the player who sat by more than a point — otherwise nobody could have known, and it belongs with the luck.</p><p>Moves are graded on the week they were made and nothing more. A stashed player who scored nothing is not yet a mistake, and one week cannot say who won a trade, which is why trades get both sides and no verdict.</p></details>`;

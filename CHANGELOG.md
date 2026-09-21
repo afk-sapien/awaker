@@ -69,6 +69,16 @@
   side by side. Below it, the week's waiver claims, free agents and trades, graded by what the
   players involved actually scored, with trades showing both sides and no verdict. Pick any finished
   week; they never change, so each one is kept on your device after the first look.
+- Kicker projections were about a point and a half light in every league, everywhere in the app.
+  Sleeper projects one combined 50-plus field goal bucket while almost every league scores 50-59 and
+  60-plus separately, so that whole category silently scored nothing. Kickers now land within 0.02
+  of Sleeper's own projection, the same as every other position. Scored results were never affected:
+  finished weeks itemise the real buckets and already matched Sleeper exactly.
+- The week in review grades a move on the week it can first affect, not the week Sleeper files it
+  under. Waivers clear after the week's games, so most of a week's claims are really moves for the
+  following week, and a player's points only count toward a move made before his own kickoff — a
+  Sunday evening pickup cannot take credit for the afternoon. A move whose week has not been played
+  says so and waits, rather than reporting points scored before it was made.
 - An AI assistant connected over MCP can now read a finished week with `get_recap`. For every team
   in a league it reports the result, the points the roster left on its bench, and the waiver claims,
   free agents and trades processed that week, each graded by what the players involved went on to
