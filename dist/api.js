@@ -60,6 +60,26 @@ export function stats(season,week,options={}){return cache.get(`stats:${season}:
 // One week of a league's matchups. Finished weeks hold the scores; weeks ahead hold only who plays whom.
 export function leagueWeek(leagueId,week,options={}){return sleeper(`/league/${leagueId}/matchups/${week}`,{ttl:6*HOUR,...options});}
 export function trends(options={}){return sleeper('/players/nfl/trending/add?lookback_hours=24&limit=100',{ttl:15*MINUTE,...options});}
+// Every add, drop, waiver claim and trade a league processed in one week. The current week is still
+// being written to; finished weeks are settled, which is all the recap ever asks for.
+export function transactions(leagueId,week,options={}){return sleeper(`/league/${leagueId}/transactions/${week}`,{ttl:6*HOUR,...options});}
+
+// Finished weeks for one league: who was started and what they scored, what was projected of them,
+// and the moves made that week. Only the recap needs this, so it is fetched on demand.
+export async function leagueHistory(season,leagueId,weeks,options={}){
+ const data={},errors=[];let next=0;
+ async function worker(){while(next<weeks.length){const week=weeks[next++];
+  try{
+   const [matchups,moves,results,expected]=await Promise.all([
+    leagueWeek(leagueId,week,options),transactions(leagueId,week,options),
+    stats(season,week,options),projections(season,week,options)]);
+   if(!Array.isArray(matchups)||!matchups.length)throw Error(`Week ${week} was never played.`);
+   data[week]={matchups,transactions:Array.isArray(moves)?moves:[],stats:results,projections:expected};
+  }catch{errors.push(week)}
+ }}
+ await Promise.all(Array.from({length:3},worker));
+ return {season,leagueId,weeks,data,errors,loadedAt:Date.now()};
+}
 
 export async function tradeOutlook(season,weeks,onProgress=()=>{},force=false){
  const data={},errors=[];let done=0,next=0;

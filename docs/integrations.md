@@ -46,8 +46,11 @@ Adapt the container format to your agent's MCP configuration. The service runs s
 | `evaluate_trade` | `POST /api/v1/trades/evaluate` | `leagueId`, integer `partnerId`, `give` and `get` player-ID arrays |
 | `get_opportunities` | `GET /api/v1/opportunities` | Optional `leagueId` |
 | `preview_digest` | `POST /api/v1/digests/preview` | Optional `period`: `daily` or `weekly` |
+| `get_recap` | `POST /api/v1/recap` | Optional `leagueId`, integer `week` (1–18); defaults to the last finished week |
 
 HTTP callers send `Authorization: Bearer <agent token>` when tokens are configured, and no header when they are not. GET inputs are query parameters. POST inputs are JSON. Unknown fields, invalid player packages, and excluded leagues are rejected. Example requests in natural language: “Find mutually beneficial trades in my leagues,” “Show my current matchups and player status,” or “Preview this week's summary.” Previews never send notifications.
+
+A recap reads one finished week for every team in a league. It reports each roster's result, the points it left on its bench, and the moves processed that week, each waiver claim and free agent graded against what the players involved scored. Start/sit calls are graded twice, because the two numbers answer different questions: `left` is the gap to the best lineup the roster could have fielded, which is hindsight, while `cost` is the gap to the lineup the projections advised before kickoff, which is the part a manager could have acted on. A decision is `avoidable` only when the projections favored the benched player, `defensible` when they favored the player who started, and `toss-up` in between. A week's verdict is not a season's: a pickup that looks wasted can age well.
 
 Responses include schema version, season/week, source fetch times, available upstream timestamps, demo status, completeness, and warnings. Missing projections remain unavailable. Searches reuse the browser's trade and waiver engines, retain owner protections, and cap each league's trade search at 10,000 pairs. Results explain both managers' projected gains and realism checks. Every capability is read-only toward Sleeper.
 

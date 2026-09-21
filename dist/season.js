@@ -1,4 +1,4 @@
-import {projected} from './engine.js';
+import {projected,optimize,activeSlots} from './engine.js';
 
 // How a player has done against what was expected of him, week by week, and how hard the next
 // few opponents are for his position. Everything uses the league's own scoring.
@@ -62,4 +62,89 @@ export function seasonReview({league,players,weeks,schedules={},currentWeek,ahea
  });
  const order=id=>{const i=POSITIONS.indexOf(id);return i<0?99:i};
  return {weeks:weeks.map(w=>w.week),rows:rows.sort((a,b)=>order(a.position)-order(b.position)||b.total-a.total),allowed};
+}
+
+// A start/sit is only a mistake if the projections favoured the bench player before kickoff. The rest
+// is hindsight, and a recap that cannot tell the two apart is just blaming people for the weather.
+export const DECISIONS=[[-1,'defensible'],[1,'toss-up'],[Infinity,'avoidable']];
+export const decisionLabel=foreseen=>Number.isFinite(foreseen)?DECISIONS.find(([limit])=>foreseen<limit)[1]:'unknown';
+
+// One finished week of one league, every roster. players_points carries the league's own scoring,
+// including the rare-event categories projections never itemise, so it is the authority on what
+// was scored; the matchup payload also holds each roster as it stood that week, not as it stands now.
+export function weekReview({league,players,week,matchups=[],projections={}}){
+ const scoring=league.scoring_settings,slots=activeSlots(league);
+ const expected=id=>projected(projections[id]?.stats,scoring);
+ const rows=(league.rosters||[]).map(roster=>{
+  const m=matchups.find(x=>x.roster_id===roster.roster_id);
+  if(!m)return {rosterId:roster.roster_id,played:false,decisions:[]};
+  const starters=(m.starters||[]).filter(id=>id&&id!=='0'),owned=[...new Set([...(m.players||[]),...starters])].filter(id=>players[id]);
+  const got=id=>{const v=Number(m.players_points?.[id]);return Number.isFinite(v)?v:null};
+  const sum=ids=>round(ids.reduce((t,id)=>t+(got(id)||0),0)),started=sum(starters);
+  // Two counterfactuals: the most this roster could have scored, and what the lineup the projections
+  // advised would have scored. The gap to the first is luck; the gap to the second was knowable.
+  const best=optimize(owned,slots,players,got,{},starters),advised=optimize(owned,slots,players,expected,{},starters);
+  const chosen=new Set(best.ids.filter(Boolean));
+  const sat=[...chosen].filter(id=>!starters.includes(id)).sort((a,b)=>(got(b)||0)-(got(a)||0));
+  const benched=starters.filter(id=>!chosen.has(id)).sort((a,b)=>(got(a)||0)-(got(b)||0));
+  const decisions=sat.map((id,i)=>{
+   // Fewer players to bench than the best lineup adds means a starting slot was left empty, and
+   // an empty slot is measured against the nothing it scored rather than against another player.
+   const out=benched[i]??null,pair=[expected(id),out?expected(out):0];
+   const foreseen=pair.every(Number.isFinite)?round(pair[0]-pair[1]):null;
+   return {sat:id,played:out,gained:round((got(id)||0)-(out?(got(out)||0):0)),foreseen,label:decisionLabel(foreseen)};
+  });
+  const opponent=m.matchup_id==null?null:matchups.find(x=>x.matchup_id===m.matchup_id&&x.roster_id!==m.roster_id)||null;
+  const points=round(Number(m.custom_points??m.points)||0),against=opponent?round(Number(opponent.custom_points??opponent.points)||0):null;
+  const left=round(best.total-started),followed=sum(advised.ids.filter(Boolean));
+  return {rosterId:roster.roster_id,played:true,points,against,opponentId:opponent?.roster_id??null,
+   result:against===null?null:points>against?'win':points<against?'loss':'tie',margin:against===null?null:round(points-against),
+   started,best:best.total,left,advised:followed,cost:round(started-followed),
+   complete:best.complete&&advised.complete,starters,bestLineup:best.ids,decisions,
+   // Losing by less than the bench was holding is the line a recap wants to open with.
+   swung:against!==null&&points<against&&left>against-points};
+ });
+ const played=rows.filter(r=>r.played),scores=played.map(r=>r.points);
+ const games=played.filter(r=>r.opponentId!==null&&r.rosterId<r.opponentId).map(r=>({rosterId:r.rosterId,opponentId:r.opponentId,margin:Math.abs(r.margin),total:round(r.points+r.against)}));
+ return {week,rows,summary:{teams:scores.length,average:scores.length?round(scores.reduce((a,b)=>a+b,0)/scores.length):null,
+  high:scores.length?Math.max(...scores):null,low:scores.length?Math.min(...scores):null,
+  closest:games.length?games.reduce((a,b)=>b.margin<a.margin?b:a):null,widest:games.length?games.reduce((a,b)=>b.margin>a.margin?b:a):null,
+  leftOnBench:round(played.reduce((t,r)=>t+(r.left||0),0))}};
+}
+
+// Spending on someone who never entered a lineup, or cutting someone who then outscored his
+// replacement, are the moves worth revisiting. The rest is roster upkeep.
+export const moveLabel=({adds,net,bid})=>{
+ if(adds.length&&adds.every(a=>!a.started))return bid?'unused bid':'stashed';
+ if(!Number.isFinite(net))return 'unknown';
+ return net<=-3?'backfired':net>=3?'paid off':'neutral';
+};
+
+// Waiver claims, free agents and trades from one week, graded by what the players involved scored
+// that same week. This is a week's verdict, not a season's: a stash can look bad and age well.
+export function moves({league,players,week,transactions=[],matchups=[],stats={}}){
+ const scoring=league.scoring_settings,points=new Map(),started=new Set();
+ for(const m of matchups){
+  for(const [id,value]of Object.entries(m.players_points||{})){const v=Number(value);if(Number.isFinite(v)&&!points.has(id))points.set(id,v)}
+  for(const id of m.starters||[])if(id&&id!=='0')started.add(id);
+ }
+ // Someone dropped and left unrostered has no players_points line anywhere, but he still has a stat line.
+ const scored=id=>points.has(id)?points.get(id):projected(stats[id]?.stats,scoring);
+ const side=(id,rosterId)=>({id,rosterId,points:scored(id),started:started.has(id),position:players[id]?.position||null});
+ const total=list=>{const known=list.map(s=>s.points).filter(Number.isFinite);return known.length?round(known.reduce((a,b)=>a+b,0)):null};
+ const rows=transactions.filter(t=>t?.status==='complete'&&['waiver','free_agent','trade'].includes(t.type)).map(t=>{
+  const adds=Object.entries(t.adds||{}).map(([id,rosterId])=>side(id,rosterId)),drops=Object.entries(t.drops||{}).map(([id,rosterId])=>side(id,rosterId));
+  const bid=Number(t.settings?.waiver_bid),gained=total(adds),lost=total(drops);
+  const net=gained===null&&lost===null?null:round((gained||0)-(lost||0));
+  const row={type:t.type,week,at:t.created??null,rosterIds:t.roster_ids||[],bid:Number.isFinite(bid)?bid:null,adds,drops,net};
+  // A trade has no single verdict, so each manager gets their own side of it.
+  return t.type==='trade'?{...row,sides:(t.roster_ids||[]).map(rosterId=>{
+   const received=adds.filter(a=>a.rosterId===rosterId),sent=drops.filter(d=>d.rosterId===rosterId);
+   const [inPoints,outPoints]=[total(received),total(sent)];
+   return {rosterId,received:received.map(p=>p.id),sent:sent.map(p=>p.id),net:inPoints===null&&outPoints===null?null:round((inPoints||0)-(outPoints||0))};
+  })}:{...row,label:moveLabel({adds,net,bid:Number.isFinite(bid)?bid:null})};
+ });
+ const claims=rows.filter(r=>r.type!=='trade'&&Number.isFinite(r.net));
+ return {week,rows,summary:{count:rows.length,trades:rows.filter(r=>r.type==='trade').length,
+  spent:round(rows.reduce((t,r)=>t+(r.bid||0),0)),best:claims.length?claims.reduce((a,b)=>b.net>a.net?b:a):null}};
 }

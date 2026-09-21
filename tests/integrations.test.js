@@ -55,9 +55,36 @@ test('MCP negotiates, validates tools, and preview calls cannot send notificatio
  assert.equal((await handle({jsonrpc:'2.0',id:0,method:'tools/list'})).error.code,-32000);
  const init=await handle({jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-11-25',clientInfo:{name:'test',version:'1'},capabilities:{}}});assert.equal(init.result.protocolVersion,'2025-11-25');
  assert.equal(await handle({jsonrpc:'2.0',method:'notifications/initialized'}),null);
- const list=await handle({jsonrpc:'2.0',id:2,method:'tools/list'});assert.equal(list.result.tools.length,5);assert.ok(list.result.tools.every(t=>t.annotations.readOnlyHint));
+ // Named rather than counted: a tool that reaches an agent unnoticed is the failure worth catching.
+ const list=await handle({jsonrpc:'2.0',id:2,method:'tools/list'});assert.ok(list.result.tools.every(t=>t.annotations.readOnlyHint));
+ assert.deepEqual(list.result.tools.map(t=>t.name),['get_status','find_trades','evaluate_trade','get_opportunities','preview_digest','get_recap']);
  const bad=await handle({jsonrpc:'2.0',id:3,method:'tools/call',params:{name:'evaluate_trade',arguments:{}}});assert.equal(bad.error.code,-32602);
  const report=await handle({jsonrpc:'2.0',id:4,method:'tools/call',params:{name:'preview_digest',arguments:{period:'weekly'}}});assert.equal(report.result.structuredContent.period,'weekly');assert.deepEqual(calls,['digest']);
+});
+test('the recap grades a finished week and degrades to a warning when a past week cannot be read',async()=>{
+ const store=openStore(':memory:'),at=Date.now(),data=fixture(at),league=data.leagues[0];
+ const provider=async()=>data;
+ provider.history=async(season,leagueId,weeks)=>({season,leagueId,weeks,errors:[],data:{1:{matchups:league.matchups,
+  transactions:[{type:'waiver',status:'complete',roster_ids:[1],adds:{'99901':1},drops:{'4035':1},settings:{waiver_bid:12},created:1}],
+  stats:{},projections:data.projections[2]}}});
+ const service=createService({store,provider,now:()=>at});service.saveSettings({username:'example'});
+ const result=await service.recap({leagueId:league.league_id});
+ assert.equal(result.recapWeek,1,'defaults to the week that just finished');
+ const mine=result.recaps[0].rows.find(r=>r.rosterId===1);
+ assert.ok(mine.best>=mine.started,'the hindsight lineup is never worse than the one that was set');
+ assert.equal(mine.left,Math.round((mine.best-mine.started)*100)/100);
+ assert.ok(mine.decisions.every(d=>d.satName&&(d.played===null||d.playedName)),'a decision names the players it is about');
+ assert.equal(result.recaps[0].names[league.mine.starters[0]],'Josh Allen','lineups resolve through the name table');
+ const claim=result.recaps[0].moves.rows[0];
+ assert.deepEqual([claim.bid,claim.adds[0].name,claim.drops[0].name,claim.label],[12,'Jordan Mason','George Kittle','unused bid']);
+ // The pick of the week is read straight out of the summary, so it has to carry names like any other row.
+ assert.equal(result.recaps[0].moves.summary.best.adds[0].name,'Jordan Mason');
+ await assert.rejects(service.recap({week:9}),/has not been played/);
+ store.close();
+});
+test('a server that cannot read past weeks says so instead of inventing a recap',async()=>{
+ const store=openStore(':memory:'),service=createService({store,provider:async()=>fixture()});service.saveSettings({username:'example'});
+ await assert.rejects(service.recap({}),/cannot read past weeks/);store.close();
 });
 test('HTTP isolates agent and owner access, rejects hostile origins, and supports owner cookie login',async()=>{
  const store=openStore(':memory:'),service=createService({store,provider:async()=>fixture()});service.saveSettings({username:'example'});

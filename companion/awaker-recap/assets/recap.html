@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- REPLACE: league name and week -->
+<title>Week 1 · The Sunday Regulars</title>
+<style>
+ :root{
+  --paper:#fbfaf8; --ink:#1a1a1a; --muted:#6b6b6b; --rule:#e2ded8; --card:#fff;
+  --win:#1f7a4d; --loss:#a13b2c; --flag:#b4701d; --bar:#c9c4bb; --bar-fill:#8a8478;
+  --gutter:16px;
+ }
+ @media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --paper:#16171a; --ink:#ececec; --muted:#9a9a9a; --rule:#2c2e33;
+   --card:#1d1f23; --win:#5fbd8a; --loss:#e08370; --flag:#d9a04e; --bar:#33363c; --bar-fill:#7d838e; }
+ }
+ :root[data-theme="dark"]{ --paper:#16171a; --ink:#ececec; --muted:#9a9a9a; --rule:#2c2e33;
+  --card:#1d1f23; --win:#5fbd8a; --loss:#e08370; --flag:#d9a04e; --bar:#33363c; --bar-fill:#7d838e; }
+ *{box-sizing:border-box}
+ body{margin:0;background:var(--paper);color:var(--ink);
+  font:16px/1.6 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  -webkit-text-size-adjust:100%}
+ .wrap{max-width:46rem;margin:0 auto;padding:2.5rem var(--gutter) 4rem}
+ header{border-bottom:2px solid var(--ink);padding-bottom:.75rem;margin-bottom:1.5rem}
+ .kicker{font-size:.8rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+ h1{margin:.25rem 0 0;font-size:clamp(1.6rem,6vw,2.3rem);line-height:1.15;letter-spacing:-.02em}
+ .lede{margin:.85rem 0 0;font-size:1.05rem;color:var(--muted)}
+ h2{margin:2.5rem 0 .85rem;font-size:.82rem;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);border-bottom:1px solid var(--rule);padding-bottom:.4rem}
+ p{margin:0 0 1rem}
+ table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+ th,td{text-align:left;padding:.55rem .5rem;border-bottom:1px solid var(--rule)}
+ th{font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+ td.n,th.n{text-align:right;white-space:nowrap}
+ tr.game td{border-bottom:none;padding-bottom:.1rem}
+ tr.game+tr td{padding-top:.1rem;color:var(--muted)}
+ .win{color:var(--win);font-weight:600}
+ .loss{color:var(--loss)}
+ .tag{display:inline-block;font-size:.7rem;letter-spacing:.06em;text-transform:uppercase;
+  border:1px solid currentColor;border-radius:2rem;padding:.05rem .45rem;margin-left:.35rem;vertical-align:.08em}
+ .tag.flag{color:var(--flag)}
+ .card{background:var(--card);border:1px solid var(--rule);border-radius:.5rem;padding:1rem 1.1rem;margin:0 0 .75rem}
+ .card h3{margin:0 0 .35rem;font-size:1rem}
+ .card p{margin:0;color:var(--muted);font-size:.95rem}
+ .meter{display:grid;grid-template-columns:minmax(6rem,9rem) 1fr auto;gap:.6rem;align-items:center;
+  margin:.4rem 0;font-size:.92rem}
+ .meter .track{background:var(--bar);border-radius:2rem;height:.55rem;overflow:hidden}
+ .meter .fill{background:var(--bar-fill);height:100%;border-radius:2rem}
+ .meter .val{font-variant-numeric:tabular-nums;color:var(--muted);min-width:3.2rem;text-align:right}
+ footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+ footer ul{margin:.4rem 0 0;padding-left:1.1rem}
+ @media print{
+  body{background:#fff;color:#000}
+  .wrap{padding:0;max-width:none}
+  .card{break-inside:avoid}
+  h2{break-after:avoid}
+ }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+ <!-- REPLACE: league name, and recapWeek from the payload (not the envelope's week) -->
+ <div class="kicker">The Sunday Regulars · Week 1</div>
+ <h1>Headline that says what the week was about</h1>
+ <!-- REPLACE: one sentence using summary.average / high / low -->
+ <p class="lede">Twelve teams averaged 113.2, the high was 117.9, and one game came down to 2.4
+ points.</p>
+</header>
+
+<!-- SECTION: scoreboard. One pair of rows per game, winner first. Mark summary.closest and
+     summary.widest with a tag. Delete the tag where it does not apply. -->
+<h2>The scoreboard</h2>
+<table>
+ <thead><tr><th>Matchup</th><th class="n">Points</th></tr></thead>
+ <tbody>
+  <tr class="game"><td><strong>Winning Team</strong> <span class="tag flag">Closest</span></td>
+   <td class="n win">117.9</td></tr>
+  <tr><td>Losing Team</td><td class="n">108.5</td></tr>
+ </tbody>
+</table>
+
+<!-- SECTION: what the benches were holding. Lead with any row where swung is true. State plainly
+     that this is hindsight. One meter per roster with a notable `left`; width is that roster's
+     share of the largest `left` on the page. Delete this section if nothing was left behind. -->
+<h2>What the benches were holding</h2>
+<p>Hindsight only — this is the gap to the best lineup each roster could have fielded, not a list of
+mistakes. Who could have known is the next section.</p>
+<div class="meter"><span>Team name</span><span class="track"><span class="fill" style="width:100%"></span></span><span class="val">31.4</span></div>
+<div class="meter"><span>Another team</span><span class="track"><span class="fill" style="width:24%"></span></span><span class="val">7.5</span></div>
+
+<!-- SECTION: the decisions. ONLY decisions labelled `avoidable`, and empty slots (played: null).
+     Every card quotes `gained` and `foreseen`. A `defensible` call belongs in the section above, as
+     luck, or not at all. Delete this section when there is nothing that qualifies. -->
+<h2>Calls that were there to be made</h2>
+<div class="card">
+ <h3>Team name started Player A over Player B</h3>
+ <p>The projections had Player B ahead by 4.1 before kickoff. Player B scored 22.6, Player A managed
+ 7.5 — a 15.1 point swing in a game decided by 9.4.</p>
+</div>
+<div class="card">
+ <h3>Team name left a flex slot empty</h3>
+ <p>Player C was on the bench, projected for 9.0, and scored 6.0. An empty slot scores nothing.</p>
+</div>
+
+<!-- SECTION: the wire. moves.summary and the rows worth naming: best `net`, anything `backfired`,
+     the biggest `bid`, any `unused bid`. Trades print both `sides` and get no verdict. -->
+<h2>The wire</h2>
+<table>
+ <thead><tr><th>Move</th><th>Team</th><th class="n">Week</th></tr></thead>
+ <tbody>
+  <tr><td>Added Player D, dropped Player E <span class="tag">backfired</span></td>
+   <td>Team name</td><td class="n loss">−12.0</td></tr>
+  <tr><td>$12 on Player F, never started <span class="tag flag">unused bid</span></td>
+   <td>Team name</td><td class="n">—</td></tr>
+  <tr><td>Traded Player G for Player H</td><td>Two teams</td><td class="n">+4.6 / −4.6</td></tr>
+ </tbody>
+</table>
+
+<footer>
+ <!-- REPLACE: the generatedAt date, then every entry in `warnings`, then the relevant
+      `limitations`. Add a line saying these are sample leagues if `demo` is true. Delete the list
+      if there were no warnings. -->
+ <p>Numbers from Awaker, 1 January 2026. Projections are estimates; start/sit calls are graded
+ against what was projected before kickoff, and one week does not settle a trade.</p>
+ <ul>
+  <li>Any warning from the payload, quoted.</li>
+ </ul>
+</footer>
+
+</div>
+</body>
+</html>

@@ -61,6 +61,22 @@
   account's data; a hung refresh in service mode times out; a league toggled off just as a refresh
   lands is no longer lost; and a week is only called final when every starter's game is over.
 - The Season review now loads after reconnecting in the browser, where it could wait forever.
+- Season review now opens with the week in review: any finished week, every team in the league. Your
+  result, the points your bench was holding, and what your own start/sit calls cost or gained
+  against the lineup the projections advised before kickoff — because those are different numbers,
+  and only the second one was a decision. Each call is graded avoidable, toss-up or defensible, an
+  empty starting slot is charged in full, and the league table puts every team's bench and calls
+  side by side. Below it, the week's waiver claims, free agents and trades, graded by what the
+  players involved actually scored, with trades showing both sides and no verdict. Pick any finished
+  week; they never change, so each one is kept on your device after the first look.
+- An AI assistant connected over MCP can now read a finished week with `get_recap`. For every team
+  in a league it reports the result, the points the roster left on its bench, and the waiver claims,
+  free agents and trades processed that week, each graded by what the players involved went on to
+  score. Start/sit calls are judged against what was projected before kickoff, not only against what
+  happened, so a week separates the points that were lost from the decisions that lost them: a
+  benched player who went off when the projections said to start someone else is luck, and only a
+  call the projections argued against is marked avoidable. An empty starting slot is charged in
+  full. Awaker still does the arithmetic; the assistant only reads it.
 
 - Add a Season review page. Every finished week shows what each of your players scored in your
   league's scoring against Sleeper's projection for that week, colored from well under to well

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {seasonReview,pointsAllowed,matchup,verdict,tone} from '../dist/season.js';
+import {seasonReview,pointsAllowed,matchup,verdict,tone,weekReview,moves,decisionLabel} from '../dist/season.js';
 
 const P=(position,team)=>({position,fantasy_positions:[position],team});
 const line=(pts,opponent,gp=1)=>({stats:{pts,gp},opponent});
@@ -37,4 +37,70 @@ test('the read weighs form against the road ahead',()=>{
  assert.equal(verdict({games:3,average:4,upcoming:hard}).label,'Sell high?');
  assert.equal(verdict({games:3,average:4,upcoming:soft}).label,'Rolling');
  assert.equal(verdict({games:3,average:.5,upcoming:[]}).label,'As expected');
+});
+
+const recapLeague={scoring_settings:scoring,roster_positions:['RB','FLEX','BN'],rosters:[{roster_id:1},{roster_id:2}],mine:{roster_id:1}};
+const recapPlayers={rb1:P('RB','BUF'),rb2:P('RB','KC'),wr1:P('WR','SF'),rb3:P('RB','DAL'),wr2:P('WR','NYJ')};
+const recapWeek=[
+ {roster_id:1,matchup_id:1,starters:['rb1','wr1'],players:['rb1','wr1','rb2'],players_points:{rb1:5,wr1:6,rb2:20},points:11},
+ {roster_id:2,matchup_id:1,starters:['rb3','wr2'],players:['rb3','wr2'],players_points:{rb3:10,wr2:8},points:18}];
+const project=map=>Object.fromEntries(Object.entries(map).map(([id,pts])=>[id,{stats:{pts,gp:1}}]));
+
+test('a week separates what the bench was holding from what the manager could have known',()=>{
+ // Projections said start rb1 over rb2, and rb2 went off anyway: 15 left on the bench, nothing to answer for.
+ const followed=weekReview({league:recapLeague,players:recapPlayers,week:4,matchups:recapWeek,projections:project({rb1:12,wr1:9,rb2:4,rb3:10,wr2:7})});
+ const mine=followed.rows.find(r=>r.rosterId===1);
+ assert.deepEqual([mine.started,mine.best,mine.left],[11,26,15],'the hindsight lineup plays rb2 and wr1');
+ assert.equal(mine.cost,0,'the lineup that was set is the lineup the projections advised');
+ assert.deepEqual([mine.result,mine.margin,mine.swung],['loss',-7,true],'lost by less than the bench was holding');
+ assert.deepEqual(mine.decisions.map(d=>[d.sat,d.played,d.gained,d.foreseen,d.label]),[['rb2','rb1',15,-8,'defensible']]);
+
+ // Same week, same result, but now the projections favoured the player left on the bench.
+ const ignored=weekReview({league:recapLeague,players:recapPlayers,week:4,matchups:recapWeek,projections:project({rb1:6,wr1:9,rb2:15,rb3:10,wr2:7})});
+ const same=ignored.rows.find(r=>r.rosterId===1);
+ assert.deepEqual([same.left,same.cost],[15,-15],'ignoring the projections is what cost the points');
+ assert.equal(same.decisions[0].label,'avoidable');
+ assert.deepEqual([same.summary,ignored.summary.high,ignored.summary.low,ignored.summary.closest.margin],[undefined,18,11,7]);
+ assert.equal(ignored.summary.leftOnBench,15,'roster 2 had nobody on the bench to regret');
+});
+test('a start/sit is only graded when both players were projected',()=>{
+ assert.deepEqual([-4,0,4,null].map(decisionLabel),['defensible','toss-up','avoidable','unknown']);
+ const blind=weekReview({league:recapLeague,players:recapPlayers,week:4,matchups:recapWeek,projections:project({wr1:9})});
+ const mine=blind.rows.find(r=>r.rosterId===1);
+ assert.deepEqual([mine.decisions[0].foreseen,mine.decisions[0].label],[null,'unknown']);
+ assert.equal(mine.complete,false,'a lineup that cannot be fully projected says so');
+});
+test('a roster that did not play that week is reported, not counted',()=>{
+ const {rows,summary}=weekReview({league:recapLeague,players:recapPlayers,week:4,matchups:[recapWeek[0]],projections:{}});
+ assert.deepEqual(rows.find(r=>r.rosterId===2),{rosterId:2,played:false,decisions:[]});
+ assert.deepEqual([summary.teams,rows[0].result,rows[0].opponentId],[1,null,null],'nobody to play means no result');
+});
+test('a starting slot left empty is charged against the manager, not written off as bad luck',()=>{
+ // Only one starter was set, so the FLEX went empty: rb2 filling it is nobody's misfortune.
+ const short=[{roster_id:1,matchup_id:1,starters:['rb1'],players:['rb1','wr1','rb2'],players_points:{rb1:5,wr1:6,rb2:20},points:5},
+  {roster_id:2,matchup_id:1,starters:['rb3','wr2'],players:['rb3','wr2'],players_points:{rb3:10,wr2:8},points:18}];
+ const {rows}=weekReview({league:recapLeague,players:recapPlayers,week:4,matchups:short,projections:project({rb1:12,wr1:9,rb2:4,rb3:10,wr2:7})});
+ const mine=rows.find(r=>r.rosterId===1);
+ assert.deepEqual([mine.started,mine.best,mine.left],[5,26,21]);
+ // The biggest gain answers for the starter who was actually benched; what is left over fills the empty slot.
+ assert.deepEqual(mine.decisions.map(d=>[d.sat,d.played,d.gained,d.foreseen,d.label]),
+  [['rb2','rb1',15,-8,'defensible'],['wr1',null,6,9,'avoidable']],'an empty slot is measured against the zero it scored');
+});
+test('moves are graded on the week they were made, and a dropped player still has a stat line',()=>{
+ const players={...recapPlayers,wrX:P('WR','LAR'),rbY:P('RB','MIA'),teZ:P('TE','PHI')};
+ const matchups=[{roster_id:1,matchup_id:1,starters:['rb1','wrX'],players:['rb1','wrX'],players_points:{rb1:5,wrX:2},points:7},
+  {roster_id:2,matchup_id:1,starters:['rb3','wr2'],players:['rb3','wr2','teZ'],players_points:{rb3:10,wr2:8,teZ:0},points:18}];
+ const transactions=[
+  {type:'waiver',status:'complete',roster_ids:[1],adds:{wrX:1},drops:{rbY:1},settings:{waiver_bid:23},created:1},
+  {type:'free_agent',status:'complete',roster_ids:[2],adds:{teZ:2},drops:null,created:2},
+  {type:'waiver',status:'failed',roster_ids:[2],adds:{rbY:2},settings:{waiver_bid:99},created:3},
+  {type:'trade',status:'complete',roster_ids:[1,2],adds:{rb3:1,rb1:2},drops:{rb3:2,rb1:1},created:4}];
+ // rbY was dropped and left unrostered, so only the week's stat line says what the cut cost.
+ const {rows,summary}=moves({league:recapLeague,players,week:4,transactions,matchups,stats:{rbY:{stats:{pts:14,gp:1}}}});
+ assert.equal(rows.length,3,'a failed claim never happened');
+ assert.deepEqual([rows[0].bid,rows[0].adds[0].points,rows[0].drops[0].points,rows[0].net,rows[0].label],[23,2,14,-12,'backfired']);
+ assert.equal(rows[1].label,'stashed','picked up and never started');
+ assert.deepEqual(rows[2].sides,[{rosterId:1,received:['rb3'],sent:['rb1'],net:5},{rosterId:2,received:['rb1'],sent:['rb3'],net:-5}]);
+ assert.equal(rows[2].label,undefined,'a trade has no single verdict');
+ assert.deepEqual([summary.count,summary.trades,summary.spent,summary.best.net],[3,1,23,0]);
 });

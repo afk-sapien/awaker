@@ -21,7 +21,7 @@ export function slimPlayers(players,leagues=[]){
 }
 export function createProvider(store){
  api.setPersistence((key,value)=>value===undefined?store.get(`cache:${key}`):store.set(`cache:${key}`,value));
- return async(settings,{outlook=false,force=false}={})=>{
+ const provider=async(settings,{outlook=false,force=false}={})=>{
   const found=await api.discover(settings.username),week=Math.max(1,Math.min(18,Number(found.nfl.week)||1)),season=found.nfl.season;
   // Leagues that are switched off or not drafted yet stay listed, so they can be switched back on,
   // but they are never analysed and cannot hold up the leagues that are in season.
@@ -44,4 +44,7 @@ export function createProvider(store){
   if(outlook){const end=Math.max(settings.preferences.tradeEndWeek||17,settings.preferences.waiverEndWeek||17),weeks=Array.from({length:Math.max(0,end-week)},(_,i)=>week+1+i);data.outlook=await api.tradeOutlook(season,weeks);for(const w of weeks)source(`outlook/${w}`,`outlook:${season}:${w}`,3600000);if(data.outlook.errors.length)errors.push(`Future weeks unavailable: ${data.outlook.errors.join(', ')}`)}
   return data;
  };
+ // Past weeks are only read by the recap, so they never ride along on a refresh.
+ provider.history=api.leagueHistory;
+ return provider;
 }

@@ -18,7 +18,7 @@ It also answers the questions you actually ask on a Sunday morning. Who should I
 
 Every league lands in one watchroom, with your players and your opponents' side by side, favorites pinned, and a focus mode for game day. Start/sit comparisons use your league's actual scoring, flex rules and started-game locks, so the advice matches the league you're in and not a generic average.
 
-Beyond that there's the waiver wire, trade ideas and defense streaming. Around the league follows every matchup in a league live, and League outlook simulates the rest of the season for playoff odds and ranks every team by what it has scored and by the roster it has now. The trade builder is the one people seem to like most: a trade can help you and help the other manager more, so it shows both sides and compares what you could have picked up instead.
+Beyond that there's the waiver wire, trade ideas and defense streaming. Season review replays any finished week for the whole league: what each bench was holding, and which of those points were actually there to be taken, since setting the lineup the projections advised and losing anyway is bad luck rather than a bad call. Around the league follows every matchup in a league live, and League outlook simulates the rest of the season for playoff odds and ranks every team by what it has scored and by the roster it has now. The trade builder is the one people seem to like most: a trade can help you and help the other manager more, so it shows both sides and compares what you could have picked up instead.
 
 <details>
 <summary>See the trade builder</summary>
