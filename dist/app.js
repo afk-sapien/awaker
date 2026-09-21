@@ -478,9 +478,10 @@ function weekInReview(l){
  <p class="muted small">${s.closest?`Closest game: ${fmt(s.closest.margin)} points. ${s.widest?`Widest: ${fmt(s.widest.margin)}. `:''}`:''}League average ${fmt(s.average)}, high ${fmt(s.high)}, low ${fmt(s.low)}.</p>`;
  const moveRow=r=>{
   const side=(list,verb)=>list.length?`${verb} ${list.map(p=>esc(pname(p.id))).join(' + ')}`:'';
+  const sentence=s=>s.charAt(0).toUpperCase()+s.slice(1);
   const who=[...new Set((r.rosterIds||[]).map(id=>teamName(l,id).team))].map(esc).join(' ⇄ ');
   const detail=r.type==='trade'?r.sides.map(x=>`${esc(teamName(l,x.rosterId).team)} ${x.net===null?'—':signed(x.net)}`).join(' · ')
-   :[side(r.adds,'Added'),side(r.drops,'dropped')].filter(Boolean).join(', ');
+   :sentence([side(r.adds,'added'),side(r.drops,'dropped')].filter(Boolean).join(', '));
   // A claim that cleared after the last kickoff is for the week after, so it is scored on that week.
   const impact=r.type==='trade'?'—':!r.played?'—':r.net===null?'—':signed(r.net);
   const tone=r.type==='trade'||!r.played||r.net===null?'muted':r.net<-.05?'loss':r.net>.05?'gain':'muted';
