@@ -1,4 +1,4 @@
-import {projected,optimize,activeSlots} from './engine.js';
+import {projected,optimize,activeSlots,eligible} from './engine.js';
 
 // How a player has done against what was expected of him, week by week, and how hard the next
 // few opponents are for his position. Everything uses the league's own scoring.
@@ -78,22 +78,31 @@ export function weekReview({league,players,week,matchups=[],projections={}}){
  const rows=(league.rosters||[]).map(roster=>{
   const m=matchups.find(x=>x.roster_id===roster.roster_id);
   if(!m)return {rosterId:roster.roster_id,played:false,decisions:[]};
-  const starters=(m.starters||[]).filter(id=>id&&id!=='0'),owned=[...new Set([...(m.players||[]),...starters])].filter(id=>players[id]);
+  // Sleeper's starters array is one entry per starting slot, in the same order as the slots, and an
+  // unfilled slot is a '0' holding its place. Keep it aligned for anything that reasons about slots,
+  // and flattened only for sums and membership.
+  const lineup=(m.starters||[]).map(id=>id&&id!=='0'?id:null);
+  const starters=lineup.filter(Boolean),owned=[...new Set([...(m.players||[]),...starters])].filter(id=>players[id]);
   const got=id=>{const v=Number(m.players_points?.[id]);return Number.isFinite(v)?v:null};
   const sum=ids=>round(ids.reduce((t,id)=>t+(got(id)||0),0)),started=sum(starters);
   // Two counterfactuals: the most this roster could have scored, and what the lineup the projections
   // advised would have scored. The gap to the first is luck; the gap to the second was knowable.
-  const best=optimize(owned,slots,players,got,{},starters),advised=optimize(owned,slots,players,expected,{},starters);
+  const best=optimize(owned,slots,players,got,{},lineup),advised=optimize(owned,slots,players,expected,{},lineup);
   const chosen=new Set(best.ids.filter(Boolean));
-  const sat=[...chosen].filter(id=>!starters.includes(id)).sort((a,b)=>(got(b)||0)-(got(a)||0));
-  const benched=starters.filter(id=>!chosen.has(id)).sort((a,b)=>(got(a)||0)-(got(b)||0));
-  const decisions=sat.map((id,i)=>{
-   // Fewer players to bench than the best lineup adds means a starting slot was left empty, and
-   // an empty slot is measured against the nothing it scored rather than against another player.
-   const out=benched[i]??null,pair=[expected(id),out?expected(out):0];
+  // Both lineups are indexed by slot, so a change is read slot by slot and the two players are
+  // always ones who could have held the same place. Pairing them by points instead would explain,
+  // with a straight face, that a receiver should have started ahead of a quarterback.
+  const spare=starters.filter(id=>!chosen.has(id));
+  const decisions=best.ids.map((id,slot)=>({id,slot})).filter(x=>x.id&&!starters.includes(x.id)).map(({id,slot})=>{
+   // Whoever held that slot, if he really lost his place rather than moving to another one. Failing
+   // that, any benched starter eligible for it. Failing that, the slot was simply left empty, which
+   // is measured against the nothing it scored.
+   const held=spare.indexOf(lineup[slot]);
+   const at=held>=0?held:spare.findIndex(other=>eligible(players[other],slots[slot]));
+   const out=at>=0?spare.splice(at,1)[0]:null,pair=[expected(id),out?expected(out):0];
    const foreseen=pair.every(Number.isFinite)?round(pair[0]-pair[1]):null;
    return {sat:id,played:out,gained:round((got(id)||0)-(out?(got(out)||0):0)),foreseen,label:decisionLabel(foreseen)};
-  });
+  }).sort((a,b)=>b.gained-a.gained);
   const opponent=m.matchup_id==null?null:matchups.find(x=>x.matchup_id===m.matchup_id&&x.roster_id!==m.roster_id)||null;
   const points=round(Number(m.custom_points??m.points)||0),against=opponent?round(Number(opponent.custom_points??opponent.points)||0):null;
   const left=round(best.total-started),followed=sum(advised.ids.filter(Boolean));

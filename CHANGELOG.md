@@ -69,6 +69,12 @@
   side by side. Below it, the week's waiver claims, free agents and trades, graded by what the
   players involved actually scored, with trades showing both sides and no verdict. Pick any finished
   week; they never change, so each one is kept on your device after the first look.
+- A start/sit in the week in review now names the player who actually lost the slot. With two
+  changes in one lineup the pairs were matched by points rather than by slot, which crossed them
+  over and could announce that a receiver should have started ahead of a quarterback. Both lineups
+  are read slot by slot, so the two players are always ones who could have held the same place. The
+  totals were never affected. An unfilled slot also keeps its place now, instead of shifting every
+  slot after it.
 - Kicker projections were about a point and a half light in every league, everywhere in the app.
   Sleeper projects one combined 50-plus field goal bucket while almost every league scores 50-59 and
   60-plus separately, so that whole category silently scored nothing. Kickers now land within 0.02

@@ -86,6 +86,30 @@ test('a starting slot left empty is charged against the manager, not written off
  assert.deepEqual(mine.decisions.map(d=>[d.sat,d.played,d.gained,d.foreseen,d.label]),
   [['rb2','rb1',15,-8,'defensible'],['wr1',null,6,9,'avoidable']],'an empty slot is measured against the zero it scored');
 });
+test('a swap names the player who actually lost the slot, not the one with a matching points rank',()=>{
+ // Two changes in one lineup. Pairing by points instead of by slot crosses them over and announces
+ // that a receiver should have started ahead of a quarterback.
+ const league={scoring_settings:scoring,roster_positions:['QB','WR','BN','BN'],rosters:[{roster_id:1}],mine:{roster_id:1}};
+ const people={qbA:P('QB','WAS'),qbB:P('QB','SF'),wrA:P('WR','WAS'),wrB:P('WR','JAX')};
+ const matchups=[{roster_id:1,matchup_id:null,starters:['qbA','wrA'],players:['qbA','wrA','qbB','wrB'],
+  players_points:{qbA:25,wrA:8,qbB:30,wrB:20},points:33}];
+ const {rows}=weekReview({league,players:people,week:4,matchups,projections:project({qbA:22,wrA:11,qbB:18,wrB:9})});
+ assert.deepEqual(rows[0].decisions.map(d=>[d.sat,d.played]),[['wrB','wrA'],['qbB','qbA']],
+  'quarterback answers for quarterback, receiver for receiver');
+ assert.equal(rows[0].left,17,'what was left behind is the same however the pairs are named');
+});
+test('an unfilled slot holds its place, so slots and players stay lined up',()=>{
+ // Sleeper writes '0' into a starting slot nobody filled. Dropping it shifts every slot after it.
+ const league={scoring_settings:scoring,roster_positions:['QB','WR','BN'],rosters:[{roster_id:1}],mine:{roster_id:1}};
+ const people={qb1:P('QB','WAS'),wr1:P('WR','JAX'),wr2:P('WR','LAR')};
+ const matchups=[{roster_id:1,matchup_id:null,starters:['0','wr1'],players:['qb1','wr1','wr2'],
+  players_points:{qb1:24,wr1:9,wr2:14},points:9}];
+ const {rows}=weekReview({league,players:people,week:4,matchups,projections:project({qb1:20,wr1:12,wr2:8})});
+ const empty=rows[0].decisions.find(d=>d.played===null);
+ assert.deepEqual([empty.sat,empty.gained],['qb1',24],'the quarterback fills the quarterback slot that went empty');
+ assert.deepEqual(rows[0].decisions.filter(d=>d.played).map(d=>[d.sat,d.played]),[['wr2','wr1']]);
+ assert.equal(rows[0].started,9,'only the one filled slot scored');
+});
 test('moves are graded on the week they were made, and a dropped player still has a stat line',()=>{
  const players={...recapPlayers,wrX:P('WR','LAR'),rbY:P('RB','MIA'),teZ:P('TE','PHI')};
  const matchups=[{roster_id:1,matchup_id:1,starters:['rb1','wrX'],players:['rb1','wrX'],players_points:{rb1:5,wrX:2},points:7},
