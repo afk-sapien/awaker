@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.5.0
+
+- Season review now opens with the week in review: any finished week, every team in the league. Your
+  result, the points your bench was holding, and what your own start/sit calls cost or gained
+  against the lineup the projections advised before kickoff — because those are different numbers,
+  and only the second one was a decision. Each call is graded avoidable, toss-up or defensible, an
+  empty starting slot is charged in full, and the league table puts every team's bench and calls
+  side by side. Below it, the week's waiver claims, free agents and trades, graded by what the
+  players involved actually scored, with trades showing both sides and no verdict. Pick any finished
+  week; they never change, so each one is kept on your device after the first look.
+- An AI assistant connected over MCP can now read a finished week with `get_recap`. For every team
+  in a league it reports the result, the points the roster left on its bench, and the waiver claims,
+  free agents and trades processed that week, each graded by what the players involved went on to
+  score. Start/sit calls are judged against what was projected before kickoff, not only against what
+  happened, so a week separates the points that were lost from the decisions that lost them: a
+  benched player who went off when the projections said to start someone else is luck, and only a
+  call the projections argued against is marked avoidable. An empty starting slot is charged in
+  full. Awaker still does the arithmetic; the assistant only reads it.
+- Auto trades can now go after a player instead of only offering one. Pick anyone on another roster
+  and it works out what it would take: every player of yours compared against him one for one, with
+  the owner's gain as the price rather than a sanity check, so each offer is one they would actually
+  answer. The cheapest is the place to open.
+- The Auto trades toolbar is one sentence. "Looking for" chooses between any trade, a deal for one
+  of your players, a way to get someone, and a way to get a position, and only that choice's control
+  appears beside it. The button that was floated into the corner is back in the row, and the panel
+  that called itself Filters & ranking without holding the ranking control is now Search settings;
+  sorting stays with the offers it sorts. Shopping for a position from the depth chart sets the same
+  control, so it is no longer a mode you can only reach from another page.
+- Kicker projections were about a point and a half light in every league, everywhere in the app.
+  Sleeper projects one combined 50-plus field goal bucket while almost every league scores 50-59 and
+  60-plus separately, so that whole category silently scored nothing. Kickers now land within 0.02
+  of Sleeper's own projection, the same as every other position. Scored results were never affected:
+  finished weeks itemise the real buckets and already matched Sleeper exactly.
+- The week in review grades a move on the week it can first affect, not the week Sleeper files it
+  under. Waivers clear after the week's games, so most of a week's claims are really moves for the
+  following week, and a player's points only count toward a move made before his own kickoff — a
+  Sunday evening pickup cannot take credit for the afternoon. A move whose week has not been played
+  says so and waits, rather than reporting points scored before it was made.
+- A start/sit in the week in review now names the player who actually lost the slot. With two
+  changes in one lineup the pairs were matched by points rather than by slot, which crossed them
+  over and could announce that a receiver should have started ahead of a quarterback. Both lineups
+  are read slot by slot, so the two players are always ones who could have held the same place. The
+  totals were never affected. An unfilled slot also keeps its place now, instead of shifting every
+  slot after it.
+
 ## 0.4.0
 
 - Add a League outlook page. The rest of the schedule is played out 4,000 times to give every team
@@ -61,49 +106,6 @@
   account's data; a hung refresh in service mode times out; a league toggled off just as a refresh
   lands is no longer lost; and a week is only called final when every starter's game is over.
 - The Season review now loads after reconnecting in the browser, where it could wait forever.
-- Season review now opens with the week in review: any finished week, every team in the league. Your
-  result, the points your bench was holding, and what your own start/sit calls cost or gained
-  against the lineup the projections advised before kickoff — because those are different numbers,
-  and only the second one was a decision. Each call is graded avoidable, toss-up or defensible, an
-  empty starting slot is charged in full, and the league table puts every team's bench and calls
-  side by side. Below it, the week's waiver claims, free agents and trades, graded by what the
-  players involved actually scored, with trades showing both sides and no verdict. Pick any finished
-  week; they never change, so each one is kept on your device after the first look.
-- A start/sit in the week in review now names the player who actually lost the slot. With two
-  changes in one lineup the pairs were matched by points rather than by slot, which crossed them
-  over and could announce that a receiver should have started ahead of a quarterback. Both lineups
-  are read slot by slot, so the two players are always ones who could have held the same place. The
-  totals were never affected. An unfilled slot also keeps its place now, instead of shifting every
-  slot after it.
-- Auto trades can now go after a player instead of only offering one. Pick anyone on another roster
-  and it works out what it would take: every player of yours compared against him one for one, with
-  the owner's gain as the price rather than a sanity check, so each offer is one they would actually
-  answer. The cheapest is the place to open.
-- The Auto trades toolbar is one sentence. "Looking for" chooses between any trade, a deal for one
-  of your players, a way to get someone, and a way to get a position, and only that choice's control
-  appears beside it. The button that was floated into the corner is back in the row, and the panel
-  that called itself Filters & ranking without holding the ranking control is now Search settings;
-  sorting stays with the offers it sorts. Shopping for a position from the depth chart sets the same
-  control, so it is no longer a mode you can only reach from another page.
-- Kicker projections were about a point and a half light in every league, everywhere in the app.
-  Sleeper projects one combined 50-plus field goal bucket while almost every league scores 50-59 and
-  60-plus separately, so that whole category silently scored nothing. Kickers now land within 0.02
-  of Sleeper's own projection, the same as every other position. Scored results were never affected:
-  finished weeks itemise the real buckets and already matched Sleeper exactly.
-- The week in review grades a move on the week it can first affect, not the week Sleeper files it
-  under. Waivers clear after the week's games, so most of a week's claims are really moves for the
-  following week, and a player's points only count toward a move made before his own kickoff — a
-  Sunday evening pickup cannot take credit for the afternoon. A move whose week has not been played
-  says so and waits, rather than reporting points scored before it was made.
-- An AI assistant connected over MCP can now read a finished week with `get_recap`. For every team
-  in a league it reports the result, the points the roster left on its bench, and the waiver claims,
-  free agents and trades processed that week, each graded by what the players involved went on to
-  score. Start/sit calls are judged against what was projected before kickoff, not only against what
-  happened, so a week separates the points that were lost from the decisions that lost them: a
-  benched player who went off when the projections said to start someone else is luck, and only a
-  call the projections argued against is marked avoidable. An empty starting slot is charged in
-  full. Awaker still does the arithmetic; the assistant only reads it.
-
 - Add a Season review page. Every finished week shows what each of your players scored in your
   league's scoring against Sleeper's projection for that week, colored from well under to well
   over. Each player also gets his next three opponents rated Tough, Average or Easy from the points

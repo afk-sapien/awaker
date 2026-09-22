@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {optimize} from '../dist/engine.js';
 import {seasonLineup,futurePoints,buildSeasonModel,realismReasons,tradeScore,compareTradeIdeas} from '../dist/trades.js';
-import {findTradeIdeas} from '../dist/analysis.js';
+import {findTradeIdeas,acquirePlayer} from '../dist/analysis.js';
 import {preferences} from '../server/settings.js';
 
 test('fast season lineups match exhaustive optimizer across flex, superflex, negative and missing scores',()=>{
@@ -237,4 +237,41 @@ test('a forced cut is the cheapest player to lose, not the lowest season total',
  const outlook={weeks:[3,4],data:{3:{games:{BUF:{},BYE:{}},projections:Object.fromEntries(Object.entries(points).map(([id,rec])=>[id,{stats:{rec}}]))},4:{games:{BUF:{}},projections:Object.fromEntries(Object.entries(points).filter(([id])=>id!=='w1').map(([id,rec])=>[id,{stats:{rec}}]))}}};
  const m=buildSeasonModel({league,players,outlook}),r=m.evaluate(mine,partner,['r1'],['x1','x2'],{autoDrop:true});
  assert.deepEqual(r.dropA,['w2'],'season totals say the bye-week receiver (14) or the kicker (16); losing the backup (24) costs least');assert.equal(r.complete,true);assert.ok(r.gainA>0,`an upgrade at running back and a better bye cover should help, got ${r.gainA}`);
+});
+
+// Going after a player is the trade search with the arrow reversed: the owner's gain stops being a
+// sanity check and becomes the price, so an offer that leaves them flat is not an offer at all.
+test('going after a player keeps only offers his owner would take, best for me first',async()=>{
+ const f=fixture(),model=buildSeasonModel(f),data={players:f.players};
+ const r=await acquirePlayer(data,f.league,model,'f',{},{});
+ assert.deepEqual([r.ownerId,r.owner,r.considered],[2,'Team 2',3]);
+ // Sending b for f leaves the owner exactly where they were, so they would never answer it.
+ assert.deepEqual(r.offers.map(o=>[o.give[0],o.gainA,o.gainB]),[['c',13,15],['a',-2,30]]);
+ assert(r.offers.every(o=>o.gainB>.25),'every offer has to leave them better off');
+ assert.deepEqual([r.total,r.weeks],[23,2],'his projection and the window come back with him');
+});
+test('what a player would add is a different question from whether anyone can pay for him',async()=>{
+ const f=fixture(),model=buildSeasonModel(f),data={players:f.players};
+ const r=await acquirePlayer(data,f.league,model,'d',{},{});
+ // Sending b would add the most to my lineup, but it guts theirs, so it is never on the table.
+ assert.equal(r.lift,30,'the most he could add here, whoever goes the other way');
+ assert.deepEqual(r.offers.map(o=>[o.give[0],o.gainA]),[['a',15]],'the only one they would take is worth less to me than that');
+ assert.equal(r.best,13,'the most any single player of mine does for them');
+});
+test('a player who improves nothing still reports a price, and one of my own is refused',async()=>{
+ const f=fixture(),model=buildSeasonModel(f),data={players:f.players};
+ const r=await acquirePlayer(data,f.league,model,'e',{},{});
+ assert.equal(r.lift,0,'he does not improve my lineup whoever goes the other way');
+ assert.deepEqual(r.offers.map(o=>o.gainA),[0,-15],'still ranked by what is left for me, so the cheapest is first');
+ await assert.rejects(()=>acquirePlayer(data,f.league,model,'a',{},{}),/not on another roster/);
+});
+test('going after a player respects exclusions, injuries, the limit and cancellation',async()=>{
+ const f=fixture(),model=buildSeasonModel(f),data={players:f.players};
+ const narrowed=await acquirePlayer(data,f.league,model,'f',{tradeExcluded:{give:['RB'],get:[]}},{});
+ assert.deepEqual([narrowed.considered,narrowed.offers.length],[1,0],'only the receiver is left to send, and he does not tempt them');
+ const hurt=fixture();hurt.players.c.injury_status='Out';
+ const without=await acquirePlayer({players:hurt.players},hurt.league,buildSeasonModel(hurt),'f',{},{});
+ assert.deepEqual(without.offers.map(o=>o.give[0]),['a'],'a player who cannot play is not currency');
+ assert.equal((await acquirePlayer(data,f.league,model,'f',{},{limit:1})).offers.length,1);
+ assert.deepEqual(await acquirePlayer(data,f.league,model,'f',{},{cancelled:()=>true}),{cancelled:true});
 });
