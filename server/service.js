@@ -1,6 +1,8 @@
 import {aggregateWatch,activeSlots,optimize,playableIds} from '../dist/engine.js';
 import {buildSeasonModel,realismReasons,compareTradeIdeas,tradeGains} from '../dist/trades.js';
 import {findTradeIdeas,waiverRows,futureWaiverRows,lockedLineup,usableValue} from '../dist/analysis.js';
+import {weekReview,moves} from '../dist/season.js';
+import {teamName} from '../dist/league.js';
 import {waiverWeeks} from '../dist/waivers.js';
 import {defaults,validateSettings,bad} from './settings.js';
 const name=(data,id)=>data.players[id]?.full_name||id;
@@ -56,6 +58,39 @@ export function createService({store,provider,now=Date.now,username:pinned=''}){
   }catch(e){warnings.push(`${l.name}: ${e.message}`)}}
   return envelope(d,{opportunities:results,horizon,weeks},warnings);
  }
+ // A finished week, judged twice: against the most the roster could have scored, and against the
+ // lineup the projections advised at kickoff. Only the second gap was a decision anyone could have
+ // made differently, and keeping them apart is what stops a recap from being hindsight with a grudge.
+ async function recap({leagueId,week}={}){
+  const d=await load(),ls=leagues(d,leagueId),warnings=[],recaps=[];
+  const target=week??d.week-1;
+  if(target<1)throw bad('No week has finished yet this season.',422);
+  if(target>d.week)throw bad(`Week ${target} has not been played yet.`,422);
+  if(typeof provider.history!=='function')throw bad('This server cannot read past weeks.',503);
+  if(target===d.week)warnings.push(`Week ${target} may still be in progress.`);
+  for(const l of ls){
+   try{
+    const history=await provider.history(d.nfl.season,l.league_id,[target]);
+    if(!history.data[target])throw bad(`week ${target} is unavailable`,503);
+    const {matchups,transactions,stats,projections,games=null,next=null}=history.data[target];
+    const review=weekReview({league:l,players:d.players,week:target,matchups,projections});
+    const made=moves({league:l,players:d.players,week:target,transactions,matchups,stats,games,next});
+    const team=id=>teamName(l,id),named=p=>({...p,name:name(d,p.id),team:team(p.rosterId)});
+    const rows=review.rows.map(r=>({...r,team:team(r.rosterId),opponent:r.opponentId==null?null:team(r.opponentId),
+     decisions:r.decisions.map(x=>({...x,satName:name(d,x.sat),playedName:name(d,x.played)}))}));
+    // Lineups stay as ids and share one name table, rather than repeating names twelve rosters over.
+    const ids=new Set(review.rows.flatMap(r=>[...(r.starters||[]),...(r.bestLineup||[])]).filter(Boolean));
+    const moveRows=made.rows.map(r=>({...r,adds:r.adds.map(named),drops:r.drops.map(named),teams:(r.rosterIds||[]).map(team)}));
+    // The pick of the week is one of the rows, so it has to be the named copy and not the raw one.
+    const best=made.summary.best?moveRows[made.rows.indexOf(made.summary.best)]??null:null;
+    recaps.push({leagueId:l.league_id,league:l.name,rosterId:l.mine.roster_id,team:team(l.mine.roster_id),
+     summary:review.summary,rows,moves:{...made,rows:moveRows,summary:{...made.summary,best}},
+     names:Object.fromEntries([...ids].map(id=>[id,name(d,id)]))});
+   }catch(e){warnings.push(`${l.name}: ${e.message}`)}
+  }
+  return envelope(d,{recapWeek:target,recaps,limitations:['Graded on one week of results; a stash can look bad and age well.',
+   'A move that cleared after the week’s last kickoff is judged on the week it could first affect, and stays ungraded until those games are played.']},warnings);
+ }
  async function digest({period='daily'}={}){
   const [state,opps,trade]=await Promise.all([status(),opportunities(),trades({limit:3})]);
   const actions=[...opps.opportunities.flatMap(l=>[...(l.lineup.complete&&l.lineup.gain>.25?[{type:'lineup',leagueId:l.leagueId,league:l.league,gain:l.lineup.gain,text:`${l.league}: lineup changes project +${l.lineup.gain.toFixed(1)} points this week.`}]:[]),...l.waivers.filter(w=>w.status==='upgrade').slice(0,1).map(w=>({type:'waiver',leagueId:l.leagueId,league:l.league,gain:w.gain,text:`${l.league}: add ${w.name}${w.dropName?`, drop ${w.dropName}`:''}; projected +${w.gain.toFixed(1)} points this week.`}))]),...trade.ideas.map(t=>({...t,text:`${t.league}: ${t.send.join(' + ')} for ${t.receive.join(' + ')}; projected +${t.gain.toFixed(1)} points/week (partner +${(t.gainB/t.weeks).toFixed(1)}).`}))].sort((a,b)=>b.gain-a.gain).slice(0,3);
@@ -65,7 +100,7 @@ export function createService({store,provider,now=Date.now,username:pinned=''}){
   const complete=state.complete&&opps.complete&&trade.complete,sources=[...new Map([...state.sources,...opps.sources,...trade.sources].map(s=>[s.name,s])).values()];
   return {...state,generatedAt:now(),sources,complete,health:complete?'healthy':'degraded',warnings,period,actions,changes:changed.length,text};
  }
- return {settings,saveSettings,usernameLocked:()=>!!pinned,load,status,trades,evaluate,opportunities,digest,envelope,client:async(force=false,have=null)=>{const loaded=await load({force}),{outlook,...data}=loaded;
+ return {settings,saveSettings,usernameLocked:()=>!!pinned,load,status,trades,evaluate,opportunities,recap,digest,envelope,client:async(force=false,have=null)=>{const loaded=await load({force}),{outlook,...data}=loaded;
   // The browser loads its own outlook, and it keeps the player directory it already has.
   if(have&&String(have)===String(data.playersAt))delete data.players;
   return {data,settings:settings()}}};

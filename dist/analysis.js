@@ -138,3 +138,32 @@ export async function shopPlayer(data,league,model,playerId,prefs={}, {perPartne
  offers.sort((a,b)=>tradeGains(b).a-tradeGains(a).a);
  return {playerId,offers:offers.slice(0,limit),market:market.sort((a,b)=>b.interest-a.interest),value:model.valueAboveReplacement?.[playerId]??null,total:model.totals[playerId]??null,weeks:model.weeks?.length??null};
 }
+// Going after one player: what would it take to prise him off the team that has him. The mirror of
+// shopPlayer. Only his owner can sell, so this compares every player of mine against him one for one.
+// Their gain stops being a sanity check and becomes the price: it has to be positive or they have no
+// reason to answer, and the cheapest offer that clears it is the one to open with.
+export async function acquirePlayer(data,league,model,playerId,prefs={},{limit=12,cancelled=()=>false}={}){
+ const excluded=prefs.tradeExcluded||{give:['DEF'],get:['DEF']};
+ const held=r=>[...(r.players||[]),...(r.reserve||[]),...(r.taxi||[])];
+ const owner=(league.rosters||[]).find(r=>r.roster_id!==league.mine.roster_id&&held(r).includes(playerId));
+ if(!owner)throw Error('He is not on another roster in this league.');
+ const outgoing=tradeCandidateIds(playableIds(league.mine),data.players,excluded.give)
+  .filter(id=>Number.isFinite(model.totals[id])&&model.totals[id]>0&&!unavailable.includes(data.players[id]?.injury_status));
+ const offers=[];let lift=null,best=null,checked=0;
+ for(const b of outgoing){
+  if(cancelled())return {cancelled:true};
+  if(++checked%40===0)await new Promise(r=>setTimeout(r,0));
+  let result;try{result=model.evaluate(league.mine,owner,[b],[playerId])}catch{continue}
+  if(!result.complete)continue;
+  // The most he could add here, and the most any one player of mine does for them. The second is
+  // what decides whether there is a deal at all, whatever he would be worth to me.
+  lift=Math.max(lift??-Infinity,result.gainA);best=Math.max(best??-Infinity,result.gainB);
+  if(result.gainB<=.25)continue;
+  if(model.assessWaivers)result=model.assessWaivers(result,league.mine,owner,{protectedA:prefs.waiverProtected?.[`${data.user?.user_id}:${league.league_id}`]||[]});
+  offers.push({...result,partnerId:owner.roster_id,partner:teamName(league,owner.roster_id).team});
+ }
+ offers.sort((a,b)=>tradeGains(b).a-tradeGains(a).a);
+ return {playerId,ownerId:owner.roster_id,owner:teamName(league,owner.roster_id).team,offers:offers.slice(0,limit),
+  lift,best,considered:outgoing.length,value:model.valueAboveReplacement?.[playerId]??null,
+  total:model.totals[playerId]??null,weeks:model.weeks?.length??null};
+}

@@ -60,6 +60,37 @@ export function stats(season,week,options={}){return cache.get(`stats:${season}:
 // One week of a league's matchups. Finished weeks hold the scores; weeks ahead hold only who plays whom.
 export function leagueWeek(leagueId,week,options={}){return sleeper(`/league/${leagueId}/matchups/${week}`,{ttl:6*HOUR,...options});}
 export function trends(options={}){return sleeper('/players/nfl/trending/add?lookback_hours=24&limit=100',{ttl:15*MINUTE,...options});}
+// Every add, drop, waiver claim and trade a league processed in one week. The current week is still
+// being written to; finished weeks are settled, which is all the recap ever asks for.
+export function transactions(leagueId,week,options={}){return sleeper(`/league/${leagueId}/transactions/${week}`,{ttl:6*HOUR,...options});}
+
+// Finished weeks for one league: who was started and what they scored, what was projected of them,
+// and the moves made that week. Only the recap needs this, so it is fetched on demand.
+export async function leagueHistory(season,leagueId,weeks,options={}){
+ const data={},errors=[];let next=0;
+ const quiet=p=>p.catch(()=>null);
+ const finished=games=>{const list=Object.values(games||{});return list.length>0&&list.every(g=>g.state==='post')};
+ async function worker(){while(next<weeks.length){const week=weeks[next++];
+  try{
+   // Sleeper files a transaction under the week it cleared in, so a Tuesday waiver sits in the week
+   // whose games are already over. Grading it needs this week's kickoff times, to tell which of its
+   // players could still play, and the week after: its scores, and whether it has been played at all.
+   const after=week+1,ahead=after<=18;
+   const [matchups,moves,results,expected,games,nextGames,nextResults,nextMatchups]=await Promise.all([
+    leagueWeek(leagueId,week,options),transactions(leagueId,week,options),
+    stats(season,week,options),projections(season,week,options),
+    quiet(scoreboard(season,week,{ttl:6*HOUR,...options})),
+    ahead?quiet(scoreboard(season,after,{ttl:HOUR,...options})):null,
+    ahead?quiet(stats(season,after,options)):null,
+    ahead?quiet(leagueWeek(leagueId,after,options)):null]);
+   if(!Array.isArray(matchups)||!matchups.length)throw Error(`Week ${week} was never played.`);
+   data[week]={matchups,transactions:Array.isArray(moves)?moves:[],stats:results,projections:expected,games:games||null,
+    next:ahead?{week:after,matchups:Array.isArray(nextMatchups)?nextMatchups:[],stats:nextResults||{},complete:finished(nextGames)}:null};
+  }catch{errors.push(week)}
+ }}
+ await Promise.all(Array.from({length:3},worker));
+ return {season,leagueId,weeks,data,errors,loadedAt:Date.now()};
+}
 
 export async function tradeOutlook(season,weeks,onProgress=()=>{},force=false){
  const data={},errors=[];let done=0,next=0;

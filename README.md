@@ -18,12 +18,36 @@ It also answers the questions you actually ask on a Sunday morning. Who should I
 
 Every league lands in one watchroom, with your players and your opponents' side by side, favorites pinned, and a focus mode for game day. Start/sit comparisons use your league's actual scoring, flex rules and started-game locks, so the advice matches the league you're in and not a generic average.
 
-Beyond that there's the waiver wire, trade ideas and defense streaming. Around the league follows every matchup in a league live, and League outlook simulates the rest of the season for playoff odds and ranks every team by what it has scored and by the roster it has now. The trade builder is the one people seem to like most: a trade can help you and help the other manager more, so it shows both sides and compares what you could have picked up instead.
+Beyond that there's the waiver wire, trade ideas and defense streaming. Around the league follows every matchup live, and League outlook simulates the rest of the season for playoff odds and ranks every team by what it has scored and by the roster it has now.
+
+Season review replays any finished week for the whole league, and it is careful about the one thing these things usually get wrong. The points sitting on your bench are only half the story: if you started the lineup the projections advised and lost anyway, that is bad luck, not a bad call. So it measures both, separately, and only marks a start/sit *avoidable* when the projections favored the player who sat.
+
+<details>
+<summary>See a week in review</summary>
+
+![A finished week showing points left on the bench, what the manager's own calls cost, and every team's result](docs/images/week-in-review.png)
+
+The bench is hindsight. The calls are what you could have done about it.
+
+</details>
+
+Trades work in both directions. Auto trades will shop a player you are done with, or go after one you want: pick anyone on another roster and it works out what it would take, with the other manager's gain as the price rather than an afterthought, so every offer is one they would actually answer.
+
+<details>
+<summary>See the trade finder</summary>
+
+![Going after a named player, showing what he adds, who owns him, and that every route costs more than he is worth](docs/images/trade-finder.png)
+
+When every way to get someone costs more than he adds, it says so rather than dressing it up.
+
+</details>
+
+The trade builder is the one people seem to like most: a trade can help you and help the other manager more, so it shows both sides and compares what you could have picked up instead.
 
 <details>
 <summary>See the trade builder</summary>
 
-![Sample trade comparing the projected gain for both managers and showing trade warnings](docs/images/trade-builder.png)
+![Sample package showing the projected season gain for both managers alongside trade warnings](docs/images/trade-builder.png)
 
 Projections are estimates, and it says so when it isn't sure.
 

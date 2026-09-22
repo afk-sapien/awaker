@@ -1,7 +1,12 @@
 export const SLOT_POSITIONS={FLEX:['RB','WR','TE'],SUPER_FLEX:['QB','RB','WR','TE'],REC_FLEX:['WR','TE'],WRRB_FLEX:['WR','RB'],IDP_FLEX:['DL','LB','DB'],IDP:['DL','LB','DB']};
 export const activeSlots=l=>(l.roster_positions||[]).filter(p=>!['BN','IR','TAXI'].includes(p));
 export function eligible(player,slot){return (player?.fantasy_positions||[player?.position]).some(p=>(SLOT_POSITIONS[slot]||[slot]).includes(p));}
-export function projected(stats,scoring){if(!stats)return null;let found=false,sum=0;for(const [key,mult]of Object.entries(scoring||{})){if(Number.isFinite(stats[key])&&Number.isFinite(mult)){sum+=stats[key]*mult;found=true;}}return found?Math.round(sum*100)/100:null;}
+// Sleeper's projections bucket 50+ field goals as one fgm_50p, while almost every league scores
+// fgm_50_59 and fgm_60p separately. That left the whole category unscored and every kicker projected
+// about a point and a half light. Only consulted when the league's own key is missing from the stat
+// line: finished weeks itemise the real buckets, so this never touches a scored week.
+export const STAT_FALLBACKS={fgm_50_59:['fgm_50p']};
+export function projected(stats,scoring){if(!stats)return null;let found=false,sum=0;for(const [key,mult]of Object.entries(scoring||{})){let value=stats[key];if(!Number.isFinite(value))for(const alt of STAT_FALLBACKS[key]||[])if(Number.isFinite(stats[alt])){value=stats[alt];break}if(Number.isFinite(value)&&Number.isFinite(mult)){sum+=value*mult;found=true;}}return found?Math.round(sum*100)/100:null;}
 export function optimize(ids,slots,players,value,locked={},preferred=[]){
  // On equal projected points, retain as many existing slot assignments as possible.
  // This avoids meaningless RB/WR ordering changes while allowing necessary flex moves.
