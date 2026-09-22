@@ -497,7 +497,7 @@ async function ensureRecap(force=false){
  }catch(e){state.error=e.message}finally{state.loading=false;if(recapState===state&&view==='season')render()}
 }
 const CALL_TONES={avoidable:'poor','toss-up':'neutral',defensible:'good'},MOVE_TONES={backfired:'poor','unused bid':'weak',stashed:'neutral',neutral:'neutral','paid off':'strong'};
-// 'not played yet' and 'unknown' are deliberately absent: no colour, because there is no verdict.
+// 'not played yet' and 'unknown' are deliberately absent: no color, because there is no verdict.
 const toneClass=(map,label)=>map[label]?` defense-${map[label]}`:'';
 function weekInReview(l){
  const week=recapTarget(),weeks=finishedWeeks(),state=recapState?.key===recapKey(l)?recapState:null;

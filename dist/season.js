@@ -64,7 +64,7 @@ export function seasonReview({league,players,weeks,schedules={},currentWeek,ahea
  return {weeks:weeks.map(w=>w.week),rows:rows.sort((a,b)=>order(a.position)-order(b.position)||b.total-a.total),allowed};
 }
 
-// A start/sit is only a mistake if the projections favoured the bench player before kickoff. The rest
+// A start/sit is only a mistake if the projections favored the bench player before kickoff. The rest
 // is hindsight, and a recap that cannot tell the two apart is just blaming people for the weather.
 export const DECISIONS=[[-1,'defensible'],[1,'toss-up'],[Infinity,'avoidable']];
 export const decisionLabel=foreseen=>Number.isFinite(foreseen)?DECISIONS.find(([limit])=>foreseen<limit)[1]:'unknown';

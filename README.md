@@ -20,7 +20,7 @@ Every league lands in one watchroom, with your players and your opponents' side 
 
 Beyond that there's the waiver wire, trade ideas and defense streaming. Around the league follows every matchup live, and League outlook simulates the rest of the season for playoff odds and ranks every team by what it has scored and by the roster it has now.
 
-Season review replays any finished week for the whole league, and it is careful about the one thing these things usually get wrong. The points sitting on your bench are only half the story: if you started the lineup the projections advised and lost anyway, that is bad luck, not a bad call. So it measures both, separately, and only marks a start/sit *avoidable* when the projections favoured the player who sat.
+Season review replays any finished week for the whole league, and it is careful about the one thing these things usually get wrong. The points sitting on your bench are only half the story: if you started the lineup the projections advised and lost anyway, that is bad luck, not a bad call. So it measures both, separately, and only marks a start/sit *avoidable* when the projections favored the player who sat.
 
 <details>
 <summary>See a week in review</summary>

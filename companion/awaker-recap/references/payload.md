@@ -88,8 +88,8 @@ One per swap the hindsight lineup would have made.
 The two players in a decision are always ones who could have held the same starting slot, so a swap
 is a real either/or rather than two unrelated names put side by side.
 
-`avoidable` means the projections favoured the player who sat by more than a point: knowable in
-advance, and fair to raise. `defensible` means they favoured the player who started — say it was
+`avoidable` means the projections favored the player who sat by more than a point: knowable in
+advance, and fair to raise. `defensible` means they favored the player who started — say it was
 bad luck, or leave it out. `toss-up` is inside a point either way. `unknown` means a missing
 projection, so there is no verdict to give.
 
