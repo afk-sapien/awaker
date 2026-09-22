@@ -75,6 +75,16 @@
   are read slot by slot, so the two players are always ones who could have held the same place. The
   totals were never affected. An unfilled slot also keeps its place now, instead of shifting every
   slot after it.
+- Auto trades can now go after a player instead of only offering one. Pick anyone on another roster
+  and it works out what it would take: every player of yours compared against him one for one, with
+  the owner's gain as the price rather than a sanity check, so each offer is one they would actually
+  answer. The cheapest is the place to open.
+- The Auto trades toolbar is one sentence. "Looking for" chooses between any trade, a deal for one
+  of your players, a way to get someone, and a way to get a position, and only that choice's control
+  appears beside it. The button that was floated into the corner is back in the row, and the panel
+  that called itself Filters & ranking without holding the ranking control is now Search settings;
+  sorting stays with the offers it sorts. Shopping for a position from the depth chart sets the same
+  control, so it is no longer a mode you can only reach from another page.
 - Kicker projections were about a point and a half light in every league, everywhere in the app.
   Sleeper projects one combined 50-plus field goal bucket while almost every league scores 50-59 and
   60-plus separately, so that whole category silently scored nothing. Kickers now land within 0.02
