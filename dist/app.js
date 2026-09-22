@@ -340,12 +340,16 @@ function shopSummary(l,r,weeks){
 // is a separate question from whether anyone on my roster is worth his while.
 function getSummary(l,r,weeks){
  const lift=Number.isFinite(r.lift)?r.lift/weeks:null,value=Number.isFinite(r.value)?r.value/weeks:null;
+ // Offers are ranked by what is left for me, so the first one is the cheapest there is. If even that
+ // one loses me points, saying "3 ways to get him" without saying so would be the good news it isn't.
+ const price=r.offers.length?tradeGains(r.offers[0]).a/weeks:null;
  const verdict=r.best===null?`Nothing on your roster can be compared with him, so there is no read on the price.`
   :r.best<=.25?`Nobody you could send improves ${esc(r.owner)}’s lineup, so a one-for-one will not tempt them. A package in the Trade builder, or a player they are thin at, is the way in.`
   :!r.offers.length?`${esc(r.owner)} would listen, but nothing single works for both of you once pickups are counted.`
+  :price!==null&&price<0?`${esc(r.owner)} would listen, but every way to get him costs you more than he adds: the cheapest is still ${signed(price)} / wk for you. He comes cheaper inside a bigger package, or not at all.`
   :lift!==null&&lift<.5?`${esc(r.owner)} would listen, though he barely improves your lineup — check the returns below are worth the player going the other way.`
   :`${esc(r.owner)} would listen. The offers below all leave them better off, which is why they would answer; the cheapest one is the place to start.`;
- return `<div class="panel shop-summary">${askHead(r,`<div><dt>Projected</dt><dd>${fmt(Number.isFinite(r.total)?r.total/weeks:null)} / wk</dd></div><div><dt>Adds to your lineup</dt><dd>${lift===null?'Unknown':signed(lift)+' / wk'}</dd></div><div><dt>Owned by</dt><dd class="tile-text">${esc(r.owner)}</dd></div>`)}<p>${verdict}</p><button class="secondary" id="shop-clear">Back to all trades</button></div>${r.offers.length?`<p class="trade-results-label">${r.offers.length} ${r.offers.length===1?'way':'ways'} to get ${esc(pname(r.playerId))} · ${esc(r.owner)} gains in every one · ranked by what is left for you</p>`+r.offers.map(o=>tradeSummary(o,true)).join(''):''}`;
+ return `<div class="panel shop-summary">${askHead(r,`<div><dt>Projected</dt><dd>${fmt(Number.isFinite(r.total)?r.total/weeks:null)} / wk</dd></div><div><dt>Adds to your lineup</dt><dd>${lift===null?'Unknown':signed(lift)+' / wk'}</dd></div><div><dt>Owned by</dt><dd class="tile-text">${esc(r.owner)}</dd></div>`)}<p>${verdict}</p><button class="secondary" id="shop-clear">Back to all trades</button></div>${r.offers.length?`<p class="trade-results-label">${r.offers.length} ${r.offers.length===1?'way':'ways'} to get ${esc(pname(r.playerId))} · ${esc(r.owner)} gains in every one · ${price!==null&&price<0?'all of them cost you points, cheapest first':'ranked by what is left for you'}</p>`+r.offers.map(o=>tradeSummary(o,true)).join(''):''}`;
 }
 // mode 'position' only filters the general search, so it never runs a search of its own.
 async function askFor(mode,id){
