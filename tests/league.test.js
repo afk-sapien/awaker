@@ -64,6 +64,16 @@ test('game clock and win chance',()=>{
  const p=winChance({mean:110,sd:15},{mean:100,sd:15});assert.ok(p>.65&&p<.72,`about two in three, got ${p}`);
 });
 
+test('a starter ruled out adds nothing to the live projection',()=>{
+ const league={...four(),matchups:[entry(1,1,0,{starters:['qb1'],players_points:{}}),entry(2,1,0,{starters:['qb2'],players_points:{}})]};
+ const projections={qb1:{stats:{pts:20}},qb2:{stats:{pts:20}}},games={T1:{state:'pre'},T2:{state:'pre'}};
+ const out={...players,qb1:{...players.qb1,injury_status:'Out'}};
+ const live=liveWeek({league,players:out,projections,games,spread:20});
+ assert.equal(live.teams[1].mean,0);assert.equal(live.teams[2].mean,20);assert.ok(live.games[0].chance<.5,'the team starting him is behind');
+ const midGame=liveWeek({league,players:out,projections,games:{T1:{state:'in',period:3,clock:'7:30'},T2:{state:'pre'}},spread:20});
+ assert.equal(midGame.teams[1].mean,7.5,'hurt after kickoff, the rest of his projection still counts as the game plays out');
+});
+
 test('the live week adds projections only for football still to be played',()=>{
  const league={...four(),matchups:[entry(1,1,30,{starters:['qb1','0'],players_points:{qb1:30}}),entry(2,1,8,{starters:['qb2'],players_points:{qb2:8}}),entry(3,2,0,{starters:['qb3'],players_points:{}}),entry(4,2,22.5,{starters:['qb4'],players_points:{qb4:22.5}})]};
  const projections=Object.fromEntries([1,2,3,4].map(id=>[`qb${id}`,{stats:{pts:20}}]));

@@ -1,8 +1,8 @@
-import {activeSlots,eligible,projected,optimize,availableIds,playableIds,tradeCandidateIds,waiverMove} from './engine.js';
+import {activeSlots,eligible,projected,optimize,availableIds,playableIds,tradeCandidateIds,waiverMove,UNAVAILABLE} from './engine.js';
 import {realismReasons,compareTradeIdeas,tradeGains} from './trades.js';
 import {teamName} from './league.js';
 import {buildWaiverOutlook} from './waivers.js';
-export const unavailable=['Out','IR','Suspended','PUP','Doubtful'];
+export const unavailable=UNAVAILABLE;
 export function lockedLineup(data,league){
  const ids=league.matchups.find(m=>m.roster_id===league.mine.roster_id)?.starters||league.mine.starters||[],locks={};
  ids.forEach((id,i)=>{const g=data.games[data.players[id]?.team];if(id&&id!=='0'&&g&&g.state!=='pre')locks[i]=id});

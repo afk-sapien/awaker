@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.7.0
+
+- Injury designations are colored everywhere a player appears: red when he is ruled out (Out, IR,
+  PUP, suspended), orange when doubtful, yellow when questionable. The word is still there, so color
+  is never the only signal.
+- A player ruled out before his game projects zero for the week, not whatever Sleeper still lists
+  for him. In start/sit, an Out starter counts for nothing, so benching him shows the gain it really
+  is instead of a loss, and a slot nobody on the bench can fill says so. Around the league's live
+  projections and win chances no longer count on him either. Once his game has kicked off, the
+  pregame projection is shown as it was, and later weeks are not decided by today's status.
+- The dashboard's code is split into modules: one state object, a renderer, event handling, and a
+  module for each page, in place of a single 158 KB file. Nothing about how it looks or behaves
+  changed. `npm run check` now catches a broken import before a browser does, and a new test draws
+  every page from the demo and checks that names from Sleeper are always escaped.
+
 ## 0.6.0
 
 - Leagues with more than 15 starting slots, such as IDP leagues, work everywhere. The lineup
