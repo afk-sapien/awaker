@@ -29,7 +29,11 @@
   `NTFY_URL` in the server environment. Any HTTPS server can still be chosen in the browser. If you
   saved an `http://` ntfy server in the browser, set `NTFY_URL` to it or deliveries will stop.
 - `awaker --port` no longer overrides an `AWAKER_PUBLIC_URL` you have set, and `awaker mcp --port`
-  now points the agent at that port without handing it the owner token.
+  now points the agent at that port without handing it the owner token. A `.env` copied from
+  `.env.example` sets `AWAKER_PUBLIC_URL=http://127.0.0.1:4173`, so change or remove that line
+  before using `--port`, or every request gets "Unrecognized host".
+- Signing in has its own request allowance, a database restored from a backup is made private
+  again, and a provider timeout says so instead of being reported as a bug.
 - Unexpected server errors are logged, a push is no longer sent twice when settings are saved while
   it is in flight, and the database drops data from past seasons and old versions at startup.
 
