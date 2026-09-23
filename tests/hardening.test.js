@@ -133,7 +133,12 @@ test('anonymous traffic from a reverse proxy address cannot lock out the owner o
   for (const attempt of Array.from({length: 31})) await request('/api/v1/settings')
   // A wrong credential counts as anonymous, so it cannot be used to guess tokens any faster.
   assert.equal((await request('/api/v1/settings', {headers: {Authorization: 'Bearer wrong'}})).status, 429)
-  assert.equal((await request('/api/v1/session', {method: 'POST', headers: {Origin: origin, 'Content-Type': 'application/json'}, body: JSON.stringify({token: owner})})).status, 429)
+  // Signing in has its own allowance, so the same traffic cannot keep the owner from signing in either,
+  // and guessing the owner token is still capped.
+  const login = token => request('/api/v1/session', {method: 'POST', headers: {Origin: origin, 'Content-Type': 'application/json'}, body: JSON.stringify({token})})
+  assert.equal((await login(owner)).status, 200)
+  for (const attempt of Array.from({length: 29})) await login('x'.repeat(64))
+  assert.equal((await login(owner)).status, 429)
   assert.equal((await request('/api/v1/settings', {headers: {Authorization: `Bearer ${owner}`}})).status, 200)
   assert.equal((await request('/api/v1/status', {headers: {Authorization: `Bearer ${agent}`}})).status, 200)
   // Each credential still has its own ceiling, and using it up does not touch the other one.

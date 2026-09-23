@@ -1,11 +1,12 @@
 import {DatabaseSync} from 'node:sqlite';
-import {mkdirSync,openSync,closeSync} from 'node:fs';
+import {mkdirSync,openSync,closeSync,chmodSync} from 'node:fs';
 import {dirname} from 'node:path';
 // Provider cache rows that name their season, such as cache:projections:2026:3.
 const seasonal=/^cache:(?:games|projections|stats|outlook):(\d{4}):/;
 export function openStore(path){
- // The file is created private, rather than tightened after SQLite has already created it.
- if(path!==':memory:'){mkdirSync(dirname(path),{recursive:true,mode:0o700});closeSync(openSync(path,'a',0o600))}
+ // The file is created private, rather than tightened after SQLite has already created it, and one
+ // restored from a backup with looser permissions is tightened again.
+ if(path!==':memory:'){mkdirSync(dirname(path),{recursive:true,mode:0o700});closeSync(openSync(path,'a',0o600));chmodSync(path,0o600)}
  const db=new DatabaseSync(path);
  db.exec('PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
  // Earlier versions kept a whole-data snapshot and a settings-change marker that nothing reads now,

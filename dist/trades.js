@@ -13,16 +13,18 @@ export function seasonLineup(ids,slots,players,value){
 }
 
 const OUT=['Out','IR','Doubtful','PUP','Sus','Suspended'];
+// A week counts as published once Sleeper projects a real slate for it; before that a missing row says nothing.
+const published=new WeakMap(),isPublished=p=>{if(!published.has(p))published.set(p,Object.keys(p).length>=100);return published.get(p)};
 export function futurePoints(id,week,players,scoring){
  if(!week?.projections||!week?.games)return null;
  const player=players[id],row=week.projections[id],team=row?.team||player?.team;
  if(!team)return null;
  // A bye is zero only when a successfully loaded schedule confirms no team game.
  if(!week.games[team])return 0;
- // Sleeper often drops the projection of a player ruled out, so for him a missing week is the zero he will score.
- // Anyone else missing a week is unknown, and stays unknown.
+ // Sleeper often drops the projection of a player ruled out, so for him a missing row in a published week is
+ // the zero he will score. Anyone else missing a week, or anyone in a week not yet projected, stays unknown.
  const points=projected(row?.stats,scoring);
- return points===null&&OUT.includes(player?.injury_status)?0:points;
+ return points===null&&OUT.includes(player?.injury_status)&&isPublished(week.projections)?0:points;
 }
 
 export function buildSeasonModel({league,players,outlook}){
