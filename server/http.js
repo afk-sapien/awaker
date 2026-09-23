@@ -78,10 +78,12 @@ export function createHttpServer({service, worker, ntfy, adminToken, agentToken,
       if (path.startsWith('/api/')) {
         // Behind a reverse proxy every client shares one address, so a credential gets its own
         // bucket and anonymous traffic cannot lock the owner or agent out. Anonymous requests,
-        // including sign-in attempts, share a smaller allowance per address.
+        // share a smaller allowance per address, and sign-in has one of its own so other anonymous
+        // traffic cannot use it up.
         const auth = role(req)
         const principal = !open && auth
-        const key = principal ? `role:${auth}` : `ip:${req.socket.remoteAddress}`
+        const login = path === '/api/v1/session' && req.method === 'POST'
+        const key = principal ? `role:${auth}` : `${login ? 'login' : 'ip'}:${req.socket.remoteAddress}`
         const window = Math.floor(now() / 60000)
         for (const [name, value] of rates) if (value.window !== window) rates.delete(name)
         if (!principal && !rates.has(key) && rates.size >= 1000) throw bad('Too many requests.', 429)

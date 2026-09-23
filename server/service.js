@@ -10,6 +10,8 @@ const name=(data,id)=>data.players[id]?.full_name||id;
 // bugs, so callers get a general message and the detail goes to the server log.
 export function reason(e){
  if(e?.status||e?.constructor===Error)return e.message;
+ // A timeout or a dropped connection is the network, not a bug.
+ if(['TimeoutError','AbortError'].includes(e?.name)||e?.message==='fetch failed')return 'Sleeper or ESPN did not answer in time. Try again shortly.';
  console.error('Analysis failed:',e?.stack||e);
  return 'Analysis failed unexpectedly for this request.';
 }

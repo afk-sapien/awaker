@@ -23,16 +23,19 @@ test('bye weeks require a loaded schedule, and missing projections never silentl
  assert.equal(futurePoints('b',{projections:{},games:{NYJ:{}}},players,{rec:1}),null);
  assert.equal(futurePoints('b',{projections:{b:{stats:{rec:5}}},games:{NYJ:{}}},players,{rec:1}),5);
 });
+// A week Sleeper has actually projected: a full slate of rows, most for players nobody here rosters.
+const slate=(p={})=>{for(let i=0;i<100;i++)p[`z${i}`]??={stats:{}};return p};
 test('an injured star missing one week keeps his season value, and that week is his zero',()=>{
- const f=fixture();f.players.c.injury_status='Out';delete f.outlook.data[4].projections.c;
+ const f=fixture();f.players.c.injury_status='Out';delete f.outlook.data[4].projections.c;slate(f.outlook.data[4].projections);
  const model=buildSeasonModel(f);assert.equal(model.totals.c,15,'15 in week 3, nothing while he is out');
  const r=model.evaluate(f.league.mine,f.partner,['c'],['f']);assert.deepEqual(r.weekly.map(w=>w.gainA),[10,3]);
  const healthy=fixture();delete healthy.outlook.data[4].projections.c;
  assert.equal(buildSeasonModel(healthy).totals.c,null,'a healthy player with a missing week is still unknown');
  const players={a:{team:'BUF',injury_status:'IR'}};
  assert.equal(futurePoints('a',{projections:{},games:{NYJ:{}}},players,{rec:1}),0,'a bye is still a bye');
- assert.equal(futurePoints('a',{projections:{},games:{BUF:{}}},players,{rec:1}),0);
- assert.equal(futurePoints('a',{projections:{},games:{BUF:{}}},{a:{team:'BUF',injury_status:'Questionable'}},{rec:1}),null,'questionable is not ruled out');
+ assert.equal(futurePoints('a',{projections:slate(),games:{BUF:{}}},players,{rec:1}),0);
+ assert.equal(futurePoints('a',{projections:{},games:{BUF:{}}},players,{rec:1}),null,'a week not yet projected says nothing, even about him');
+ assert.equal(futurePoints('a',{projections:slate(),games:{BUF:{}}},{a:{team:'BUF',injury_status:'Questionable'}},{rec:1}),null,'questionable is not ruled out');
 });
 function fixture(){
  const players=Object.fromEntries(['a','b','c','d','e','f','r','w'].map((id,i)=>[id,{position:['RB','WR','RB','WR','RB','WR','RB','WR'][i],team:'BUF'}]));

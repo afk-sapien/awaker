@@ -73,7 +73,8 @@ export function projections(season,week,options={}){return cache.get(`projection
 // day old, so it is never the one kept. Until then, and without a schedule, they last minutes.
 const SETTLED=30*HOUR;
 export async function stats(season,week,options={}){
- const games=await scoreboard(season,week,{ttl:HOUR}).catch(()=>null),list=Object.values(games||{});
+ // The schedule only decides how long results are kept, so a slow ESPN is not allowed to hold them up.
+ const games=await Promise.race([scoreboard(season,week,{ttl:HOUR}).catch(()=>null),new Promise(r=>setTimeout(r,3000,null))]),list=Object.values(games||{});
  const settled=list.length>0&&list.every(g=>g.state==='post')&&Date.now()-Math.max(...list.map(g=>Date.parse(g.start)))>SETTLED;
  return cache.get(`stats:${season}:${week}`,async()=>{
  const d=await json(`https://api.sleeper.app/stats/nfl/${season}/${week}?season_type=regular`);

@@ -1,7 +1,7 @@
 import {spawn} from 'node:child_process';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,rmSync,statSync} from 'node:fs';
+import {mkdtempSync,rmSync,statSync,chmodSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {openStore} from '../server/store.js';
@@ -448,12 +448,17 @@ test('startup drops data nothing reads any more and past seasons, and creates th
   s=openStore(path);
   for(const k of ['snapshot','eventReset','cache:projections:2025:3','cache:games:2025:17','cache:stats:2024:1','cache:outlook:2025:18'])assert.equal(s.get(k),null,k);
   for(const [k,v] of Object.entries(kept))assert.deepEqual(s.get(k),v,k);s.close();
+  // A database restored from a backup with looser permissions is made private again.
+  if(process.platform!=='win32'){chmodSync(path,0o644);openStore(path).close();assert.equal(statSync(path).mode&0o777,0o600)}
  }finally{rmSync(dir,{recursive:true,force:true})}
 });
 test('engine refusals reach agents in their own words, but a bug is logged and described generally',t=>{
  const logged=[];t.mock.method(console,'error',(...args)=>logged.push(args.join(' ')));
  assert.equal(reason(Error('Choose distinct players from each team.')),'Choose distinct players from each team.');
  assert.equal(reason(Object.assign(Error('Unknown trade partner.'),{status:400})),'Unknown trade partner.');assert.equal(logged.length,0);
+ // A provider that times out or drops the connection is the network, not a bug, and is not logged as one.
+ assert.equal(reason(new DOMException('The operation was aborted due to timeout','TimeoutError')),'Sleeper or ESPN did not answer in time. Try again shortly.');
+ assert.equal(reason(new TypeError('fetch failed')),'Sleeper or ESPN did not answer in time. Try again shortly.');assert.equal(logged.length,0);
  assert.equal(reason(new TypeError("Cannot read properties of undefined (reading 'roster_id')")),'Analysis failed unexpectedly for this request.');
  assert.equal(logged.length,1);assert.match(logged[0],/TypeError: Cannot read properties/);
 });
