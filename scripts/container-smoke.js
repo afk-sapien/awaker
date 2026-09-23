@@ -22,7 +22,7 @@ for (const mode of ['dashboard', 'service']) {
       ? ['-e', `AWAKER_ADMIN_TOKEN=${owner}`, '-e', `AWAKER_AGENT_TOKEN=${agent}`, '-e', 'SLEEPER_USERNAME=example']
       : []
     const storage = mode === 'service' ? ['-v', `${volume}:/app/data`] : []
-    id = docker('run', '-d', '--name', name, '--read-only', '--cap-drop=ALL', '--security-opt=no-new-privileges', '-p', '127.0.0.1::4173', ...env, ...storage, image).trim()
+    id = docker('run', '-d', '--name', name, '--read-only', '--tmpfs', '/tmp', '--cap-drop=ALL', '--security-opt=no-new-privileges', '-p', '127.0.0.1::4173', ...env, ...storage, image).trim()
     const port = docker('port', id, '4173/tcp').trim().split(':').at(-1)
     let url = `http://127.0.0.1:${port}`
     const headers = {Host: '127.0.0.1:4173'}

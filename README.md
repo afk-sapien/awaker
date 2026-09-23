@@ -90,7 +90,7 @@ awaker
 
 ```sh
 docker run -d --name awaker --restart unless-stopped --init \
-  --read-only --cap-drop=ALL --security-opt=no-new-privileges \
+  --read-only --tmpfs /tmp --cap-drop=ALL --security-opt=no-new-privileges \
   -p 127.0.0.1:4173:4173 -v awaker-data:/app/data \
   -e SLEEPER_USERNAME=your-sleeper-name \
   ghcr.io/afk-sapien/awaker:latest
@@ -117,6 +117,7 @@ services:
     restart: unless-stopped
     init: true
     read_only: true
+    tmpfs: [/tmp]
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
 volumes:
@@ -141,7 +142,7 @@ awaker service --username YOUR_SLEEPER_NAME
 
 With Docker, that is the `SLEEPER_USERNAME` in the command above. Same image, same address. Open [Notifications](http://127.0.0.1:4173/integrations.html) to pick schedules and alert thresholds, which start switched off. Every few hours (six by default) it compares trades and the waiver wire, and sends one notification when something new clears the projected gain you chose.
 
-Phone pushes go through [ntfy](https://ntfy.sh) and need no account: on the same page, generate a random topic, save it, subscribe to that topic in the ntfy app, and send a test. A self-hosted ntfy server and an access token are optional.
+Phone pushes go through [ntfy](https://ntfy.sh) and need no account: on the same page, generate a random topic, save it, subscribe to that topic in the ntfy app, and send a test. A self-hosted ntfy server and an access token are optional. Any HTTPS server can be picked in the browser; one on plain HTTP, including `localhost`, has to be named in `NTFY_URL` in the server's environment first.
 
 There's no login. The account it reports on is read from the environment and can't be changed from the browser, so it can only ever report on your leagues. Schedules, thresholds and where notifications go are editable by anyone who can reach it, the same as any small self-hosted tool. Run `awaker setup` to generate an owner token and a read-only agent token if you want a sign-in, and set up HTTPS before exposing it anywhere.
 
@@ -156,7 +157,7 @@ Worth knowing before you trust it with a lineup decision:
 - **It leans on unofficial endpoints.** League data comes from the [documented Sleeper API](https://docs.sleeper.com/), but projections and ESPN game status use undocumented endpoints that can change or break.
 - **Your data stays with you.** Browser preferences stay in your browser. Service settings, caches and reports live in a local SQLite file that can contain private league strategy, so protect `.env`, the data volume and your backups. No analytics, no telemetry.
 
-The browser talks to `api.sleeper.app`, `site.api.espn.com` and `sleepercdn.com`. Sleeper's terms allow noncommercial use; talk to them about anything commercial. Awaker is an independent project, unaffiliated with Sleeper, ESPN or the NFL.
+The browser talks to `api.sleeper.app`, `site.api.espn.com` and `sleepercdn.com`, and nothing else: fonts ship with the app. Sleeper's terms allow noncommercial use; talk to them about anything commercial. Awaker is an independent project, unaffiliated with Sleeper, ESPN or the NFL.
 
 ## Development
 
@@ -168,7 +169,7 @@ node scripts/container-smoke.js
 node scripts/scan-images.js
 ```
 
-The last two need Docker. CI covers Node 22 and 24, installed Python packages on Linux, macOS and Windows, and the container on AMD64 and ARM64. It also scans history for secrets and images for known vulnerabilities, and blocks publishing on HIGH or CRITICAL findings. See [release instructions](docs/releasing.md).
+The last two need Docker. CI covers Node 22 (including 22.13, the oldest supported) and 24, installed Python packages on Linux, macOS and Windows, and the container on AMD64 and ARM64. It also scans history for secrets and images for known vulnerabilities, and blocks publishing on HIGH or CRITICAL findings. See [release instructions](docs/releasing.md).
 
 [Contributing](CONTRIBUTING.md) · [Code of conduct](CODE_OF_CONDUCT.md) · [Getting help](SUPPORT.md) · [Security reporting](SECURITY.md) · [Changelog](CHANGELOG.md)
 
