@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0
 
 - Leagues with more than 15 starting slots, such as IDP leagues, work everywhere. The lineup
   optimizer used to refuse them, which took week in review, start/sit and waivers down with it.
