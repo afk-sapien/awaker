@@ -89,13 +89,13 @@ The user-data directory defaults to:
 
 Override it with `AWAKER_HOME` or `--data-dir /path/to/awaker`. Use the same directory for setup and service. The directory contains `.env` and `awaker.sqlite`. Python setup restricts file permissions on POSIX systems. On Windows, keep the directory under your private user profile and use Windows access controls when sharing a machine.
 
-`--env-file /path/to/.env` selects a different environment file. A Python install does not load a random `.env` from the current working directory. Existing process environment values override the chosen file, and explicit CLI flags override both. `--port` defaults the browser URL to that local port unless `--public-url` is also supplied. Use `--host 0.0.0.0 --public-url https://awaker.example.com` behind a properly configured reverse proxy.
+`--env-file /path/to/.env` selects a different environment file. A Python install does not load a random `.env` from the current working directory. Existing process environment values override the chosen file, and explicit CLI flags override both. `--port` defaults the browser URL to that local port unless `--public-url`, the environment, or the env file already sets `AWAKER_PUBLIC_URL`. For `awaker mcp`, `--port` points the adapter at the service on that local port by setting `AWAKER_API_URL`. Use `--host 0.0.0.0 --public-url https://awaker.example.com` behind a properly configured reverse proxy.
 
 To migrate an existing Node deployment, stop it, back up its database, and run `awaker service --env-file /absolute/path/to/old/.env` with `AWAKER_DB` set to the existing database's absolute path in that file. An omitted database override creates a separate Python-installation database.
 
 Upgrade with `pipx upgrade awaker`, or reinstall the newer checkout/wheel using `python -m pip install --upgrade .`. For a same-version source reinstall, use `--force-reinstall`. User data stays outside the installed package and survives reinstalls. Uninstalling the package leaves user data in place. Back up that directory while the service is stopped.
 
-For an agent's MCP configuration, use `awaker` as the command and `["mcp"]` as its arguments. Use an absolute executable path if the agent cannot find pipx commands on PATH. Set `AWAKER_API_URL` and `AWAKER_AGENT_TOKEN` in its environment. The owner token is unnecessary for MCP access.
+For an agent's MCP configuration, use `awaker` as the command and `["mcp"]` as its arguments. Use an absolute executable path if the agent cannot find pipx commands on PATH. Set `AWAKER_API_URL` and `AWAKER_AGENT_TOKEN` in its environment. The owner token is unnecessary for MCP access, and `awaker mcp` removes it from the adapter's environment even when the env file contains it.
 
 ## Configuration
 
@@ -109,9 +109,9 @@ For an agent's MCP configuration, use `awaker` as the command and `["mcp"]` as i
 | `AWAKER_AGENT_TOKEN` | Empty | Read-only analysis access for agents |
 | `AWAKER_DB` | `data/awaker.sqlite` | SQLite path. Existing `data/sunday.sqlite` takes precedence when unset |
 | `SLEEPER_USERNAME` | Required for the service | The account it reports on. Fixed at startup and not changeable through the browser or API |
-| `NTFY_URL`, `NTFY_TOPIC`, `NTFY_TOKEN` | `https://ntfy.sh`, empty, empty | Optional defaults for phone pushes. Only the topic is required, and the token is for access-controlled topics. Notification settings saved in **Notifications** take over |
+| `NTFY_URL`, `NTFY_TOPIC`, `NTFY_TOKEN` | `https://ntfy.sh`, empty, empty | Optional defaults for phone pushes. Only the topic is required, and the token is for access-controlled topics. Notification settings saved in **Notifications** take over. `NTFY_URL` is also the only plain HTTP ntfy server the browser may choose |
 
-Legacy `SUNDAY_*` names still work. An explicitly set `AWAKER_*` value takes precedence, including an empty value. Tokens must be distinct and at least 32 printable ASCII characters. Generated tokens have 256 bits of randomness.
+Legacy `SUNDAY_*` names still work. A non-empty `AWAKER_*` value takes precedence. An empty value counts as unset, so a blank `AWAKER_ADMIN_TOKEN=` does not override a legacy `SUNDAY_ADMIN_TOKEN`. Tokens must be distinct and at least 32 printable ASCII characters. Generated tokens have 256 bits of randomness.
 
 For local Node on another port, set `PORT`, `AWAKER_PUBLIC_URL`, and `AWAKER_API_URL` together. For Docker, change only the host side of the Compose port mapping and update both URLs. The container continues to listen on 4173.
 

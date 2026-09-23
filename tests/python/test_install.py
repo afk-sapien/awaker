@@ -150,6 +150,13 @@ class InstalledApplicationTests(unittest.TestCase):
             self.assertEqual(self.request(port, "/healthz")[0], 200)
         self.assertTrue(database.is_file())
 
+    def test_port_flag_keeps_a_public_url_set_in_the_environment_file(self):
+        custom = self.directory / "proxy.env"
+        custom.write_text("AWAKER_PUBLIC_URL=https://awaker.example.com\n")
+        with self.server("serve", ("--env-file", str(custom))) as port:
+            self.assertEqual(self.request(port, "/", headers={"Host": "awaker.example.com"})[0], 200)
+            self.assertEqual(self.request(port, "/")[0], 403)
+
     def test_service_runs_without_tokens_and_keeps_its_configured_account(self):
         self.environment["SLEEPER_USERNAME"] = "example"
         with self.server("service") as port:

@@ -22,7 +22,7 @@ async function harness(t, options = {}) {
   const request = (path, options = {}) => httpRequest(`http://127.0.0.1:${server.address().port}${path}`, {
     ...options, headers: {Host: new URL(origin).host, ...options.headers}
   })
-  return {request, advance: duration => { at += duration }}
+  return {request, port: server.address().port, advance: duration => { at += duration }}
 }
 
 async function login(request) {
@@ -64,6 +64,32 @@ test('host validation, security headers and health checks do not disclose accoun
   assert.equal((await request('/', {method: 'POST'})).status, 405)
 })
 
+test('static files revalidate by ETag, compress text and load fonts from this server only', async t => {
+  const {request} = await harness(t)
+  const first = await request('/app.js')
+  const etag = first.headers.get('etag')
+  assert.equal(first.status, 200)
+  assert.equal(first.headers.get('cache-control'), 'no-cache')
+  assert.match(etag, /^"[\w-]+"$/)
+  assert.equal(first.headers.get('content-encoding'), null)
+  const again = await request('/app.js', {headers: {'If-None-Match': etag}})
+  assert.equal(again.status, 304)
+  assert.equal(await again.text(), '')
+  const gzip = await request('/app.js', {headers: {'Accept-Encoding': 'gzip, br'}})
+  assert.equal(gzip.headers.get('content-encoding'), 'gzip')
+  assert.equal(gzip.headers.get('vary'), 'Accept-Encoding')
+  assert.notEqual(gzip.headers.get('etag'), etag)
+  assert.equal((await request('/app.js', {headers: {'Accept-Encoding': 'gzip', 'If-None-Match': gzip.headers.get('etag')}})).status, 304)
+  const font = await request('/fonts/dm-sans-variable.woff2', {headers: {'Accept-Encoding': 'gzip'}})
+  assert.equal(font.status, 200)
+  assert.equal(font.headers.get('content-type'), 'font/woff2')
+  assert.equal(font.headers.get('content-encoding'), null)
+  const csp = first.headers.get('content-security-policy')
+  assert.match(csp, /font-src 'self'(;|$)/)
+  assert.doesNotMatch(csp, /googleapis|gstatic/)
+  assert.doesNotMatch(await (await request('/styles.css')).text(), /@import|googleapis|gstatic/)
+})
+
 test('JSON request limits return useful errors without resetting the connection', async t => {
   const {request} = await harness(t)
   const headers = {Authorization: `Bearer ${owner}`, 'Content-Type': 'application/json'}
@@ -93,13 +119,45 @@ test('file serving blocks hidden files, malformed paths and symlinks outside dis
 
 test('API request limits expire and health remains available', async t => {
   const {request, advance} = await harness(t)
-  for (const attempt of Array.from({length: 120})) assert.equal((await request('/api/v1/settings')).status, 401)
+  for (const attempt of Array.from({length: 30})) assert.equal((await request('/api/v1/settings')).status, 401)
   const blocked = await request('/api/v1/settings')
   assert.equal(blocked.status, 429)
   assert.equal(blocked.headers.get('retry-after'), '60')
   assert.equal((await request('/healthz')).status, 200)
   advance(60000)
   assert.equal((await request('/api/v1/settings')).status, 401)
+})
+
+test('anonymous traffic from a reverse proxy address cannot lock out the owner or the agent', async t => {
+  const {request, advance} = await harness(t)
+  for (const attempt of Array.from({length: 31})) await request('/api/v1/settings')
+  // A wrong credential counts as anonymous, so it cannot be used to guess tokens any faster.
+  assert.equal((await request('/api/v1/settings', {headers: {Authorization: 'Bearer wrong'}})).status, 429)
+  assert.equal((await request('/api/v1/session', {method: 'POST', headers: {Origin: origin, 'Content-Type': 'application/json'}, body: JSON.stringify({token: owner})})).status, 429)
+  assert.equal((await request('/api/v1/settings', {headers: {Authorization: `Bearer ${owner}`}})).status, 200)
+  assert.equal((await request('/api/v1/status', {headers: {Authorization: `Bearer ${agent}`}})).status, 200)
+  // Each credential still has its own ceiling, and using it up does not touch the other one.
+  for (const attempt of Array.from({length: 119})) await request('/api/v1/settings', {headers: {Authorization: `Bearer ${owner}`}})
+  assert.equal((await request('/api/v1/settings', {headers: {Authorization: `Bearer ${owner}`}})).status, 429)
+  assert.equal((await request('/api/v1/status', {headers: {Authorization: `Bearer ${agent}`}})).status, 200)
+  advance(60000)
+  assert.equal((await request('/api/v1/settings', {headers: {Authorization: `Bearer ${owner}`}})).status, 200)
+})
+
+test('a thousand anonymous addresses fill the rate table without shutting out the owner', {skip: process.platform !== 'linux' && 'needs the whole 127.0.0.0/8 loopback range'}, async t => {
+  const {request: http} = await import('node:http')
+  const {port} = await harness(t)
+  const from = (localAddress, headers = {}) => new Promise((done, fail) => {
+    const req = http({host: '127.0.0.1', port, path: '/api/v1/settings', localAddress, headers: {Host: new URL(origin).host, ...headers}}, res => { res.resume(); res.on('end', () => done(res.statusCode)) })
+    req.on('error', fail)
+    req.end()
+  })
+  const addresses = Array.from({length: 1000}, (_, i) => `127.0.${1 + Math.floor(i / 250)}.${1 + i % 250}`)
+  for (let i = 0; i < addresses.length; i += 50) await Promise.all(addresses.slice(i, i + 50).map(address => from(address)))
+  assert.equal(await from('127.0.9.9'), 429, 'a new anonymous address is refused once the table is full')
+  assert.equal(await from('127.0.9.9', {Authorization: `Bearer ${owner}`}), 200)
+  // The agent is let in too: it is refused the owner route itself, not throttled.
+  assert.equal(await from('127.0.9.10', {Authorization: `Bearer ${agent}`}), 403)
 })
 
 test('concurrent analysis is bounded and capacity returns after failure', async t => {
@@ -143,6 +201,12 @@ test('configuration preserves old environment names and database paths', () => {
     assert.equal(result.adminToken, owner)
     assert.equal(result.agentToken, agent)
     assert.equal(result.host, 'new')
+    // A blank line copied from .env.example must not switch off a login the legacy name still sets.
+    const blank = config({AWAKER_ADMIN_TOKEN: '', SUNDAY_ADMIN_TOKEN: owner, AWAKER_AGENT_TOKEN: '', SUNDAY_AGENT_TOKEN: agent, AWAKER_PUBLIC_URL: '', AWAKER_DB: ''}, dir)
+    assert.equal(blank.adminToken, owner)
+    assert.equal(blank.agentToken, agent)
+    assert.equal(blank.publicUrl, 'http://127.0.0.1:4173')
+    assert.equal(config({AWAKER_ADMIN_TOKEN: ''}, dir).adminToken, undefined)
     assert.throws(() => config({PORT: 'NaN'}, dir))
     for (const url of ['ftp://example.com', 'https://user:pass@example.com', 'https://example.com/path', 'https://example.com/?token=x']) {
       assert.throws(() => publicOrigin(url))
@@ -211,4 +275,52 @@ test('a configured Sleeper account cannot be changed through the service', async
   // Stored settings from before the account was configured never win.
   data.set('settings', {...service.settings(), username: 'stale-account'})
   assert.equal(service.settings().username, 'owner-account')
+})
+
+test('an unexpected server fault is logged with its stack and reaches the browser only in general terms', async t => {
+  const logged = []
+  t.mock.method(console, 'error', (...args) => logged.push(args.join(' ')))
+  const {request} = await harness(t, {service: {status: async () => { throw new TypeError('reading secret internals') }}})
+  const response = await request('/api/v1/status', {headers: {Authorization: `Bearer ${agent}`}})
+  assert.equal(response.status, 500)
+  assert.equal((await response.text()).includes('secret internals'), false)
+  assert.equal(logged.length, 1)
+  assert.match(logged[0], /TypeError: reading secret internals\n\s+at /)
+  assert.equal(logged[0].includes(agent) || logged[0].includes(owner), false)
+  // An intentional refusal carries a status and is not a fault worth logging.
+  assert.equal((await request('/api/v1/settings')).status, 401)
+  assert.equal(logged.length, 1)
+})
+
+test('a request for the wrong host explains which setting names the right one', async t => {
+  const {request} = await harness(t)
+  const response = await request('/api/v1/settings', {headers: {Host: 'localhost:4173'}})
+  assert.equal(response.status, 403)
+  assert.match((await response.json()).error, /AWAKER_PUBLIC_URL/)
+})
+
+test('the Python launcher keeps a configured public URL, points mcp at --port, and keeps the owner token from it', async t => {
+  const {spawnSync} = await import('node:child_process')
+  const dir = mkdtempSync(join(tmpdir(), 'awaker-launch-'))
+  t.after(() => rmSync(dir, {recursive: true, force: true}))
+  mkdirSync(join(dir, 'server'))
+  // Stand-ins for the real entry points report the environment the launcher gave them.
+  const report = "console.log(JSON.stringify(Object.fromEntries(Object.entries(process.env).filter(([k]) => /^(AWAKER|SUNDAY)_/.test(k)))))"
+  writeFileSync(join(dir, 'server', 'start.js'), report)
+  writeFileSync(join(dir, 'server', 'mcp.js'), `export function runMcp() { ${report} }`)
+  const environment = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(AWAKER|SUNDAY|NTFY)_|^PORT$/.test(k)))
+  const launch = (command, envFile, overrides) => {
+    const result = spawnSync(process.execPath, [resolve('src/awaker/launch.mjs'), command, dir, dir, envFile, JSON.stringify(overrides)], {env: environment, encoding: 'utf8'})
+    assert.equal(result.status, 0, result.stderr)
+    return JSON.parse(result.stdout)
+  }
+  const configured = join(dir, 'configured.env')
+  writeFileSync(configured, `AWAKER_PUBLIC_URL=https://awaker.example.com\nAWAKER_ADMIN_TOKEN=${owner}\nSUNDAY_ADMIN_TOKEN=${owner}\nAWAKER_AGENT_TOKEN=${agent}\n`)
+  assert.equal(launch('serve', configured, {PORT: '5000'}).AWAKER_PUBLIC_URL, 'https://awaker.example.com')
+  assert.equal(launch('serve', join(dir, 'missing.env'), {PORT: '5000'}).AWAKER_PUBLIC_URL, 'http://127.0.0.1:5000')
+  assert.equal(launch('serve', configured, {PORT: '5000', AWAKER_PUBLIC_URL: 'https://other.example.com'}).AWAKER_PUBLIC_URL, 'https://other.example.com')
+  const mcp = launch('mcp', configured, {PORT: '5000'})
+  assert.equal(mcp.AWAKER_API_URL, 'http://127.0.0.1:5000')
+  assert.equal(mcp.AWAKER_AGENT_TOKEN, agent)
+  assert.equal(JSON.stringify(mcp).includes(owner), false)
 })

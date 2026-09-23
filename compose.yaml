@@ -18,6 +18,9 @@ services:
       # Retained so existing deployments keep their data.
       - sunday-data:/app/data
     read_only: true
+    # A read-only root still needs somewhere to write temporary files.
+    tmpfs:
+      - /tmp
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     init: true

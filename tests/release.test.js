@@ -19,3 +19,11 @@ test('release publication requires matching safe versions and keeps previews awa
  }
  assert.throws(() => releaseMetadata('pull_request', {repository}, '', '0.2.0'), /Unsupported/)
 })
+test('package.json, the newest changelog release and the MCP server report the same version', async () => {
+ const {readFileSync} = await import('node:fs')
+ const {serverVersion} = await import('../server/mcp.js')
+ const {version} = JSON.parse(readFileSync('package.json', 'utf8'))
+ const heading = readFileSync('CHANGELOG.md', 'utf8').match(/^## v?(\d+\.\d+\.\d+\S*)/m)?.[1]
+ assert.equal(heading, version)
+ assert.equal(serverVersion, version)
+})

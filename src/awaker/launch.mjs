@@ -9,8 +9,17 @@ Object.assign(process.env, overrides)
 if (!process.env.AWAKER_DB && !process.env.SUNDAY_DB) {
   process.env.AWAKER_DB = resolve(directory, 'awaker.sqlite')
 }
-if (overrides.PORT && !overrides.AWAKER_PUBLIC_URL) {
-  process.env.AWAKER_PUBLIC_URL = `http://127.0.0.1:${overrides.PORT}`
+// --port fills in a missing browser URL. One already set in the environment or the env file is
+// kept, since it is usually a reverse proxy's address. For mcp, --port names the local service to call.
+if (overrides.PORT) {
+  const local = `http://127.0.0.1:${overrides.PORT}`
+  if (command === 'mcp') process.env.AWAKER_API_URL = local
+  else if (!process.env.AWAKER_PUBLIC_URL && !process.env.SUNDAY_PUBLIC_URL) process.env.AWAKER_PUBLIC_URL = local
+}
+// The adapter only needs the agent token, so the owner token never reaches it.
+if (command === 'mcp') {
+  delete process.env.AWAKER_ADMIN_TOKEN
+  delete process.env.SUNDAY_ADMIN_TOKEN
 }
 const entry = {serve: 'start.js', service: 'main.js', mcp: 'mcp.js'}[command]
 if (!entry) throw Error('Unknown Awaker command')
