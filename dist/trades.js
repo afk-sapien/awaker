@@ -1,4 +1,4 @@
-import {activeSlots,eligible,playableIds,availableIds,projected,assign} from './engine.js';
+import {activeSlots,eligible,playableIds,availableIds,projected,assign,UNAVAILABLE} from './engine.js';
 
 // Rectangular assignment (Hungarian algorithm): maximize a legal lineup without
 // enumerating every slot subset for every trade and every remaining week.
@@ -12,7 +12,7 @@ export function seasonLineup(ids,slots,players,value){
  return {ids:picks,total:picks.reduce((sum,id)=>sum+(id?value(id):0),0),complete:picks.every(Boolean)};
 }
 
-const OUT=['Out','IR','Doubtful','PUP','Sus','Suspended'];
+const OUT=UNAVAILABLE;
 // A week counts as published once Sleeper projects a real slate for it; before that a missing row says nothing.
 const published=new WeakMap(),isPublished=p=>{if(!published.has(p))published.set(p,Object.keys(p).length>=100);return published.get(p)};
 export function futurePoints(id,week,players,scoring){
@@ -32,7 +32,7 @@ export function buildSeasonModel({league,players,outlook}){
  const allIds=Object.keys(players),free=availableIds(league,players);
  for(const week of weeks){const d=outlook.data[week];values[week]=Object.fromEntries(allIds.map(id=>[id,futurePoints(id,d,players,league.scoring_settings)]));
   const byPosition={};
-  for(const id of free){const p=players[id],v=values[week][id];if(!Number.isFinite(v)||['Out','IR','PUP','Suspended','Doubtful'].includes(p.injury_status))continue;
+  for(const id of free){const p=players[id],v=values[week][id];if(!Number.isFinite(v)||UNAVAILABLE.includes(p.injury_status))continue;
    for(const pos of p.fantasy_positions||[p.position])byPosition[pos]=Math.max(byPosition[pos]??0,v);
   }
   replacement[week]=byPosition;
@@ -88,7 +88,7 @@ export function buildSeasonModel({league,players,outlook}){
   const key=JSON.stringify([roster.roster_id,positions,[...protectedIds].sort()]);
   if(!waiverPlans.has(key)){
    const ids=playableIds(roster),base=before(roster),protectedSet=new Set([...protectedIds,...(roster.starters||base[0].ids)]);
-   const pool=free.filter(id=>!['Out','IR','PUP','Suspended','Doubtful'].includes(players[id].injury_status)&&(players[id].fantasy_positions||[players[id].position]).some(pos=>positions.includes(pos))&&slots.some(slot=>eligible(players[id],slot)));
+   const pool=free.filter(id=>!UNAVAILABLE.includes(players[id].injury_status)&&(players[id].fantasy_positions||[players[id].position]).some(pos=>positions.includes(pos))&&slots.some(slot=>eligible(players[id],slot)));
    const covered=pool.filter(id=>Number.isFinite(totals[id]));
    const shortlist=new Set();
    for(const pos of positions){

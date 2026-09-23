@@ -1,4 +1,4 @@
-import {activeSlots,playableIds,waiverDropReason,eligible,benchMove,BENCH_MARGIN,filledSlots,betterMove} from './engine.js';
+import {activeSlots,playableIds,waiverDropReason,eligible,benchMove,BENCH_MARGIN,filledSlots,betterMove,UNAVAILABLE} from './engine.js';
 import {futurePoints,seasonLineup} from './trades.js';
 
 export function waiverWeeks(week,horizon,endWeek=17){
@@ -19,7 +19,7 @@ export function buildWaiverOutlook({league,players,outlook,protectedIds=[],start
  const before=weeks.map((_,i)=>lineup(roster,i)),capacity=league.roster_positions.filter(s=>!['IR','TAXI'].includes(s)).length;
  const safeDrops=roster.filter(id=>!waiverDropReason(id,{players,value:id=>totals[id],protectedIds,starterIds,excludedDropPositions}));
  return {totals,values,evaluate(id){
-  if(!weeks.length||totals[id]===null||!Number.isFinite(totals[id])||['Out','IR','PUP','Suspended','Doubtful'].includes(players[id]?.injury_status))return {drop:null,gain:null,status:'unavailable'};
+  if(!weeks.length||totals[id]===null||!Number.isFinite(totals[id])||UNAVAILABLE.includes(players[id]?.injury_status))return {drop:null,gain:null,status:'unavailable'};
   const drops=roster.length<capacity?[null]:safeDrops.filter(drop=>!samePosition||(players[id]?.fantasy_positions||[players[id]?.position]).some(pos=>eligible(players[drop],pos)));
   if(!drops.length)return {drop:null,gain:null,status:'no_safe_drop'};
   let best=null;const spare=[];

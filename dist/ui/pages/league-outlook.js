@@ -27,7 +27,7 @@ export function projectionStamp(rows){if(!projectionStamps.has(rows)){let latest
 export function currentLeagueOutlook(){
  const l=league(),state=S.leagueSeasonState;if(!l||state?.key!==leagueSeasonKey(l)||!state.past)return null;
  const stamps=Object.entries(S.data.projections).map(([week,rows])=>[week,projectionStamp(rows)]),rosters=rosterKey(l);
- const key=JSON.stringify([state.key,rosters,stamps,l.matchups.map(m=>[m.roster_id,m.matchup_id,m.points,m.custom_points,m.starters]),Object.entries(S.data.games).map(([team,g])=>[team,g.state,g.period,g.clock])]);
+ const key=JSON.stringify([state.key,rosters,stamps,l.matchups.map(m=>[m.roster_id,m.matchup_id,m.points,m.custom_points,m.starters]),Object.entries(S.data.games).map(([team,g])=>[team,g.state,g.period,g.clock]),l.matchups.flatMap(m=>m.starters||[]).map(id=>S.data.players[id]?.injury_status||'')]);
  return leagueOutlooks.get(key,()=>leagueOutlook({league:l,players:S.data.players,past:state.past,future:state.future,currentWeek:S.data.week,projections:S.data.projections,games:S.data.games,rosterMemo:(weeks,compute)=>rosterOutlooks.get(JSON.stringify([rosters,stamps,weeks]),compute)}));
 }
 export function leagueGate(head){

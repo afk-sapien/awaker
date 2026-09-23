@@ -31,11 +31,13 @@ for (const name of readdirSync('dist').filter(name => name.endsWith('.html'))) {
 for (const [file, suffixes] of urls) if (suffixes.size > 1) problems.push(`${file} is imported under ${suffixes.size} different URLs`)
 
 // A named import that nothing exports only fails once a browser loads the page, so every module the
-// dashboard is built from is linked here. The entry points run on load and need a browser, so they are skipped.
+// dashboard is built from is linked and run here. Modules only define things when loaded, so any error is a
+// real one: a missing export, or a value used before a circular import has defined it. The entry points
+// run on load and need a browser, so they are skipped.
 const entries = new Set(['dist/app.js', 'dist/boot.js', 'dist/integrations.js'])
 for (const file of modules.filter(file => !entries.has(file))) {
   try { await import(pathToFileURL(resolve(file))) }
-  catch (error) { if (error instanceof SyntaxError) problems.push(`${file}: ${error.message}`) }
+  catch (error) { problems.push(`${file}: ${error.message}`) }
 }
 if (problems.length) { console.error(problems.join('\n')); process.exit(1) }
 console.log('JavaScript syntax, import and link checks passed.')

@@ -30,6 +30,12 @@ test('a starter ruled out counts as the zero he will score, and an injured bench
  assert.equal(r.starters[0].projection,0);assert.equal(r.bench[0].options[0].delta,15,'benching him gains everything the replacement scores');
  assert.equal(r.bench[1].reason,'IR');
  data.players.a.injury_status='Questionable';assert.equal(lineupComparisons(data,league).baseline,30,'a questionable starter still might play');
+ data.players.a.injury_status='Out';data.games.A.state='in';assert.equal(lineupComparisons(data,league).starters[0].projection,10,'once his game is on, the pregame projection stands');
+ data.games.A.state='pre';data.nfl={week:1};assert.equal(lineupComparisons(data,league).baseline,30,'browsing another week, today’s status decides nothing');
+});
+test('Sleeper’s Sus is suspended everywhere: never recommended, and never counted',()=>{
+ const {data,league}=fixture();data.players.d.injury_status='Sus';data.players.a.injury_status='Sus';
+ const r=lineupComparisons(data,league);assert.equal(r.bench[1].reason,'Sus');assert.equal(r.starters[0].projection,0);
 });
 test('empty slots contribute zero while negative and zero projections remain valid',()=>{
  const {data,league}=fixture();league.mine.starters=['0'];data.projections[2].b.stats.rec=-2;data.projections[2].d.stats.rec=0;

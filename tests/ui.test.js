@@ -66,5 +66,6 @@ test('injury designations are colored by how likely he is to play, and a player 
  data.games[team]={...game,state:'in'};assert.ok(value(id,league)>0,'once his game is on, the pregame projection stands');
  data.games[team]={...game,state:'pre'};
  if(data.projections[next]?.[id])assert.ok(value(id,league,next)>0,'a later week is not decided by today’s status');
+ S.data.nfl={...S.data.nfl,week:S.data.week+1};assert.ok(value(id,league)>0,'on a week other than the NFL’s current one, today’s status decides nothing');S.data.nfl={...S.data.nfl,week:S.data.week};
  S.filter='all';const {before}=await draw('watch');assert.ok(before.includes('class="injury injury-out">Out<'),'his card carries the red badge');
 });

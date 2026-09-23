@@ -14,9 +14,9 @@ export const isTradeView=()=>S.view==='trades'||S.view==='trade-builder';
 export function toast(t){$('#toast').textContent=t;clearTimeout(toast.t);toast.t=setTimeout(()=>$('#toast').textContent='',4500)}
 export const league=()=>S.data.leagues.find(l=>l.league_id===S.leagueId&&l.enabled)||S.data.leagues.find(l=>l.enabled);
 export const pname=id=>S.data.players[id]?.full_name||[S.data.players[id]?.first_name,S.data.players[id]?.last_name].filter(Boolean).join(' ')||id||'Empty slot';
-// Before his game this week, a player ruled out projects the zero he will score, not whatever Sleeper still lists
-// for him. Once it has kicked off, the pregame projection is history and is shown as it was.
-export function value(id,l=league(),w=S.data.week){const p=S.data.players[id];if(w===S.data.week&&ruledOut(p)&&(S.data.games?.[p.team]?.state??'pre')==='pre')return 0;return projected(S.data.projections[w]?.[id]?.stats,l?.scoring_settings)}
+// Before his game in the current NFL week, a player ruled out projects the zero he will score, not whatever Sleeper
+// still lists for him. Once it has kicked off the pregame projection is history, and other weeks are not his status's to decide.
+export function value(id,l=league(),w=S.data.week){const p=S.data.players[id];if(w===(S.data.nfl?.week??S.data.week)&&ruledOut(p)&&(S.data.games?.[p.team]?.state??'pre')==='pre')return 0;return projected(S.data.projections[w]?.[id]?.stats,l?.scoring_settings)}
 export const scoring=l=>l.scoring_settings?.rec===1?'PPR':l.scoring_settings?.rec===.5?'HALF PPR':l.scoring_settings?.rec===0||!l.scoring_settings?.rec?'STANDARD':'CUSTOM';
 export function leagueOptions(selected=S.leagueId,all=false){return (all?'<option value="all">All leagues</option>':'')+S.data.leagues.filter(l=>l.enabled).map(l=>`<option value="${esc(l.league_id)}" ${selected===l.league_id?'selected':''}>${esc(l.name)}</option>`).join('')}
 export function empty(title,body=''){return `<div class="empty"><h3>${esc(title)}</h3>${body?`<p>${esc(body)}</p>`:''}</div>`}

@@ -70,6 +70,8 @@ test('a starter ruled out adds nothing to the live projection',()=>{
  const out={...players,qb1:{...players.qb1,injury_status:'Out'}};
  const live=liveWeek({league,players:out,projections,games,spread:20});
  assert.equal(live.teams[1].mean,0);assert.equal(live.teams[2].mean,20);assert.ok(live.games[0].chance<.5,'the team starting him is behind');
+ const midGame=liveWeek({league,players:out,projections,games:{T1:{state:'in',period:3,clock:'7:30'},T2:{state:'pre'}},spread:20});
+ assert.equal(midGame.teams[1].mean,7.5,'hurt after kickoff, the rest of his projection still counts as the game plays out');
 });
 
 test('the live week adds projections only for football still to be played',()=>{

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {optimize,projected,aggregateWatch,availableIds,tradeCandidateIds,createScoreTracker,waiverDropReason,waiverMove} from '../dist/engine.js';
+import {optimize,projected,aggregateWatch,availableIds,tradeCandidateIds,createScoreTracker,waiverDropReason,waiverMove,ruledOut,UNAVAILABLE} from '../dist/engine.js';
 const p={q:{position:'QB'},a:{position:'RB'},b:{position:'RB'},w:{position:'WR'},t:{position:'TE'},x:{position:'WR'}};
 const scores={q:20,a:15,b:12,w:19,t:8,x:16};
 test('optimizer assigns unique players to legal flex slots',()=>{const r=optimize(Object.keys(p),['QB','RB','WR','FLEX'],p,id=>scores[id]);assert.equal(r.total,70);assert.equal(new Set(r.ids).size,4);assert.equal(r.ids[0],'q');assert.equal(r.ids[1],'a');assert(r.complete)});
@@ -164,4 +164,10 @@ test('an 18-starter IDP lineup is set in full, and a tie keeps the player alread
  assert.equal(optimize(ids,slots,players,id=>even[id],{},current).ids[slots.indexOf('DL')+1],'DL2','an equal backup already starting stays put');
  const locked=optimize(ids,slots,players,id=>points[id],{0:'QB1'});
  assert.equal(locked.ids[0],'QB1');assert.ok(locked.complete);assert.equal(locked.total,Math.round((best.total-points.QB0+points.QB1)*100)/100);
+});
+
+test('one list of statuses: ruled out is Out, IR, PUP and suspended; unavailable adds Doubtful',()=>{
+ for(const status of ['Out','IR','PUP','Sus','Suspended'])assert.ok(ruledOut({injury_status:status})&&UNAVAILABLE.includes(status),status);
+ for(const status of ['Doubtful'])assert.ok(!ruledOut({injury_status:status})&&UNAVAILABLE.includes(status),status);
+ for(const status of ['Questionable',undefined])assert.ok(!ruledOut({injury_status:status})&&!UNAVAILABLE.includes(status),String(status));
 });

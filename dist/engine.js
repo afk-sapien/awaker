@@ -12,6 +12,8 @@ export const STAT_OVERLAPS={fgm_50p:['fgm_60p']};
 // Ruled out for the week: whatever he was projected, he will not play. Doubtful and Questionable players still might.
 export const RULED_OUT=['Out','IR','PUP','Sus','Suspended'];
 export const ruledOut=player=>RULED_OUT.includes(player?.injury_status);
+// Never started, picked up or traded for: ruled out, or doubtful enough not to count on. Every list of statuses is this one.
+export const UNAVAILABLE=[...RULED_OUT,'Doubtful'];
 export function projected(stats,scoring){if(!stats)return null;let found=false,sum=0;for(const [key,mult]of Object.entries(scoring||{})){let value=stats[key];if(!Number.isFinite(value))for(const alt of STAT_FALLBACKS[key]||[])if(Number.isFinite(stats[alt])){value=Math.max(0,(STAT_OVERLAPS[alt]||[]).reduce((v,k)=>Number.isFinite(scoring[k])&&Number.isFinite(stats[k])?v-stats[k]:v,stats[alt]));break}if(Number.isFinite(value)&&Number.isFinite(mult)){sum+=value*mult;found=true;}}return found?Math.round(sum*100)/100:null;}
 // Rectangular assignment (Hungarian algorithm): cost is rows x cols with rows <= cols, lowest total
 // wins, and the result is the column each row takes.
@@ -59,7 +61,7 @@ export function waiverDropReason(id,{players,value,protectedIds=[],starterIds=[]
  if(starterIds.includes(id))return 'Current starter';
  if(!players[id])return 'Player information unavailable';
  if([players[id].position,...(players[id].fantasy_positions||[])].some(p=>excludedDropPositions.includes(p)))return 'Drop position excluded';
- if(['Out','IR','Suspended','PUP','Doubtful'].includes(players[id].injury_status))return 'Unavailable this week';
+ if(UNAVAILABLE.includes(players[id].injury_status))return 'Unavailable this week';
  const projection=value(id);
  if(!Number.isFinite(projection)||projection<=0)return 'No usable weekly projection';
  return null;
