@@ -55,3 +55,8 @@ test('score-only refreshes preserve season models; roster, scoring, reserve, slo
  const live=copy();live.syncedAt=999;live.rosters[0].starters=['b'];live.rosters[0].points=12;live.matchups=[{points:99}];assert.equal(rosterKey(live),key);
  for(const mutate of [l=>l.league_id='b',l=>l.mine.roster_id=2,l=>l.rosters[0].players.push('c'),l=>l.rosters[0].reserve.push('a'),l=>l.rosters[0].taxi.push('b'),l=>l.scoring_settings.rec=.5,l=>l.roster_positions.push('FLEX')]){const changed=copy();mutate(changed);assert.notEqual(rosterKey(changed),key)}
 });
+test('a three-league session stays in memory: two hundred entries are all still there',async()=>{
+ const cache=createResourceCache();let calls=0;
+ for(let i=0;i<200;i++)await cache.get(`k${i}`,async()=>++calls,{persist:false});
+ assert.equal(await cache.get('k0',()=>assert.fail('evicted'),{persist:false}),1);
+});

@@ -197,3 +197,19 @@ test('a matchup opens into both lineups in slot order, with the bench and where 
  assert.deepEqual(theirs.starters.map(p=>[p.id,p.state,p.heading]),[['q2','pre',21],['r2','bye',0],[null,'empty',0]]);
  assert.equal(matchupDetail({league,players:all,projections,games,rosterIds:[1,9]}),null);
 });
+test('a head-to-head tie still counts half a win toward luck in a median league',()=>{
+ const season=seasonSoFar({league:four({league_average_match:1}),players,weeks:[week(1,[100,100,120,80])]});
+ const a=season.rows[1];
+ assert.deepEqual([a.wins,a.losses,a.ties],[0,0,2],'tied the matchup and landed on the median');
+ assert.equal(a.luck,0,'half a win head to head, and the same scores earn half a win against the league');
+});
+test('the depth chart leaves out injured reserve, and a matchup labels the taxi squad as taxi',()=>{
+ const value=id=>({q1:20,q2:30})[id],chart=depthChart({league:{roster_positions:['QB'],rosters:[{roster_id:1,players:['q1','q2'],reserve:['q2']}]},players:{q1:P('QB'),q2:P('QB')},value});
+ assert.equal(chart.cells[1][0].id,'q1','the injured starter cannot play, so he is not the depth at quarterback');
+ const all={q:P('QB','A'),b1:P('RB','C'),ir:P('WR','D'),tx:P('RB','E')};
+ const league={scoring_settings:{pts:1},roster_positions:['QB','BN'],rosters:[{roster_id:1,players:['q','b1','ir','tx'],reserve:['ir'],taxi:['tx']},{roster_id:2,players:[]}],
+  matchups:[{roster_id:1,matchup_id:1,points:0,starters:['q'],players:['q','b1','ir','tx'],players_points:{b1:4,tx:9}},{roster_id:2,matchup_id:1,points:0,starters:['0'],players:[]}]};
+ const {sides:[mine]}=matchupDetail({league,players:all,projections:{},games:{},rosterIds:[1,2]});
+ assert.deepEqual(mine.bench.map(p=>[p.id,p.label]),[['b1','BN'],['tx','TAXI'],['ir','IR']]);
+ assert.equal(mine.benchPoints,4,'taxi points are not bench points');
+});

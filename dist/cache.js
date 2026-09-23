@@ -1,5 +1,7 @@
 // Successful responses only. In-flight work is shared, including disk reads.
-export function createResourceCache({read=async()=>null,write=async()=>{},now=()=>Date.now(),maxEntries=96}={}){
+// The season outlook alone holds three entries for every week left and each league adds its own, so a
+// session with three leagues outgrew a hundred and evicted what the next refresh needed.
+export function createResourceCache({read=async()=>null,write=async()=>{},now=()=>Date.now(),maxEntries=256}={}){
  const memory=new Map(),pending=new Map();
  const remember=(key,entry)=>{memory.delete(key);memory.set(key,entry);while(memory.size>maxEntries)memory.delete(memory.keys().next().value)};
  const fresh=(entry,ttl)=>entry&&now()>=entry.at&&now()-entry.at<ttl;

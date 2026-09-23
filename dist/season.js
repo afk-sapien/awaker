@@ -82,7 +82,10 @@ export function weekReview({league,players,week,matchups=[],projections={}}){
   // unfilled slot is a '0' holding its place. Keep it aligned for anything that reasons about slots,
   // and flattened only for sums and membership.
   const lineup=(m.starters||[]).map(id=>id&&id!=='0'?id:null);
-  const starters=lineup.filter(Boolean),owned=[...new Set([...(m.players||[]),...starters])].filter(id=>players[id]);
+  // Injured reserve and the taxi squad could never have started, so they are no bench alternative.
+  // Their membership is the roster as it stands now, not as it stood that week, which is the best on hand.
+  const parked=new Set([...(roster.reserve||[]),...(roster.taxi||[])]);
+  const starters=lineup.filter(Boolean),owned=[...new Set([...(m.players||[]).filter(id=>!parked.has(id)),...starters])].filter(id=>players[id]);
   const got=id=>{const v=Number(m.players_points?.[id]);return Number.isFinite(v)?v:null};
   const sum=ids=>round(ids.reduce((t,id)=>t+(got(id)||0),0)),started=sum(starters);
   // Two counterfactuals: the most this roster could have scored, and what the lineup the projections
@@ -137,10 +140,12 @@ export const moveLabel=({adds,net,bid,complete=true})=>{
 // that were already on the board when the move cleared belong to the week after. A week's verdict,
 // never a season's. games is that week's kickoff times by NFL team; without it nothing is reweighted.
 export function moves({league,players,week,transactions=[],matchups=[],stats={},games=null,next=null}){
- const scoring=league.scoring_settings;
+ const scoring=league.scoring_settings,schedule=!!games&&Object.keys(games).length>0;
  const kickoff=id=>{const at=Date.parse(games?.[players[id]?.team||id]?.start??'');return Number.isFinite(at)?at:null};
- // No kickoff for him, or no timestamp on the move, means no reason to move him off this week.
- const ahead=(id,at)=>{const k=kickoff(id);return k===null||at===null?true:at<k};
+ // A team missing from a loaded schedule had a bye, so nothing he could do that week was left: the
+ // move is for the next one. Otherwise no kickoff for him, or no timestamp on the move, means no
+ // reason to move him off this week.
+ const ahead=(id,at)=>{if(at===null)return true;const team=players[id]?.team;if(schedule&&team&&!games[team])return false;const k=kickoff(id);return k===null?true:at<k};
  const view=(weekNumber,rosters,lines,complete)=>{
   const points=new Map(),started=new Set();
   for(const m of rosters||[]){

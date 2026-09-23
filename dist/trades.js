@@ -1,4 +1,4 @@
-import {activeSlots,eligible,playableIds,availableIds,projected} from './engine.js';
+import {activeSlots,eligible,playableIds,availableIds,projected,assign} from './engine.js';
 
 // Rectangular assignment (Hungarian algorithm): maximize a legal lineup without
 // enumerating every slot subset for every trade and every remaining week.
@@ -7,28 +7,22 @@ export function seasonLineup(ids,slots,players,value){
  const n=slots.length,m=roster.length+n,blocked=1e6;
  if(!n)return {total:0,ids:[],complete:true};
  const cost=slots.map(slot=>Array.from({length:m},(_,j)=>j>=roster.length?blocked/2:eligible(players[roster[j]],slot)?-value(roster[j]):blocked));
- const u=Array(n+1).fill(0),v=Array(m+1).fill(0),p=Array(m+1).fill(0),way=Array(m+1).fill(0);
- for(let i=1;i<=n;i++){
-  p[0]=i;let j0=0;const min=Array(m+1).fill(Infinity),used=Array(m+1).fill(false);
-  do{used[j0]=true;const i0=p[j0];let delta=Infinity,j1=0;
-   for(let j=1;j<=m;j++)if(!used[j]){const cur=cost[i0-1][j-1]-u[i0]-v[j];if(cur<min[j]){min[j]=cur;way[j]=j0}if(min[j]<delta){delta=min[j];j1=j}}
-   for(let j=0;j<=m;j++)if(used[j]){u[p[j]]+=delta;v[j]-=delta}else min[j]-=delta;
-   j0=j1;
-  }while(p[j0]!==0);
-  do{const j1=way[j0];p[j0]=p[j1];j0=j1}while(j0);
- }
  const picks=Array(n).fill(null);
- for(let j=1;j<=m;j++)if(p[j]&&j<=roster.length&&cost[p[j]-1][j-1]<blocked/2)picks[p[j]-1]=roster[j-1];
+ assign(cost).forEach((j,i)=>{if(j>=0&&j<roster.length&&cost[i][j]<blocked/2)picks[i]=roster[j]});
  return {ids:picks,total:picks.reduce((sum,id)=>sum+(id?value(id):0),0),complete:picks.every(Boolean)};
 }
 
+const OUT=['Out','IR','Doubtful','PUP','Sus','Suspended'];
 export function futurePoints(id,week,players,scoring){
  if(!week?.projections||!week?.games)return null;
  const player=players[id],row=week.projections[id],team=row?.team||player?.team;
  if(!team)return null;
  // A bye is zero only when a successfully loaded schedule confirms no team game.
  if(!week.games[team])return 0;
- return projected(row?.stats,scoring);
+ // Sleeper often drops the projection of a player ruled out, so for him a missing week is the zero he will score.
+ // Anyone else missing a week is unknown, and stays unknown.
+ const points=projected(row?.stats,scoring);
+ return points===null&&OUT.includes(player?.injury_status)?0:points;
 }
 
 export function buildSeasonModel({league,players,outlook}){

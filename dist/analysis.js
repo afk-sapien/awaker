@@ -147,6 +147,9 @@ export async function acquirePlayer(data,league,model,playerId,prefs={},{limit=1
  const held=r=>[...(r.players||[]),...(r.reserve||[]),...(r.taxi||[])];
  const owner=(league.rosters||[]).find(r=>r.roster_id!==league.mine.roster_id&&held(r).includes(playerId));
  if(!owner)throw Error('He is not on another roster in this league.');
+ // Trades are valued on the rosters that can start, so a parked player has nothing to compare.
+ if((owner.reserve||[]).includes(playerId))throw Error('He is on their injured reserve, so there is no trade to value until he is activated.');
+ if((owner.taxi||[]).includes(playerId))throw Error('He is on their taxi squad, so there is no trade to value until he is promoted.');
  const outgoing=tradeCandidateIds(playableIds(league.mine),data.players,excluded.give)
   .filter(id=>Number.isFinite(model.totals[id])&&model.totals[id]>0&&!unavailable.includes(data.players[id]?.injury_status));
  const offers=[];let lift=null,best=null,checked=0;
