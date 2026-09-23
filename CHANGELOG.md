@@ -1,5 +1,38 @@
 # Changelog
 
+## Unreleased
+
+- Leagues with more than 15 starting slots, such as IDP leagues, work everywhere. The lineup
+  optimizer used to refuse them, which took week in review, start/sit and waivers down with it.
+- Week in review grades a Tuesday claim of a player coming off his bye on the week he could
+  actually play, rather than calling it an unused bid. Injured reserve and taxi players are no
+  longer counted as bench points you could have started.
+- A player who is out for one week no longer drops out of every trade and waiver calculation for
+  the rest of the season. That week counts as zero; a healthy player missing a projection is still
+  treated as unknown.
+- A 60+ yard field goal is no longer counted twice in finished weeks, head-to-head ties count
+  toward luck in median leagues, and taxi players are labelled as taxi rather than IR.
+- A week's stats are only kept for a day once the week is settled, so a look on Sunday night no
+  longer hides Monday night's game until Tuesday. Sleeper requests are retried briefly on 429 and
+  server errors.
+- Going after a player who is on his owner's IR or taxi squad says so, instead of returning nothing.
+- The dashboard no longer loads fonts from Google; they ship with the app. Pages are compressed and
+  revalidated instead of downloaded in full each time, and each script loads once.
+- Keyboard focus and open panels survive the 45-second refresh, league cards open with Enter or
+  Space, a broken saved preference or a failed script download no longer leaves the app stuck, and
+  one error during a refresh no longer stops every refresh after it.
+- **Security:** a blank `AWAKER_ADMIN_TOKEN=` no longer switches off a login still configured with
+  the older `SUNDAY_ADMIN_TOKEN`, and `.env.example` leaves both token lines commented out.
+  Signed-in owners and agents have their own request allowance, so anonymous traffic behind a
+  reverse proxy cannot lock them out.
+- **Changed:** an ntfy server over plain HTTP, including one on loopback, must now be named in
+  `NTFY_URL` in the server environment. Any HTTPS server can still be chosen in the browser. If you
+  saved an `http://` ntfy server in the browser, set `NTFY_URL` to it or deliveries will stop.
+- `awaker --port` no longer overrides an `AWAKER_PUBLIC_URL` you have set, and `awaker mcp --port`
+  now points the agent at that port without handing it the owner token.
+- Unexpected server errors are logged, a push is no longer sent twice when settings are saved while
+  it is in flight, and the database drops data from past seasons and old versions at startup.
+
 ## 0.5.0
 
 - Season review now opens with the week in review: any finished week, every team in the league. Your
