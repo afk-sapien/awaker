@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.0
 
 - Injury designations are colored everywhere a player appears: red when he is ruled out (Out, IR,
   PUP, suspended), orange when doubtful, yellow when questionable. The word is still there, so color
