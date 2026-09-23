@@ -6,6 +6,13 @@ import {teamName} from '../dist/league.js';
 import {waiverWeeks} from '../dist/waivers.js';
 import {defaults,validateSettings,bad} from './settings.js';
 const name=(data,id)=>data.players[id]?.full_name||id;
+// The engines explain a refused trade or league with a plain Error. A TypeError and its kin are
+// bugs, so callers get a general message and the detail goes to the server log.
+export function reason(e){
+ if(e?.status||e?.constructor===Error)return e.message;
+ console.error('Analysis failed:',e?.stack||e);
+ return 'Analysis failed unexpectedly for this request.';
+}
 export function createService({store,provider,now=Date.now,username:pinned=''}){
  let pending=null,revision=0,snapshot=null,analysisCache=new Map();
  // A configured account is authoritative, so an open service cannot be repointed
@@ -35,14 +42,14 @@ export function createService({store,provider,now=Date.now,username:pinned=''}){
  async function trades({leagueId,limit=10,positions}={},options={}){
   const d=await load({outlook:true,...options}),ls=leagues(d,leagueId),pref=settings().preferences,ideas=[],warnings=[];
   const cachedKey=JSON.stringify([d.updatedAt,leagueId,limit,positions,pref]);if(analysisCache.has(cachedKey)){const cached=analysisCache.get(cachedKey);return envelope(d,{ideas:cached.ideas,filters:cached.filters,limitations:cached.limitations},cached.warnings)}
-  for(const l of ls){try{const result=await findTradeIdeas(d,l,model(d,l),pref,{limit:positions?10000:limit});if(result.truncated)warnings.push(`${l.name}: search capped at 10000 pairs`);ideas.push(...result.ideas.filter(r=>!positions||r.get.some(id=>(d.players[id]?.fantasy_positions||[d.players[id]?.position]).some(p=>positions.includes(p)))).map(r=>({...r,type:'trade',leagueId:l.league_id,league:l.name,gain:tradeGains(r).a/r.weeks,send:r.give.map(id=>name(d,id)),receive:r.get.map(id=>name(d,id)),drop:(r.dropA||[]).map(id=>name(d,id))})))}catch(e){warnings.push(`${l.name}: ${e.message}`)}}
+  for(const l of ls){try{const result=await findTradeIdeas(d,l,model(d,l),pref,{limit:positions?10000:limit});if(result.truncated)warnings.push(`${l.name}: search capped at 10000 pairs`);ideas.push(...result.ideas.filter(r=>!positions||r.get.some(id=>(d.players[id]?.fantasy_positions||[d.players[id]?.position]).some(p=>positions.includes(p)))).map(r=>({...r,type:'trade',leagueId:l.league_id,league:l.name,gain:tradeGains(r).a/r.weeks,send:r.give.map(id=>name(d,id)),receive:r.get.map(id=>name(d,id)),drop:(r.dropA||[]).map(id=>name(d,id))})))}catch(e){warnings.push(`${l.name}: ${reason(e)}`)}}
   ideas.sort((a,b)=>compareTradeIdeas(a,b,pref.tradeOwnBias??.15));
   const result=envelope(d,{ideas:ideas.slice(0,limit),filters:pref,limitations:['Expected-point estimates; no acceptance probabilities, draft picks, or dynasty valuation.']},warnings);
   if(analysisCache.size>30)analysisCache.clear();analysisCache.set(cachedKey,result);return result;
  }
  async function evaluate({leagueId,partnerId,give,get}){
   const d=await load({outlook:true}),l=leagues(d,leagueId)[0],p=l.rosters.find(r=>String(r.roster_id)===String(partnerId)&&r.roster_id!==l.mine.roster_id);if(!p)throw bad('Unknown trade partner.');
-  try{const season=model(d,l),pref=settings().preferences,result=season.assessWaivers(season.evaluate(l.mine,p,give,get,{autoDrop:true,protectedA:pref.waiverProtected?.[`${d.user.user_id}:${l.league_id}`]||[]}),l.mine,p,{protectedA:pref.waiverProtected?.[`${d.user.user_id}:${l.league_id}`]||[]});return envelope(d,{result,filters:pref,realismWarnings:realismReasons(result,{minGain:pref.tradeMinGain??0,maxGap:pref.tradeMaxGap??1})},result.complete?[]:['Incomplete starting-lineup projections.'])}catch(e){throw bad(e.message,e.status||422)}
+  try{const season=model(d,l),pref=settings().preferences,result=season.assessWaivers(season.evaluate(l.mine,p,give,get,{autoDrop:true,protectedA:pref.waiverProtected?.[`${d.user.user_id}:${l.league_id}`]||[]}),l.mine,p,{protectedA:pref.waiverProtected?.[`${d.user.user_id}:${l.league_id}`]||[]});return envelope(d,{result,filters:pref,realismWarnings:realismReasons(result,{minGain:pref.tradeMinGain??0,maxGap:pref.tradeMaxGap??1})},result.complete?[]:['Incomplete starting-lineup projections.'])}catch(e){throw bad(reason(e),e.status||(e?.constructor===Error?422:500))}
  }
  // horizon 'current' ranks pickups for this week. 'next' and 'season' hold one pickup and drop across
  // future weeks, as the waiver view does, and report the gain per week so one threshold fits all three.
@@ -55,7 +62,7 @@ export function createService({store,provider,now=Date.now,username:pinned=''}){
    const complete=best.complete,gain=Number.isFinite(best.total)?best.total-ids.reduce((sum,id)=>sum+(value(id)||0),0):null;
    if(!complete)warnings.push(`${l.name}: a starting slot has nobody available to fill it`);
    results.push({leagueId:l.league_id,league:l.name,lineup:{...best,current:ids,gain,complete},waivers:(future?futureWaiverRows(d,l,{...d.outlook,weeks},prefs):waiverRows(d,l,prefs)).map(r=>({...r,perWeek:r.gain===null?null:r.gain/weeks.length,benchPerWeek:r.status==='bench'?r.benchGain/weeks.length:null,name:name(d,r.id),dropName:r.drop?name(d,r.drop):null}))});
-  }catch(e){warnings.push(`${l.name}: ${e.message}`)}}
+  }catch(e){warnings.push(`${l.name}: ${reason(e)}`)}}
   return envelope(d,{opportunities:results,horizon,weeks},warnings);
  }
  // A finished week, judged twice: against the most the roster could have scored, and against the
@@ -86,7 +93,7 @@ export function createService({store,provider,now=Date.now,username:pinned=''}){
     recaps.push({leagueId:l.league_id,league:l.name,rosterId:l.mine.roster_id,team:team(l.mine.roster_id),
      summary:review.summary,rows,moves:{...made,rows:moveRows,summary:{...made.summary,best}},
      names:Object.fromEntries([...ids].map(id=>[id,name(d,id)]))});
-   }catch(e){warnings.push(`${l.name}: ${e.message}`)}
+   }catch(e){warnings.push(`${l.name}: ${reason(e)}`)}
   }
   return envelope(d,{recapWeek:target,recaps,limitations:['Graded on one week of results; a stash can look bad and age well.',
    'A move that cleared after the week’s last kickoff is judged on the week it could first affect, and stays ungraded until those games are played.']},warnings);

@@ -1,8 +1,10 @@
 import {existsSync} from 'node:fs'
 import {resolve} from 'node:path'
 
+// An empty value counts as unset, so a blank AWAKER_ADMIN_TOKEN= copied from .env.example
+// cannot silently switch off a login that a legacy SUNDAY_ADMIN_TOKEN still configures.
 export function setting(env, name) {
-  return env[`AWAKER_${name}`] ?? env[`SUNDAY_${name}`]
+  return env[`AWAKER_${name}`] || env[`SUNDAY_${name}`] || undefined
 }
 
 export function publicOrigin(value) {

@@ -1,6 +1,6 @@
 # Releasing Awaker
 
-The package version is currently 0.5.0. Container publishing is configured, but creating a tag, publishing a GitHub release, changing visibility, and publishing to PyPI remain separate actions.
+The package version is currently 0.6.0. Container publishing is configured, but creating a tag, publishing a GitHub release, changing visibility, and publishing to PyPI remain separate actions.
 
 ## Try the container workflow
 
@@ -13,7 +13,7 @@ This makes a tested preview available without creating a release or moving `late
 
 ## Publish a version
 
-1. Update `package.json`, the MCP server version in `server/mcp.js`, and `CHANGELOG.md`. The Python version is read from `package.json`.
+1. Update `package.json` and `CHANGELOG.md`. The Python package and the MCP server both read their version from `package.json`, and a release test fails if the newest changelog heading disagrees.
 2. Push the release commit to the default branch and confirm CI passes. Test the live-provider flows you intend to claim, including any owner-controlled ntfy delivery.
 3. Stop and back up an existing service. Confirm an upgrade preserves its settings, reports, and database volume.
 4. Create a tag matching the package version, such as `v0.2.0`, on the tested commit. For a preview, use a version such as `0.3.0-beta.1` and tag `v0.3.0-beta.1`.

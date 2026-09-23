@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {optimize,projected,aggregateWatch,availableIds,tradeResult,tradeCandidateIds,createScoreTracker,waiverDropReason,waiverMove} from '../dist/engine.js';
+import {optimize,projected,aggregateWatch,availableIds,tradeCandidateIds,createScoreTracker,waiverDropReason,waiverMove} from '../dist/engine.js';
 const p={q:{position:'QB'},a:{position:'RB'},b:{position:'RB'},w:{position:'WR'},t:{position:'TE'},x:{position:'WR'}};
 const scores={q:20,a:15,b:12,w:19,t:8,x:16};
 test('optimizer assigns unique players to legal flex slots',()=>{const r=optimize(Object.keys(p),['QB','RB','WR','FLEX'],p,id=>scores[id]);assert.equal(r.total,70);assert.equal(new Set(r.ids).size,4);assert.equal(r.ids[0],'q');assert.equal(r.ids[1],'a');assert(r.complete)});
@@ -9,7 +9,6 @@ test('missing projection is not represented as zero',()=>{assert.equal(projected
 test('same player scores differently with each league scoring system',()=>{assert.equal(projected({rec:6,rec_yd:100},{rec:1,rec_yd:.1}),16);assert.equal(projected({rec:6,rec_yd:100},{rec:.5,rec_yd:.1}),13)});
 test('watchroom deduplicates ownership and opposing exposure across leagues',()=>{const players={w:{position:'WR',team:'BUF'}};const leagues=[1,2].map(i=>({league_id:String(i),name:'League '+i,enabled:true,mine:{roster_id:1,players:i===1?['w']:[],starters:i===1?['w']:[]},rosters:[{roster_id:2,players:i===2?['w']:[],starters:i===2?['w']:[]}],matchups:[{roster_id:1,matchup_id:1,players:i===1?['w']:[],starters:i===1?['w']:[],players_points:{w:16}},{roster_id:2,matchup_id:1,players:i===2?['w']:[],starters:i===2?['w']:[],players_points:{w:13}}]}));const a=aggregateWatch(leagues,players,{});assert.equal(a.length,1);assert.deepEqual(a[0].appearances.map(a=>a.points),[16,13]);assert.deepEqual(a[0].appearances.map(a=>a.side),['mine','opponent'])});
 test('waivers exclude active, reserve, and taxi rostered players',()=>{assert.deepEqual(availableIds({rosters:[{players:['q'],reserve:['a'],taxi:['b']}]},p),['w','t','x'])});
-test('trade values marginal starters rather than summed player points',()=>{const l={roster_positions:['RB','WR','FLEX','BN']};const r=tradeResult({league:l,roster:{players:['a','w','x','t']},partner:{players:['b','q']},give:['t'],get:['b'],players:p,value:id=>scores[id]});assert.equal(r.gainA,0);assert.equal(r.complete,false)});
 test('negative projections still fill mandatory legal lineup positions',()=>{const r=optimize(['q'],['QB'],p,()=>-2);assert.equal(r.total,-2);assert(r.complete)});
 
 test('start/sit preserves existing RB1/RB2 and WR1/WR2 order',()=>{
@@ -140,4 +139,29 @@ test('a coarse 50-plus projection bucket still scores where a league splits 50-5
  // A finished week itemises the real buckets, so the fallback must never double count.
  assert.equal(projected({fgm_50_59:1,fgm_60p:1,fgm_50p:2,xpm:3},scoring),14);
  assert.equal(projected({fgm_50p:1},{fgm_40_49:4}),null,'it fills only the bucket it belongs to');
+});
+test('a 60-yard make with no 50-59 key on the line scores once, as a 60-yard make',()=>{
+ const scoring={fgm_50_59:5,fgm_60p:6};
+ assert.equal(projected({fgm_60p:1,fgm_50p:1},scoring),6);
+ assert.equal(projected({fgm_60p:1,fgm_50p:3},scoring),16,'the other two long makes are 50-59s');
+ assert.equal(projected({fgm_60p:.1,fgm_50p:.4},scoring),2.1,'a projection that splits out 60-plus is not double counted either');
+ assert.equal(projected({fgm_60p:1,fgm_50p:1},{fgm_50_59:5}),5,'a league without a 60-plus category keeps every long make in 50-59');
+});
+test('an 18-starter IDP lineup is set in full, and a tie keeps the player already in the slot',()=>{
+ const slots=['QB','RB','RB','WR','WR','WR','TE','FLEX','FLEX','K','DEF','DL','DL','LB','LB','DB','DB','IDP_FLEX'];
+ const players={},points={};let n=0;
+ for(const [pos,count]of Object.entries({QB:2,RB:4,WR:5,TE:2,K:1,DEF:1,DL:3,LB:3,DB:3}))for(let i=0;i<count;i++){const id=`${pos}${i}`;players[id]={position:pos};points[id]=20-i*3+(n++%3)}
+ const ids=Object.keys(players),best=optimize(ids,slots,players,id=>points[id]);
+ assert.ok(best.complete);assert.equal(new Set(best.ids).size,18);
+ assert.ok(best.ids.every((id,i)=>players[id].position===slots[i]||['FLEX','IDP_FLEX'].includes(slots[i])));
+ // The best 18 by position, worked out by hand: every position's top players, then the flex picks.
+ const top=(pos,k)=>ids.filter(id=>players[id].position===pos).map(id=>points[id]).sort((a,b)=>b-a).slice(0,k);
+ const flex=[...top('RB',4).slice(2),...top('WR',5).slice(3),...top('TE',2).slice(1)].sort((a,b)=>b-a).slice(0,2),idp=[...top('DL',3).slice(2),...top('LB',3).slice(2),...top('DB',3).slice(2)].sort((a,b)=>b-a)[0];
+ const hand=[...top('QB',1),...top('RB',2),...top('WR',3),...top('TE',1),...top('K',1),...top('DEF',1),...top('DL',2),...top('LB',2),...top('DB',2),...flex,idp].reduce((a,b)=>a+b,0);
+ assert.equal(best.total,Math.round(hand*100)/100);
+ const even={...points,DL2:points.DL1};
+ const current=[...best.ids];current[slots.indexOf('DL')+1]='DL2';
+ assert.equal(optimize(ids,slots,players,id=>even[id],{},current).ids[slots.indexOf('DL')+1],'DL2','an equal backup already starting stays put');
+ const locked=optimize(ids,slots,players,id=>points[id],{0:'QB1'});
+ assert.equal(locked.ids[0],'QB1');assert.ok(locked.complete);assert.equal(locked.total,Math.round((best.total-points.QB0+points.QB1)*100)/100);
 });

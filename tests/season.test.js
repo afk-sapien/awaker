@@ -163,3 +163,18 @@ test('without kickoff times every move stays on its own week',()=>{
   transactions:[claim(sunday+86400000,9)]});
  assert.deepEqual([rows[0].forWeek,rows[0].played,summary.pending],[4,true,0]);
 });
+test('a Tuesday claim on a player whose team had the week off is graded on the week he can play',()=>{
+ // Buffalo is missing from the schedule: a bye. The claim cleared after the week, so it is next week's.
+ const players={...timedPlayers,rbB:P('RB','BUF')},next={week:5,matchups:[{roster_id:1,matchup_id:1,starters:['rbB'],players:['rbB'],players_points:{rbB:25},points:25}],stats:{},complete:true};
+ const {rows}=moves({league:recapLeague,players,week:4,matchups:thisWeek,stats:{},games:kickoffs,next,transactions:[claim(monday+86400000,30,{rbB:1})]});
+ assert.deepEqual([rows[0].forWeek,rows[0].net,rows[0].label],[5,25,'paid off']);
+ const blind=moves({league:recapLeague,players,week:4,matchups:thisWeek,stats:{},games:null,next,transactions:[claim(monday+86400000,30,{rbB:1})]});
+ assert.equal(blind.rows[0].forWeek,4,'without a schedule there is no telling a bye from a missing kickoff');
+});
+test('injured reserve and the taxi squad are no bench alternative in the week in review',()=>{
+ const league={...recapLeague,rosters:[{roster_id:1,reserve:['rb2']},{roster_id:2,taxi:['rb3']}]};
+ const matchups=[{...recapWeek[0]},{...recapWeek[1],starters:['wr2'],players:['rb3','wr2'],points:8}];
+ const {rows}=weekReview({league,players:recapPlayers,week:4,matchups,projections:project({rb1:12,wr1:9,rb2:4,rb3:10,wr2:7})});
+ assert.deepEqual([rows[0].best,rows[0].left,rows[0].decisions.length],[11,0,0],'rb2 scored 20 from injured reserve, where he could not have started');
+ assert.deepEqual([rows[1].best,rows[1].complete],[8,false],'a taxi player does not fill the empty slot');
+});

@@ -1,11 +1,11 @@
 import {spawn} from 'node:child_process';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,rmSync} from 'node:fs';
+import {mkdtempSync,rmSync,statSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {openStore} from '../server/store.js';
-import {createService} from '../server/service.js';
+import {createService,reason} from '../server/service.js';
 import {validateSettings,defaults} from '../server/settings.js';
 import {createWorker,occurrence,nextRun,quiet} from '../server/scheduler.js';
 import {createNtfy,validateNtfy} from '../server/ntfy.js';
@@ -136,7 +136,7 @@ test('ntfy keeps token in authorization, marks provider acceptance, and rejects 
  let sent;const store=openStore(':memory:'),fetcher=async(...args)=>{sent=args;return {ok:true}};
  const ntfy=createNtfy({store,env:{NTFY_URL:'https://ntfy.example',NTFY_TOPIC:'private',NTFY_TOKEN:'secret'},fetcher});
  assert.deepEqual(await ntfy.publish({type:'alert',title:'Trade',message:'Useful',url:'https://sunday.example/?view=trades'}),{accepted:true});assert.equal(sent[1].headers.Authorization,'Bearer secret');assert.equal(JSON.parse(sent[1].body).priority,4);assert.equal(sent[1].body.includes('secret'),false);
- assert.throws(()=>createNtfy({store,env:{NTFY_URL:'http://ntfy.example',NTFY_TOPIC:'x',NTFY_TOKEN:'secret'}}),/HTTPS/);assert.equal(createNtfy({store,env:{}}).configured(),false);
+ assert.throws(()=>createNtfy({store,env:{}}).save({url:'http://ntfy.example',topic:'x',token:'secret'}),/HTTPS/);assert.equal(createNtfy({store,env:{}}).configured(),false);
  await assert.rejects(createNtfy({store,env:{}}).publish({title:'x',message:'y'}),/not configured/);store.close();
 });
 test('ntfy needs only a topic: the server defaults to ntfy.sh and the token is optional in the environment and in saved settings',async()=>{
@@ -168,7 +168,7 @@ test('ntfy settings keep the URL and topic safety rules',()=>{
  for(const url of ['http://ntfy.example','ftp://ntfy.example','https://user:pass@ntfy.example','https://ntfy.example/?x=1','https://ntfy.example/#x','not a url',12])assert.throws(()=>validateNtfy({url,topic:'ok'}),/ntfy/,String(url));
  for(const topic of ['','has space','a/b','x'.repeat(101),undefined,5])assert.throws(()=>validateNtfy({topic}),/topic/);
  for(const token of ['has space','x'.repeat(301),5,'naïve'])assert.throws(()=>validateNtfy({topic:'ok',token}),/token/);
- assert.equal(validateNtfy({url:'http://127.0.0.1:8080',topic:'ok'}).url,'http://127.0.0.1:8080');assert.equal(validateNtfy({url:'',topic:'ok'}).url,'https://ntfy.sh');
+ assert.equal(validateNtfy({url:'http://127.0.0.1:8080',topic:'ok'},{plainOrigin:'http://127.0.0.1:8080'}).url,'http://127.0.0.1:8080');assert.equal(validateNtfy({url:'',topic:'ok'}).url,'https://ntfy.sh');
  const store=openStore(':memory:'),ntfy=createNtfy({store,env:{}});
  for(const input of [null,[],{topic:'ok',extra:1},JSON.parse('{"topic":"ok","__proto__":{}}')])assert.throws(()=>ntfy.save(input),/Unknown notification setting/);
  assert.equal(ntfy.configured(),false);store.close();
@@ -267,7 +267,7 @@ test('notification settings, test sends and scan now work over HTTP without expo
  assert.deepEqual(JSON.parse(text).notifications,{configured:true,source:'saved',url:'https://ntfy.sh',topic:'awaker-Abc123_-',tokenSet:true,subscribeUrl:'https://ntfy.sh/awaker-Abc123_-'});
  response=await call('/notifications/test','POST',{});assert.deepEqual(await response.json(),{accepted:true,deviceDelivery:'unconfirmed'});assert.equal(sent.at(-1).headers.Authorization,'Bearer tk_browser');assert.equal(JSON.parse(sent.at(-1).body).topic,'awaker-Abc123_-');
  assert.equal((await call('/notifications/test','POST',{})).status,429);
- at+=10000;reply={ok:false,status:403};response=await call('/notifications/test','POST',{});assert.equal(response.status,502);assert.match((await response.json()).error,/rejected delivery \(403\).*access token/);
+ at+=10000;reply={ok:false,status:403};response=await call('/notifications/test','POST',{});assert.equal(response.status,502);text=(await response.json()).error;assert.match(text,/did not accept.*access token/);assert.equal(text.includes('403'),false);
  at+=10000;reply=null;response=await call('/notifications/test','POST',{});assert.equal(response.status,502);assert.match((await response.json()).error,/Could not reach/);
  for(const path of ['/settings','/digests/preview']){text=await (await call(path,path==='/settings'?'GET':'POST',path==='/settings'?undefined:{})).text();assert.equal(/tk_browser|env_secret/.test(text),false)}
  assert.equal((await call('/scan','POST',{})).status,409);
@@ -395,4 +395,65 @@ test('an alert whose delivery failed is sent once the cooldown ends, even when s
  // The first scan with the idea is three hours in. ntfy stays down until the push has used all five tries and given up.
  for(let minutes=0;minutes<=14*60;minutes+=20){if(minutes>=5*60+20)online=true;h.at+=20*60000;await worker.tick()}
  assert.equal(sent,1,'owed alerts survive the scans in between');h.store.close();
+});
+test('the browser cannot aim ntfy at loopback or private ports, but the operator can name a plain HTTP server',async()=>{
+ const store=openStore(':memory:'),sent=[],fetcher=async url=>{sent.push(url.href);return {ok:false,status:404}};
+ const open=createNtfy({store,env:{},fetcher});
+ for(const url of ['http://127.0.0.1:22','http://localhost:6379','http://[::1]:80','http://192.168.1.10','http://10.0.0.5:8080'])assert.throws(()=>open.save({url,topic:'probe'}),/HTTPS/,url);
+ for(const url of ['https://ntfy.example#','https://ntfy.example/#x'])assert.throws(()=>open.save({url,topic:'ok'}),/Invalid ntfy URL/,url);
+ // NTFY_URL is set by whoever runs the server, so its exact scheme, host and port are trusted, and nothing else is.
+ const lan=createNtfy({store,env:{NTFY_URL:'http://ntfy.lan:8080'},fetcher});
+ assert.equal(lan.save({url:'http://ntfy.lan:8080',topic:'home'}).url,'http://ntfy.lan:8080');
+ for(const url of ['http://ntfy.lan:8081','http://ntfy.lan','http://127.0.0.1:8080'])assert.throws(()=>lan.save({url,topic:'home'}),/HTTPS/,url);
+ // A plain HTTP server saved earlier stops receiving deliveries once NTFY_URL no longer names it.
+ await assert.rejects(createNtfy({store,env:{},fetcher}).publish({title:'T',message:'M',url:'u'}),/HTTPS/);assert.equal(sent.length,0);
+ // A refusal says so without the upstream status, which would otherwise tell open ports from closed ones.
+ await assert.rejects(lan.publish({title:'T',message:'M',url:'u'}),e=>!/404/.test(e.message)&&/did not accept/.test(e.message));assert.equal(sent.length,1);
+ store.close();
+});
+test('a push that goes out while settings are being saved is recorded, so it is not sent again',async()=>{
+ const h=harness(),logged=[],base=h.service.settings;let during=null;
+ const worker=createWorker({store:h.store,service:h.service,now:()=>h.at,publish:async item=>{h.publish(item);if(during){h.config=during;during=null}}});
+ await worker.tick();h.at+=60000;during={...base(),timezone:'America/New_York'};
+ const original=console.error;console.error=(...args)=>logged.push(args.join(' '));
+ try{await worker.tick()}finally{console.error=original}
+ assert.equal(h.calls,1);assert.deepEqual(logged,[]);
+ const stored=h.store.get('worker');assert.equal(stored.outbox[0].status,'accepted');assert.equal(stored.reports[0].delivery,'accepted');
+ await worker.tick();h.at+=60000;await worker.tick();assert.equal(h.calls,1,'the accepted report is not delivered twice');h.store.close();
+});
+test('a failed background run is logged on the server while the browser sees only a general message',async()=>{
+ const h=harness(),logged=[];h.service.digest=async()=>{throw new RangeError('engine exploded')};
+ const original=console.error;console.error=(...args)=>logged.push(args.join(' '));
+ try{await h.worker.tick();h.at+=60000;await h.worker.tick()}finally{console.error=original}
+ assert.equal(logged.length,1);assert.match(logged[0],/RangeError: engine exploded\n\s+at /);
+ assert.equal(JSON.stringify(h.worker.status()).includes('exploded'),false);h.store.close();
+});
+test('the next run is found without a minute-by-minute Intl search and matches one across clock changes',()=>{
+ const brute=(at,schedule,zone,period)=>{const current=occurrence(at,schedule,zone,period);for(let t=Math.floor(at/60000)*60000+60000;t<at+8*86400000;t+=60000)if(occurrence(t,schedule,zone,period)>current)return t;return null};
+ // Spring forward and fall back in Los Angeles, and Lord Howe Island's half-hour change.
+ for(const [zone,at] of [['America/Los_Angeles','2026-03-07T10:00:00Z'],['America/Los_Angeles','2026-10-31T09:10:00Z'],['Australia/Lord_Howe','2026-10-03T14:50:00Z'],['UTC','2026-09-18T07:59:30Z']])
+  for(const time of ['01:30','02:30','01:59','08:00'])for(const period of ['daily','weekly']){
+   const schedule={enabled:true,time,day:0};assert.equal(nextRun(Date.parse(at),schedule,zone,period),brute(Date.parse(at),schedule,zone,period),`${zone} ${at} ${time} ${period}`);
+  }
+ // Settings are read twice per page load, so this must stay cheap: it once took about 50 ms a call.
+ const started=performance.now();for(let i=0;i<50;i++)nextRun(Date.parse('2026-09-18T08:01:00Z')+i*60000,{enabled:true,time:'08:00',day:2},'America/Los_Angeles','weekly');
+ assert.ok(performance.now()-started<1000,'fifty weekly lookups finish well inside a second');
+});
+test('startup drops data nothing reads any more and past seasons, and creates the database private',()=>{
+ const dir=mkdtempSync(join(tmpdir(),'awaker-prune-')),path=join(dir,'nested','awaker.sqlite');
+ try{
+  let s=openStore(path);if(process.platform!=='win32')assert.equal(statSync(path).mode&0o777,0o600);
+  const kept={settings:{timezone:'UTC'},worker:{runs:{}},'cache:directory':{at:1},'cache:https://api.sleeper.app/v1/league/9/rosters':{at:1},'cache:projections:2026:3':{at:1},'cache:games:2026:1':{at:1},'cache:outlook:2026:5':{at:1},'cache:stats:2026:2':{at:1}};
+  for(const [k,v] of Object.entries({...kept,snapshot:{big:true},eventReset:5,'cache:projections:2025:3':{at:1},'cache:games:2025:17':{at:1},'cache:stats:2024:1':{at:1},'cache:outlook:2025:18':{at:1}}))s.set(k,v);s.close();
+  s=openStore(path);
+  for(const k of ['snapshot','eventReset','cache:projections:2025:3','cache:games:2025:17','cache:stats:2024:1','cache:outlook:2025:18'])assert.equal(s.get(k),null,k);
+  for(const [k,v] of Object.entries(kept))assert.deepEqual(s.get(k),v,k);s.close();
+ }finally{rmSync(dir,{recursive:true,force:true})}
+});
+test('engine refusals reach agents in their own words, but a bug is logged and described generally',t=>{
+ const logged=[];t.mock.method(console,'error',(...args)=>logged.push(args.join(' ')));
+ assert.equal(reason(Error('Choose distinct players from each team.')),'Choose distinct players from each team.');
+ assert.equal(reason(Object.assign(Error('Unknown trade partner.'),{status:400})),'Unknown trade partner.');assert.equal(logged.length,0);
+ assert.equal(reason(new TypeError("Cannot read properties of undefined (reading 'roster_id')")),'Analysis failed unexpectedly for this request.');
+ assert.equal(logged.length,1);assert.match(logged[0],/TypeError: Cannot read properties/);
 });

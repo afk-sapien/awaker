@@ -18,15 +18,31 @@ function storage(key,value){if(persistence)return Promise.resolve(persistence(ke
  };
 });}
 const cache=createResourceCache({read:key=>storage(key),write:(key,value)=>storage(key,value)});
+// A rate limit or a server hiccup is usually gone a moment later, so those are asked again twice,
+// waiting as long as the service asks up to a cap. Any other refusal will not change. One deadline
+// covers every attempt and the waits between them.
+const RETRIES = 2, RETRY_CAP = 5000
+function retryDelay(header, attempt) {
+ const seconds = Number(header), date = Date.parse(header ?? '')
+ const asked = header != null && header !== '' && Number.isFinite(seconds) ? seconds * 1000 : Number.isFinite(date) ? date - Date.now() : 500 * 2 ** attempt
+ return Math.max(0, Math.min(RETRY_CAP, asked))
+}
+const pause = (ms, signal) => new Promise((resolve, reject) => {
+ if (signal.aborted) return reject(signal.reason)
+ const timer = setTimeout(resolve, ms)
+ signal.addEventListener('abort', () => { clearTimeout(timer); reject(signal.reason) }, {once: true})
+})
 export async function json(url) {
  const target = new URL(url)
  if (target.protocol !== 'https:' || target.username || target.password || !['https://api.sleeper.app', 'https://site.api.espn.com'].includes(target.origin)) throw Error('Unrecognized data provider.')
- const response = await fetch(target.href, {redirect: 'error', credentials: 'omit', signal: AbortSignal.timeout(22000)})
- if (!response.ok) {
+ const signal = AbortSignal.timeout(22000)
+ for (let attempt = 0; ; attempt++) {
+  const response = await fetch(target.href, {redirect: 'error', credentials: 'omit', signal})
+  if (response.ok) return readJsonResponse(response)
   await response.body?.cancel()
+  if (attempt < RETRIES && (response.status === 429 || response.status >= 500)) { await pause(retryDelay(response.headers.get('retry-after'), attempt), signal); continue }
   throw Error(`Data service returned ${response.status}. Please try again.`)
  }
- return readJsonResponse(response)
 }
 export const sleeper=(path,options={})=>cache.get(BASE+path,()=>json(BASE+path),options);
 export function loadPlayers(options={}){return cache.get('directory',async()=>{
@@ -51,12 +67,19 @@ export function projections(season,week,options={}){return cache.get(`projection
  if(!Array.isArray(d))throw Error('Projection feed unavailable.');
  return Object.fromEntries(d.filter(r=>Object.keys(r.stats||{}).some(k=>!k.includes('adp'))).map(r=>[r.player_id,{stats:r.stats,team:r.team,opponent:r.opponent,updated_at:r.updated_at}]));
  },{ttl:HOUR,...options});}
-// What actually happened in a week, in the same shape as projections. Finished weeks never change.
-export function stats(season,week,options={}){return cache.get(`stats:${season}:${week}`,async()=>{
+// What actually happened in a week, in the same shape as projections. A week keeps changing until
+// its last game is over, and stat corrections trail that, so results are held for a day only once the
+// week's last kickoff is SETTLED ago: a copy fetched before that game ended is by then more than a
+// day old, so it is never the one kept. Until then, and without a schedule, they last minutes.
+const SETTLED=30*HOUR;
+export async function stats(season,week,options={}){
+ const games=await scoreboard(season,week,{ttl:HOUR}).catch(()=>null),list=Object.values(games||{});
+ const settled=list.length>0&&list.every(g=>g.state==='post')&&Date.now()-Math.max(...list.map(g=>Date.parse(g.start)))>SETTLED;
+ return cache.get(`stats:${season}:${week}`,async()=>{
  const d=await json(`https://api.sleeper.app/stats/nfl/${season}/${week}?season_type=regular`);
  if(!Array.isArray(d))throw Error('Weekly results unavailable.');
  return Object.fromEntries(d.filter(r=>r.stats&&(r.stats.gp||r.stats.pts_ppr!==undefined||r.stats.pts_std!==undefined)).map(r=>[r.player_id,{stats:r.stats,team:r.team,opponent:r.opponent}]));
- },{ttl:24*HOUR,...options});}
+ },{ttl:settled?24*HOUR:10*MINUTE,...options});}
 // One week of a league's matchups. Finished weeks hold the scores; weeks ahead hold only who plays whom.
 export function leagueWeek(leagueId,week,options={}){return sleeper(`/league/${leagueId}/matchups/${week}`,{ttl:6*HOUR,...options});}
 export function trends(options={}){return sleeper('/players/nfl/trending/add?lookback_hours=24&limit=100',{ttl:15*MINUTE,...options});}

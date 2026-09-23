@@ -6,13 +6,42 @@ export function eligible(player,slot){return (player?.fantasy_positions||[player
 // about a point and a half light. Only consulted when the league's own key is missing from the stat
 // line: finished weeks itemise the real buckets, so this never touches a scored week.
 export const STAT_FALLBACKS={fgm_50_59:['fgm_50p']};
-export function projected(stats,scoring){if(!stats)return null;let found=false,sum=0;for(const [key,mult]of Object.entries(scoring||{})){let value=stats[key];if(!Number.isFinite(value))for(const alt of STAT_FALLBACKS[key]||[])if(Number.isFinite(stats[alt])){value=stats[alt];break}if(Number.isFinite(value)&&Number.isFinite(mult)){sum+=value*mult;found=true;}}return found?Math.round(sum*100)/100:null;}
+// fgm_50p holds the 60-plus makes too. A stat line with fgm_60p but no fgm_50_59 key, which is how a
+// finished week reads when every long kick went 60+, would otherwise score each of them twice.
+export const STAT_OVERLAPS={fgm_50p:['fgm_60p']};
+export function projected(stats,scoring){if(!stats)return null;let found=false,sum=0;for(const [key,mult]of Object.entries(scoring||{})){let value=stats[key];if(!Number.isFinite(value))for(const alt of STAT_FALLBACKS[key]||[])if(Number.isFinite(stats[alt])){value=Math.max(0,(STAT_OVERLAPS[alt]||[]).reduce((v,k)=>Number.isFinite(scoring[k])&&Number.isFinite(stats[k])?v-stats[k]:v,stats[alt]));break}if(Number.isFinite(value)&&Number.isFinite(mult)){sum+=value*mult;found=true;}}return found?Math.round(sum*100)/100:null;}
+// Rectangular assignment (Hungarian algorithm): cost is rows x cols with rows <= cols, lowest total
+// wins, and the result is the column each row takes.
+export function assign(cost){
+ const n=cost.length,m=n?cost[0].length:0,u=Array(n+1).fill(0),v=Array(m+1).fill(0),p=Array(m+1).fill(0),way=Array(m+1).fill(0);
+ for(let i=1;i<=n;i++){
+  p[0]=i;let j0=0;const min=Array(m+1).fill(Infinity),used=Array(m+1).fill(false);
+  do{used[j0]=true;const i0=p[j0];let delta=Infinity,j1=0;
+   for(let j=1;j<=m;j++)if(!used[j]){const cur=cost[i0-1][j-1]-u[i0]-v[j];if(cur<min[j]){min[j]=cur;way[j]=j0}if(min[j]<delta){delta=min[j];j1=j}}
+   for(let j=0;j<=m;j++)if(used[j]){u[p[j]]+=delta;v[j]-=delta}else min[j]-=delta;
+   j0=j1;
+  }while(p[j0]!==0);
+  do{const j1=way[j0];p[j0]=p[j1];j0=j1}while(j0);
+ }
+ const out=Array(n).fill(-1);for(let j=1;j<=m;j++)if(p[j])out[p[j]-1]=j-1;return out;
+}
+// Past this many open slots the subset search below grows too slow (2^n masks), and IDP or deep
+// leagues start 18 or more, so the lineup is set as an assignment instead. Same answer, same ties.
+export const SUBSET_LIMIT=10;
 export function optimize(ids,slots,players,value,locked={},preferred=[]){
  // On equal projected points, retain as many existing slot assignments as possible.
  // This avoids meaningless RB/WR ordering changes while allowing necessary flex moves.
  const better=(candidate,current)=>!current||candidate.sum>current.sum+1e-9||(Math.abs(candidate.sum-current.sum)<=1e-9&&candidate.kept>current.kept);
  const fixed=new Set(Object.values(locked).filter(Boolean));const free=slots.map((s,i)=>({s,i})).filter(x=>!(x.i in locked));
- if(free.length>15)throw Error('Lineup optimization supports up to 15 unlocked starting slots.');
+ if(free.length>SUBSET_LIMIT){
+  const pool=[...new Set(ids)].filter(id=>!fixed.has(id)&&players[id]).map(id=>({id,v:value(id)})).filter(x=>x.v!==null&&Number.isFinite(x.v)),blocked=1e6;
+  // A filled slot always beats an empty one (the dummy columns), then points, then a sliver for keeping the current player.
+  const picked=assign(free.map(({s,i})=>[...pool.map(x=>eligible(players[x.id],s)?-x.v-(preferred[i]===x.id?1e-6:0):blocked),...free.map(()=>blocked/2)]));
+  const picks={...locked};let sum=0,filled=0;
+  picked.forEach((j,k)=>{if(j>=0&&j<pool.length&&eligible(players[pool[j].id],free[k].s)){picks[free[k].i]=pool[j].id;sum+=pool[j].v;filled++}});
+  let unknown=false,total=sum;for(const id of Object.values(locked)){if(!id)continue;const v=value(id);if(v===null)unknown=true;else total+=v;}
+  return {ids:slots.map((_,i)=>picks[i]||null),total:Math.round(total*100)/100,complete:filled===free.length&&!unknown};
+ }
  let dp=new Map([[0,{sum:0,kept:0,picks:{...locked}}]]);
  for(const id of [...new Set(ids)]){if(fixed.has(id)||!players[id])continue;const v=value(id);if(v===null||!Number.isFinite(v))continue;const next=new Map(dp);for(const [mask,row]of dp){for(let j=0;j<free.length;j++){if(mask&(1<<j)||!eligible(players[id],free[j].s))continue;const m=mask|(1<<j),candidate={sum:row.sum+v,kept:row.kept+(preferred[free[j].i]===id?1:0),picks:{...row.picks,[free[j].i]:id}};if(better(candidate,next.get(m)))next.set(m,candidate)}}dp=next;}
  const target=(1<<free.length)-1;let best=dp.get(target);if(!best){let n=-1;for(const [mask,row]of dp){const count=mask.toString(2).replaceAll('0','').length;if(count>n||(count===n&&better(row,best))){best=row;n=count}}}
@@ -90,13 +119,3 @@ export function createScoreTracker(){
  };
 }
 export function aggregateWatch(leagues,players,games){const byId=new Map();for(const l of leagues){if(!l.enabled||!l.mine)continue;const m=l.matchups.find(m=>m.roster_id===l.mine.roster_id),opp=m?.matchup_id==null?null:l.matchups.find(x=>x.matchup_id===m.matchup_id&&x.roster_id!==m.roster_id);const sides=[{r:l.mine,m,side:'mine'},{r:l.rosters.find(r=>r.roster_id===opp?.roster_id),m:opp,side:'opponent'}];for(const {r,m,side}of sides){if(!r)continue;for(const id of (m?.players||r.players||[])){if(!players[id])continue;const starter=(m?.starters||r.starters||[]).includes(id);if(side==='opponent'&&!starter)continue;let p=byId.get(id);if(!p){p={id,player:players[id],game:games[players[id].team]||null,appearances:[]};byId.set(id,p)}p.appearances.push({leagueId:l.league_id,league:l.name,side,starter,points:Number.isFinite(m?.players_points?.[id])?m.players_points[id]:null});}}}return [...byId.values()];}
-export function tradeResult({league,roster,partner,give,get,players,value,freeAgents=[],locked={}}){
- const a=playableIds(roster),b=playableIds(partner),slots=activeSlots(league);
- if(!give.length||!get.length||new Set([...give,...get]).size!==give.length+get.length||give.some(id=>!a.includes(id))||get.some(id=>!b.includes(id)))throw Error('Choose distinct players from each team.');
- const max=Math.max(a.length,b.length,league.roster_positions.length),afterA=a.filter(id=>!give.includes(id)).concat(get),afterB=b.filter(id=>!get.includes(id)).concat(give);
- const droppedA=[],droppedB=[],addedA=[],addedB=[];
- const adjust=(ids,baseLen,drops,adds)=>{while(ids.length>Math.max(baseLen,max)){const sorted=[...ids].sort((x,y)=>(value(x)??-999)-(value(y)??-999));const id=sorted.find(x=>!give.includes(x)&&!get.includes(x));if(!id)break;ids.splice(ids.indexOf(id),1);drops.push(id)}while(ids.length<baseLen){const before=optimize(ids,slots,players,value);const candidates=freeAgents.filter(id=>!ids.includes(id)&&!give.includes(id)&&!get.includes(id)&&!addedA.includes(id)&&!addedB.includes(id)).slice(0,18);let winner=null,gain=-Infinity;for(const id of candidates){const result=optimize([...ids,id],slots,players,value);const d=result.total-before.total;if(d>gain){gain=d;winner=id}}if(!winner)break;ids.push(winner);adds.push(winner)}};
- adjust(afterA,a.length,droppedA,addedA);adjust(afterB,b.length,droppedB,addedB);
- const beforeA=optimize(a,slots,players,value),beforeB=optimize(b,slots,players,value),newA=optimize(afterA,slots,players,value),newB=optimize(afterB,slots,players,value);
- return {gainA:newA.total-beforeA.total,gainB:newB.total-beforeB.total,beforeA,beforeB,newA,newB,droppedA,droppedB,addedA,addedB,complete:beforeA.complete&&beforeB.complete&&newA.complete&&newB.complete};
-}

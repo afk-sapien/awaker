@@ -1,4 +1,5 @@
 import {gzipSync} from 'node:zlib'
+import {createHash} from 'node:crypto'
 import {readFile, realpath} from 'node:fs/promises'
 import {resolve, extname, sep} from 'node:path'
 import {bad} from './settings.js'
@@ -11,8 +12,8 @@ export const securityHeaders = {
   'Content-Security-Policy': [
     "default-src 'self'",
     "script-src 'self'",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' https://fonts.gstatic.com",
+    "style-src 'self' 'unsafe-inline'",
+    "font-src 'self'",
     "img-src 'self' https://sleepercdn.com",
     "connect-src 'self' https://api.sleeper.app https://site.api.espn.com",
     "object-src 'none'",
@@ -45,10 +46,28 @@ export async function serveStatic(req, res, dist, path) {
   try { filename = await realpath(resolve(root, '.' + (decoded === '/' ? '/index.html' : decoded))) }
   catch { throw bad('Not found.', 404) }
   if (!filename.startsWith(root + sep)) throw bad('Not found.', 404)
-  const types = {'.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png'}
-  if (!types[extname(filename)]) throw bad('Not found.', 404)
+  const type = types[extname(filename)]
+  if (!type) throw bad('Not found.', 404)
   let file
   try { file = await readFile(filename) } catch { throw bad('Not found.', 404) }
-  res.writeHead(200, {...securityHeaders, 'Content-Type': types[extname(filename)], 'Cache-Control': 'no-cache', 'Content-Length': file.length})
-  res.end(req.method === 'HEAD' ? undefined : file)
+  // Files are revalidated on every load (no-cache) and answered with 304 when unchanged, so a new release is picked up without versioned URLs.
+  const gzip = compressible.has(extname(filename)) && file.length > 1024 && /\bgzip\b/.test(String(req.headers['accept-encoding'] || ''))
+  const etag = `"${createHash('sha256').update(file).digest('base64url').slice(0, 27)}${gzip ? '-gz' : ''}"`
+  const headers = {...securityHeaders, 'Content-Type': type, 'Cache-Control': 'no-cache', ETag: etag, ...(compressible.has(extname(filename)) ? {Vary: 'Accept-Encoding'} : {})}
+  const match = String(req.headers['if-none-match'] || '').split(',').map(tag => tag.trim().replace(/^W\//, ''))
+  if (match.includes(etag) || match.includes('*')) { res.writeHead(304, headers); return res.end() }
+  const body = gzip ? gzipCached(filename, etag, file) : file
+  res.writeHead(200, {...headers, ...(gzip ? {'Content-Encoding': 'gzip'} : {}), 'Content-Length': body.length})
+  res.end(req.method === 'HEAD' ? undefined : body)
+}
+
+const types = {'.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8'}
+const compressible = new Set(['.html', '.js', '.css', '.svg', '.txt'])
+const gzipped = new Map()
+function gzipCached(filename, etag, file) {
+  const hit = gzipped.get(filename)
+  if (hit?.etag === etag) return hit.body
+  const body = gzipSync(file, {level: 6})
+  gzipped.set(filename, {etag, body})
+  return body
 }

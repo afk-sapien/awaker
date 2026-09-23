@@ -30,7 +30,7 @@ export function leagueShape(league){
 // weeks: [{week, matchups}] for finished weeks, oldest first. A week nobody scored in is skipped.
 export function seasonSoFar({league,players,weeks}){
  const {medianGame}=leagueShape(league),ids=league.rosters.map(r=>r.roster_id);
- const rows=Object.fromEntries(ids.map(id=>[id,{rosterId:id,wins:0,losses:0,ties:0,h2hWins:0,pf:0,pa:0,allPlayWins:0,allPlayLosses:0,expectedWins:0,games:0,scores:[],byPosition:Object.fromEntries(POSITIONS.map(p=>[p,0]))}]));
+ const rows=Object.fromEntries(ids.map(id=>[id,{rosterId:id,wins:0,losses:0,ties:0,h2hWins:0,h2hTies:0,pf:0,pa:0,allPlayWins:0,allPlayLosses:0,expectedWins:0,games:0,scores:[],byPosition:Object.fromEntries(POSITIONS.map(p=>[p,0]))}]));
  const counted=[];
  for(const {week,matchups} of weeks){
   const byId=new Map((matchups||[]).map(m=>[m.roster_id,m]));
@@ -49,14 +49,14 @@ export function seasonSoFar({league,players,weeks}){
   }
   for(const [a,b] of pairings(matchups)){
    const x=score(byId.get(a)),y=score(byId.get(b));rows[a].pa+=y;rows[b].pa+=x;
-   if(x===y){rows[a].ties++;rows[b].ties++}else{const [w,l]=x>y?[a,b]:[b,a];rows[w].wins++;rows[w].h2hWins++;rows[l].losses++}
+   if(x===y){rows[a].ties++;rows[b].ties++;rows[a].h2hTies++;rows[b].h2hTies++}else{const [w,l]=x>y?[a,b]:[b,a];rows[w].wins++;rows[w].h2hWins++;rows[l].losses++}
   }
  }
  for(const row of Object.values(rows)){
   const played=row.scores.filter(Boolean).map(s=>s.points);
   Object.assign(row,{pf:round(row.pf),pa:round(row.pa),average:row.games?round(row.pf/row.games):null,high:played.length?Math.max(...played):null,low:played.length?Math.min(...played):null,
    // Luck is head-to-head wins against the wins the same scores earn against the whole league.
-   expectedWins:round(row.expectedWins),luck:round(row.h2hWins+row.ties/2*(medianGame?0:1)-row.expectedWins),
+   expectedWins:round(row.expectedWins),luck:round(row.h2hWins+row.h2hTies/2-row.expectedWins),
    byPosition:Object.fromEntries(POSITIONS.map(p=>[p,row.games?round(row.byPosition[p]/row.games):0]))});
  }
  return {rows,weeks:counted,games:counted.length};
@@ -102,7 +102,7 @@ export function depthChart({league,players,value}){
  const columns=depthSlots(league),cells={},spare={},spots={};for(const c of columns)spots[c.position]=Math.max(spots[c.position]||0,c.depth);
  for(const roster of league.rosters){
   const byPosition={};
-  for(const id of (roster.players||[]).filter(id=>players[id]&&!(roster.taxi||[]).includes(id))){const v=value(id);if(Number.isFinite(v))(byPosition[players[id].position]||=[]).push({id,points:round(v)})}
+  for(const id of (roster.players||[]).filter(id=>players[id]&&!(roster.taxi||[]).includes(id)&&!(roster.reserve||[]).includes(id))){const v=value(id);if(Number.isFinite(v))(byPosition[players[id].position]||=[]).push({id,points:round(v)})}
   for(const list of Object.values(byPosition))list.sort((a,b)=>b.points-a.points);
   cells[roster.roster_id]=columns.map(c=>byPosition[c.position]?.[c.depth-1]||null);
   // The best player who cannot start: what a team could give up at each position.
@@ -191,9 +191,9 @@ export function matchupDetail({league,players,projections={},games={},rosterIds}
  };
  const sides=rosterIds.map(rosterId=>{
   const m=(league.matchups||[]).find(x=>x.roster_id===rosterId),roster=(league.rosters||[]).find(r=>r.roster_id===rosterId);if(!m)return null;
-  const starting=m.starters||[],reserve=new Set([...(roster?.reserve||[]),...(roster?.taxi||[])]);
+  const starting=m.starters||[],reserve=new Set(roster?.reserve||[]),taxi=new Set(roster?.taxi||[]),parked=id=>reserve.has(id)?'IR':taxi.has(id)?'TAXI':'BN';
   const starters=slots.map((slot,i)=>({slot,label:SLOT_LABELS[slot]||slot,...line(m,starting[i])}));
-  const bench=(m.players||roster?.players||[]).filter(id=>!starting.includes(id)&&players[id]).map(id=>({slot:reserve.has(id)?'IR':'BN',label:reserve.has(id)?'IR':'BN',...line(m,id)})).sort((a,b)=>(a.slot==='IR')-(b.slot==='IR')||b.points-a.points||(b.projection||0)-(a.projection||0));
+  const bench=(m.players||roster?.players||[]).filter(id=>!starting.includes(id)&&players[id]).map(id=>({slot:parked(id),label:parked(id),...line(m,id)})).sort((a,b)=>(a.slot!=='BN')-(b.slot!=='BN')||b.points-a.points||(b.projection||0)-(a.projection||0));
   return {rosterId,points:round(score(m)),heading:round(score(m)+starters.reduce((s,p)=>s+p.heading-p.points,0)),projection:round(starters.reduce((s,p)=>s+(p.projection||0),0)),starters,bench,benchPoints:round(bench.filter(p=>p.slot==='BN').reduce((s,p)=>s+p.points,0))};
  });
  return sides.includes(null)?null:{slots,sides};

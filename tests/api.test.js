@@ -29,3 +29,26 @@ test('projection cache keeps useful stats, reuses results, and honors forced ref
   await api.projections(2099,2,{force:true});assert.equal(calls,2);
  }finally{globalThis.fetch=original}
 });
+test('a rate limit or server error is asked again a bounded number of times, any other refusal is not',async()=>{
+ const original=globalThis.fetch;let calls=0,script=[];
+ globalThis.fetch=async()=>{calls++;const status=script.shift()??200;return status===200?Response.json([{player_id:'a',stats:{rec:1}}]):new Response('busy',{status,headers:{'retry-after':'0'}})};
+ try{
+  script=[503,429];assert.equal((await api.projections(2097,1)).a.stats.rec,1);assert.equal(calls,3,'two retries, then success');
+  calls=0;script=[500,502,503];await assert.rejects(api.projections(2097,2),/returned 503/);assert.equal(calls,3,'gives up after two retries');
+  calls=0;script=[404];await assert.rejects(api.projections(2097,3),/returned 404/);assert.equal(calls,1,'a 404 will not change');
+ }finally{globalThis.fetch=original}
+});
+test('the week being played is refetched within minutes, a week long settled is held for a day',async()=>{
+ const original=globalThis.fetch,originalNow=Date.now;let clock=Date.parse('2026-09-28T03:00:00Z'),calls=[],state='in';Date.now=()=>clock;
+ const event=start=>({id:'1',date:start,status:{type:{state,shortDetail:''}},competitions:[{competitors:[{id:'a',team:{abbreviation:'BUF'},homeAway:'home'},{id:'b',team:{abbreviation:'MIA'},homeAway:'away'}]}]});
+ globalThis.fetch=async url=>{if(url.includes('scoreboard'))return Response.json({events:[event('2026-09-29T00:15:00Z')]});calls.push(url);return Response.json([{player_id:'a',stats:{gp:1,pts_ppr:calls.length}}])};
+ try{
+  // Sunday night: Monday's game has not been played, so Sunday's numbers must not stand for a day.
+  assert.equal((await api.stats(2096,4)).a.stats.pts_ppr,1);
+  clock+=11*60000;assert.equal((await api.stats(2096,4)).a.stats.pts_ppr,2,'refetched after ten minutes');
+  // Two days after the last kickoff the week is over and corrected, and one fetch serves the day.
+  clock=Date.parse('2026-10-01T12:00:00Z');state='post';
+  assert.equal((await api.stats(2096,4,{force:true})).a.stats.pts_ppr,3);
+  clock+=6*3600000;assert.equal((await api.stats(2096,4)).a.stats.pts_ppr,3,'a settled week is not fetched again');
+ }finally{globalThis.fetch=original;Date.now=originalNow}
+});

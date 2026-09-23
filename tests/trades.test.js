@@ -23,6 +23,17 @@ test('bye weeks require a loaded schedule, and missing projections never silentl
  assert.equal(futurePoints('b',{projections:{},games:{NYJ:{}}},players,{rec:1}),null);
  assert.equal(futurePoints('b',{projections:{b:{stats:{rec:5}}},games:{NYJ:{}}},players,{rec:1}),5);
 });
+test('an injured star missing one week keeps his season value, and that week is his zero',()=>{
+ const f=fixture();f.players.c.injury_status='Out';delete f.outlook.data[4].projections.c;
+ const model=buildSeasonModel(f);assert.equal(model.totals.c,15,'15 in week 3, nothing while he is out');
+ const r=model.evaluate(f.league.mine,f.partner,['c'],['f']);assert.deepEqual(r.weekly.map(w=>w.gainA),[10,3]);
+ const healthy=fixture();delete healthy.outlook.data[4].projections.c;
+ assert.equal(buildSeasonModel(healthy).totals.c,null,'a healthy player with a missing week is still unknown');
+ const players={a:{team:'BUF',injury_status:'IR'}};
+ assert.equal(futurePoints('a',{projections:{},games:{NYJ:{}}},players,{rec:1}),0,'a bye is still a bye');
+ assert.equal(futurePoints('a',{projections:{},games:{BUF:{}}},players,{rec:1}),0);
+ assert.equal(futurePoints('a',{projections:{},games:{BUF:{}}},{a:{team:'BUF',injury_status:'Questionable'}},{rec:1}),null,'questionable is not ruled out');
+});
 function fixture(){
  const players=Object.fromEntries(['a','b','c','d','e','f','r','w'].map((id,i)=>[id,{position:['RB','WR','RB','WR','RB','WR','RB','WR'][i],team:'BUF'}]));
  const mine={roster_id:1,players:['a','b','c']},partner={roster_id:2,players:['d','e','f']};
@@ -274,4 +285,10 @@ test('going after a player respects exclusions, injuries, the limit and cancella
  assert.deepEqual(without.offers.map(o=>o.give[0]),['a'],'a player who cannot play is not currency');
  assert.equal((await acquirePlayer(data,f.league,model,'f',{},{limit:1})).offers.length,1);
  assert.deepEqual(await acquirePlayer(data,f.league,model,'f',{},{cancelled:()=>true}),{cancelled:true});
+});
+test('going after a player parked on injured reserve or the taxi squad says why there is no offer',async()=>{
+ const f=fixture();f.partner.players.push('r','w');f.partner.reserve=['r'];f.partner.taxi=['w'];
+ const model=buildSeasonModel(f),data={players:f.players};
+ await assert.rejects(()=>acquirePlayer(data,f.league,model,'r',{},{}),/injured reserve/);
+ await assert.rejects(()=>acquirePlayer(data,f.league,model,'w',{},{}),/taxi squad/);
 });

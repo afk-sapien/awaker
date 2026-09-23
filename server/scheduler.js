@@ -5,14 +5,28 @@ export function localParts(at,zone){
  const p=Object.fromEntries(formatters.get(zone).formatToParts(at).map(p=>[p.type,p.value]));
  return {date:`${p.year}-${p.month}-${p.day}`,time:`${p.hour}:${p.minute}`};
 }
-export function occurrence(at,schedule,zone,period){
- const {date,time}=localParts(at,zone),day=new Date(`${date}T12:00:00Z`);let back=time<schedule.time?1:0;
+function occurrenceOf({date,time},schedule,zone,period){
+ const day=new Date(`${date}T12:00:00Z`);let back=time<schedule.time?1:0;
  if(period==='weekly'){back=(day.getUTCDay()-schedule.day+7)%7;if(back===0&&time<schedule.time)back=7}
  day.setUTCDate(day.getUTCDate()-back);return `${period}:${day.toISOString().slice(0,10)}:${schedule.time}:${zone}`;
 }
+export function occurrence(at,schedule,zone,period){return occurrenceOf(localParts(at,zone),schedule,zone,period)}
+// The zone's offset from UTC at a whole minute, read once through Intl.
+const offset=(t,zone)=>{const {date,time}=localParts(t,zone);return Date.parse(`${date}T${time}:00Z`)-t};
+// The answer is still exact to the minute, because a repeated or skipped hour can move the next
+// run by less than an hour. Intl is asked only for each hour's offset. An hour whose offset is the
+// same at both ends has no clock change inside it, so its local times are plain arithmetic, and as
+// they only move forward the hour can be passed over when its last minute is not yet due.
 export function nextRun(at,schedule,zone,period){
  if(!schedule.enabled)return null;
- const current=occurrence(at,schedule,zone,period);for(let t=Math.floor(at/60000)*60000+60000;t<at+8*86400000;t+=60000)if(occurrence(t,schedule,zone,period)>current)return t;
+ const current=occurrence(at,schedule,zone,period),first=Math.floor(at/60000)*60000+60000,end=at+8*86400000;
+ let hour=Math.floor(first/3600000)*3600000,before=offset(hour,zone);
+ for(;hour<end;hour+=3600000){
+  const after=offset(hour+3600000,zone),steady=before===after,start=Math.max(first,hour),stop=Math.min(hour+3600000,end);
+  const due=t=>{const local=steady?new Date(t+before).toISOString():null;return occurrenceOf(local?{date:local.slice(0,10),time:local.slice(11,16)}:localParts(t,zone),schedule,zone,period)>current};
+  if(start<stop&&(!steady||due(start+Math.floor((stop-1-start)/60000)*60000)))for(let t=start;t<stop;t+=60000)if(due(t))return t;
+  before=after;
+ }
  return null;
 }
 export function quiet(at,settings){const t=localParts(at,settings.timezone).time,{quietStart:a,quietEnd:b}=settings.alerts;return a===b?false:a<b?t>=a&&t<b:t>=a||t<b}
@@ -63,8 +77,17 @@ export function createWorker({store,service,ntfy=null,publish=null,now=Date.now,
    state.baselines??=state.baselined&&state.scope?{trade:state.scope}:{};
    const reset=store.get('scheduleReset',0);
    if(state.reset!==reset){state.reset=reset;state.baselines={};state.events={};state.outbox=state.outbox.map(o=>o.status==='pending'?{...o,status:'cancelled'}:o);state.runs=Object.fromEntries(['daily','weekly'].filter(p=>settings[p].enabled).map(p=>[p,occurrence(reset,settings[p],settings.timezone,p)]));state.lastScan=0}
-   if(state.eventReset!==store.get('eventReset',0)){state.eventReset=store.get('eventReset',0);state.baselines={};state.events={};state.lastScan=0;state.outbox=state.outbox.map(o=>['alert','trade'].includes(o.type)&&o.status==='pending'?{...o,status:'cancelled'}:o)}
    const save=()=>{if(JSON.stringify(service.settings())!==revision)throw Error('Settings changed; worker will retry.');state.reports=state.reports.slice(0,50);state.outbox=state.outbox.slice(-100);store.set('worker',state)};
+   // A push that went out while settings were being saved has still gone out. Its outcome is written
+   // onto the stored state even though the rest of this run is discarded, or it would be sent again.
+   const record=item=>{
+    if(JSON.stringify(service.settings())===revision)return save();
+    const stored=store.get('worker',initial()),queued=stored.outbox.find(o=>o.id===item.id),report=stored.reports.find(r=>r.id===item.id);
+    if(queued)Object.assign(queued,{status:item.status,attempts:item.attempts,nextAttempt:item.nextAttempt,acceptedAt:item.acceptedAt,error:item.error});
+    if(report)report.delivery=item.status;
+    if(item.status==='failed')for(const i of item.items||[])if(stored.events?.[i.key])stored.events[i.key].deferred=true;
+    store.set('worker',stored);throw Error('Settings changed; worker will retry.');
+   };
    for(const period of ['daily','weekly']){
     const config=settings[period];if(!config.enabled)continue;
     const key=occurrence(at,config,settings.timezone,period);
@@ -137,11 +160,11 @@ export function createWorker({store,service,ntfy=null,publish=null,now=Date.now,
     }
     if(JSON.stringify(service.settings())!==revision)throw Error('Settings changed before delivery');
     if(!notifier.configured())continue;
-    try{await notifier.publish(item);item.status='accepted';item.acceptedAt=now();item.error=null;const report=state.reports.find(r=>r.id===item.id);if(report)report.delivery='accepted'}catch{item.attempts++;item.error='Notification provider did not confirm acceptance.';item.status=item.attempts>=5?'failed':'pending';if(item.status==='failed')release(item);item.nextAttempt=at+Math.min(3600000,60000*2**item.attempts);const report=state.reports.find(r=>r.id===item.id);if(report)report.delivery=item.status}
-    save();
+    try{await notifier.publish(item);item.status='accepted';item.acceptedAt=now();item.error=null;const report=state.reports.find(r=>r.id===item.id);if(report)report.delivery='accepted'}catch(e){console.error('Notification delivery failed:',e?.message||e);item.attempts++;item.error='Notification provider did not confirm acceptance.';item.status=item.attempts>=5?'failed':'pending';if(item.status==='failed')release(item);item.nextAttempt=at+Math.min(3600000,60000*2**item.attempts);const report=state.reports.find(r=>r.id===item.id);if(report)report.delivery=item.status}
+    record(item);
    }
    state.failures=0;state.retryAt=0;state.lastError=null;if(JSON.stringify(state)!==loaded)save();store.set('workerLastRun',at);
-  }catch(e){if(/^Settings changed/.test(e?.message||''))return;const s=store.get('worker',initial());s.failures++;s.retryAt=now()+Math.min(3600000,60000*2**Math.min(s.failures,6));s.lastError={at:now(),message:'Background run failed. Check data availability and service configuration.'};store.set('worker',s)}finally{running=false;forced=false}
+  }catch(e){if(/^Settings changed/.test(e?.message||''))return;console.error('Background run failed:',e?.stack||e);const s=store.get('worker',initial());s.failures++;s.retryAt=now()+Math.min(3600000,60000*2**Math.min(s.failures,6));s.lastError={at:now(),message:'Background run failed. Check data availability and service configuration.'};store.set('worker',s)}finally{running=false;forced=false}
  }
  // Runs the same scan the schedule would, right now. Baseline, quiet hours and the daily cap still apply.
  async function scan(){

@@ -68,7 +68,7 @@ export function createHttpServer({service, worker, ntfy, adminToken, agentToken,
 
   const server = createServer(async (req, res) => {
     try {
-      if (req.headers.host !== new URL(origin).host) throw bad('Unrecognized host.', 403)
+      if (req.headers.host !== new URL(origin).host) throw bad('Unrecognized host. Open the address set in AWAKER_PUBLIC_URL, or change it to the one you use.', 403)
       if (req.headers.origin && req.headers.origin !== origin) throw bad('Unrecognized origin.', 403)
       const path = new URL(req.url, origin).pathname
       if (path === '/healthz' && ['GET', 'HEAD'].includes(req.method)) {
@@ -76,13 +76,18 @@ export function createHttpServer({service, worker, ntfy, adminToken, agentToken,
         return
       }
       if (path.startsWith('/api/')) {
-        const ip = req.socket.remoteAddress
+        // Behind a reverse proxy every client shares one address, so a credential gets its own
+        // bucket and anonymous traffic cannot lock the owner or agent out. Anonymous requests,
+        // including sign-in attempts, share a smaller allowance per address.
+        const auth = role(req)
+        const principal = !open && auth
+        const key = principal ? `role:${auth}` : `ip:${req.socket.remoteAddress}`
         const window = Math.floor(now() / 60000)
-        for (const [key, value] of rates) if (value.window !== window) rates.delete(key)
-        if (!rates.has(ip) && rates.size >= 1000) throw bad('Too many requests.', 429)
-        const rate = rates.get(ip) || {window, count: 0}
-        rates.set(ip, rate)
-        if (++rate.count > 120) {
+        for (const [name, value] of rates) if (value.window !== window) rates.delete(name)
+        if (!principal && !rates.has(key) && rates.size >= 1000) throw bad('Too many requests.', 429)
+        const rate = rates.get(key) || {window, count: 0}
+        rates.set(key, rate)
+        if (++rate.count > (principal || open ? 120 : 30)) {
           res.setHeader('Retry-After', '60')
           throw bad('Too many requests.', 429)
         }
@@ -99,7 +104,6 @@ export function createHttpServer({service, worker, ntfy, adminToken, agentToken,
           json(res, 200, {connected: true})
           return
         }
-        const auth = role(req)
         if (!auth) throw bad('Authorization required.', 401)
         if (!req.headers.authorization && req.method !== 'GET' && req.headers.origin !== origin) {
           throw bad('Same-origin request required.', 403)
@@ -159,6 +163,8 @@ export function createHttpServer({service, worker, ntfy, adminToken, agentToken,
       await serveStatic(req, res, dist, path)
     } catch (error) {
       if (!req.complete) res.setHeader('Connection', 'close')
+      // Expected refusals carry a status. Anything else is a fault the browser only hears about in general terms.
+      if (!error.status) console.error('Request failed:', error?.stack || error)
       json(res, error.status || 500, {error: error.status ? error.message : 'Service request failed. Check provider availability or server configuration.'})
     }
   })
