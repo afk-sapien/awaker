@@ -9,6 +9,9 @@ export const STAT_FALLBACKS={fgm_50_59:['fgm_50p']};
 // fgm_50p holds the 60-plus makes too. A stat line with fgm_60p but no fgm_50_59 key, which is how a
 // finished week reads when every long kick went 60+, would otherwise score each of them twice.
 export const STAT_OVERLAPS={fgm_50p:['fgm_60p']};
+// Ruled out for the week: whatever he was projected, he will not play. Doubtful and Questionable players still might.
+export const RULED_OUT=['Out','IR','PUP','Sus','Suspended'];
+export const ruledOut=player=>RULED_OUT.includes(player?.injury_status);
 export function projected(stats,scoring){if(!stats)return null;let found=false,sum=0;for(const [key,mult]of Object.entries(scoring||{})){let value=stats[key];if(!Number.isFinite(value))for(const alt of STAT_FALLBACKS[key]||[])if(Number.isFinite(stats[alt])){value=Math.max(0,(STAT_OVERLAPS[alt]||[]).reduce((v,k)=>Number.isFinite(scoring[k])&&Number.isFinite(stats[k])?v-stats[k]:v,stats[alt]));break}if(Number.isFinite(value)&&Number.isFinite(mult)){sum+=value*mult;found=true;}}return found?Math.round(sum*100)/100:null;}
 // Rectangular assignment (Hungarian algorithm): cost is rows x cols with rows <= cols, lowest total
 // wins, and the result is the column each row takes.

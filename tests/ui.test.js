@@ -54,3 +54,17 @@ test('the service decides the account and leagues; the browser keeps everything 
  const prefs=readPreferences(JSON.stringify({username:'someone-else',disabled:['x'],showBench:false,tradeMinGain:2}),{username:'owner',disabled:['L2'],preferences:{tradeMinGain:4}});
  assert.equal(prefs.username,'owner');assert.deepEqual(prefs.disabled,['L2']);assert.equal(prefs.tradeMinGain,4);assert.equal(prefs.showBench,false);
 });
+
+test('injury designations are colored by how likely he is to play, and a player ruled out projects zero this week',async()=>{
+ const {injury,value}=await import('../dist/ui/core.js');
+ assert.equal(injury({}),'');
+ for(const [status,tone] of [['Out','out'],['IR','out'],['Sus','out'],['PUP','out'],['Doubtful','doubtful'],['Questionable','questionable'],['NA','other']])assert.match(injury({injury_status:status}),new RegExp(`class="injury injury-${tone}">${status}<`),status);
+ const data=demo();start(data);
+ const league=data.leagues.find(l=>l.enabled),id=league.mine.starters.find(id=>Number(value(id,league))>0),next=data.week+1;
+ data.players[id].injury_status='Out';const team=data.players[id].team,game=data.games[team];
+ data.games[team]={...game,state:'pre'};assert.equal(value(id,league),0,'before kickoff this week, he scores nothing');
+ data.games[team]={...game,state:'in'};assert.ok(value(id,league)>0,'once his game is on, the pregame projection stands');
+ data.games[team]={...game,state:'pre'};
+ if(data.projections[next]?.[id])assert.ok(value(id,league,next)>0,'a later week is not decided by today’s status');
+ S.filter='all';const {before}=await draw('watch');assert.ok(before.includes('class="injury injury-out">Out<'),'his card carries the red badge');
+});

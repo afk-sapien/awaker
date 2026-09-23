@@ -1,4 +1,4 @@
-import {projected,activeSlots,playableIds,SLOT_POSITIONS} from './engine.js';
+import {projected,activeSlots,playableIds,SLOT_POSITIONS,ruledOut} from './engine.js';
 import {seasonLineup} from './trades.js';
 
 // The whole league at once: what every team has scored, what every roster projects to score,
@@ -162,7 +162,7 @@ export function liveWeek({league,players,projections={},games={},spread=24}){
   let open=0,planned=0,remaining=0;const counts={pre:0,live:0,done:0};let top=null;
   const starters=(m.starters||[]).filter(id=>players[id]);
   for(const id of starters){
-   const points=Number(m.players_points?.[id])||0,game=games[players[id].team],left=known?(game?gameRemaining(game):0):points?.5:1,plan=Math.max(0,projected(projections[id]?.stats,league.scoring_settings)||0);
+   const points=Number(m.players_points?.[id])||0,game=games[players[id].team],left=known?(game?gameRemaining(game):0):points?.5:1,plan=ruledOut(players[id])?0:Math.max(0,projected(projections[id]?.stats,league.scoring_settings)||0);
    counts[!known?(points?'live':'pre'):!game||game.state==='post'?'done':game.state==='pre'?'pre':'live']++;
    planned+=plan;open+=plan*left;remaining+=left;
    if(points>0&&(!top||points>top.points))top={id,points};
@@ -185,7 +185,7 @@ export function matchupDetail({league,players,projections={},games={},rosterIds}
  const slots=activeSlots(league),known=Object.keys(games).length>0;
  const line=(m,id)=>{
   if(!id||id==='0'||!players[id])return {id:null,points:0,projection:null,heading:0,state:'empty',game:null};
-  const points=Number(m.players_points?.[id])||0,projection=projected(projections[id]?.stats,league.scoring_settings),game=games[players[id].team]||null;
+  const points=Number(m.players_points?.[id])||0,projection=ruledOut(players[id])?0:projected(projections[id]?.stats,league.scoring_settings),game=games[players[id].team]||null;
   const state=!known?'unknown':!game?'bye':game.state==='post'?'done':game.state==='pre'?'pre':'live',left=state==='pre'||state==='unknown'?1:state==='live'?gameRemaining(game):0;
   return {id,points:round(points),projection:Number.isFinite(projection)?round(projection):null,heading:round(points+Math.max(0,projection||0)*left),state,game};
  };

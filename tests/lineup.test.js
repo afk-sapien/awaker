@@ -24,9 +24,12 @@ test('missing projections remain unknown instead of inflating gains',()=>{
  const r=lineupComparisons(data,league);assert.equal(r.baseline,null);assert.equal(r.bench[0].options.find(o=>o.id==='a').delta,null);
  assert.equal(r.bench[1].reason,'Projection unavailable');assert.equal(r.bench[1].projection,null);
 });
-test('injured starters use the same raw projection basis; injured bench players cannot be recommended',()=>{
+test('a starter ruled out counts as the zero he will score, and an injured bench player cannot be recommended',()=>{
  const {data,league}=fixture();data.players.a.injury_status='Out';data.players.d.injury_status='IR';
- const r=lineupComparisons(data,league);assert.equal(r.baseline,30);assert.equal(r.bench[0].options[0].delta,5);assert.equal(r.bench[1].reason,'IR');
+ const r=lineupComparisons(data,league);assert.equal(r.baseline,20,'his 10 projected points are not coming');
+ assert.equal(r.starters[0].projection,0);assert.equal(r.bench[0].options[0].delta,15,'benching him gains everything the replacement scores');
+ assert.equal(r.bench[1].reason,'IR');
+ data.players.a.injury_status='Questionable';assert.equal(lineupComparisons(data,league).baseline,30,'a questionable starter still might play');
 });
 test('empty slots contribute zero while negative and zero projections remain valid',()=>{
  const {data,league}=fixture();league.mine.starters=['0'];data.projections[2].b.stats.rec=-2;data.projections[2].d.stats.rec=0;

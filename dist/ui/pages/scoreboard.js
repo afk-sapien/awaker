@@ -1,14 +1,14 @@
 // Around the league: every matchup, and one game opened up.
 import {matchupDetail,median} from '../../league.js';
 import {S} from '../state.js';
-import {chance,empty,esc,fmt,league,leagueOptions,ordinal,pageHead,playerChip,pname,projectionNote,record,signed,teamCell} from '../core.js';
+import {chance,empty,esc,fmt,injury,league,leagueOptions,ordinal,pageHead,playerChip,pname,projectionNote,record,signed,teamCell} from '../core.js';
 import {currentLeagueOutlook,leagueGate} from './league-outlook.js';
 
 export function lineupsView(o,g,by){
  const detail=matchupDetail({league:league(),players:S.data.players,projections:S.data.projections[S.data.week],games:S.data.games,rosterIds:g.teams});if(!detail)return '';
  const [a,b]=detail.sides,teams=g.teams.map(id=>by.get(id));
  const when=p=>{const game=p.game,where=game?.opponent?`${game.home?'vs':'@'} ${game.opponent}`:'';return p.state==='live'?`<span class="lu-clock">${esc(game.detail||'Live')}</span> ${esc(where)}`:p.state==='done'?`Final ${esc(where)}`:p.state==='bye'?'Bye':p.state==='pre'?esc([game.detail,where].filter(Boolean).join(' · ')):''};
- const player=(p,flip)=>p.id?`<div class="lu-player ${flip?'flip':''} lu-${p.state}">${playerChip(p.id,`<div class="muted small">${esc(S.data.players[p.id].position||'')} · ${esc(S.data.players[p.id].team||'FA')}${S.data.players[p.id].injury_status?` · <span class="attention">${esc(S.data.players[p.id].injury_status)}</span>`:''}</div><div class="lu-when small">${when(p)}</div>`)}</div>`:`<div class="lu-player ${flip?'flip':''} lu-empty"><span class="muted">Empty</span></div>`;
+ const player=(p,flip)=>p.id?`<div class="lu-player ${flip?'flip':''} lu-${p.state}">${playerChip(p.id,`<div class="muted small">${esc(S.data.players[p.id].position||'')} · ${esc(S.data.players[p.id].team||'FA')}${injury(S.data.players[p.id])}</div><div class="lu-when small">${when(p)}</div>`)}</div>`:`<div class="lu-player ${flip?'flip':''} lu-empty"><span class="muted">Empty</span></div>`;
  // Before kickoff the number that matters is the projection; once he has played it is the points.
  const started=p=>p.state==='live'||p.state==='done'||p.state==='bye',points=(p,other,flip)=>{if(!p.id)return `<div class="lu-score ${flip?'flip':''}"><strong class="muted">—</strong></div>`;const diff=p.projection===null?null:p.points-p.projection,won=started(p)&&started(other)&&p.points>other.points;
   return `<div class="lu-score ${flip?'flip':''} ${won?'won':started(p)&&started(other)&&other.id?'lost':''}"><strong class="${started(p)?'':'pending'}">${started(p)?fmt(p.points,2):fmt(p.projection)}</strong><small>${p.state==='live'?`heading for ${fmt(p.heading)}`:p.state==='done'&&diff!==null?`<span class="${diff>=2?'gain':diff<=-2?'attention':''}">${signed(diff)}</span> vs ${fmt(p.projection)} proj.`:p.state==='bye'?'no game':'projected'}</small></div>`};

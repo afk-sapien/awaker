@@ -189,3 +189,5 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
 .waiver-table tr.waiver-upgrade>td:first-child{box-shadow:inset 3px 0 0 var(--green)}.waiver-table tr.waiver-none>td{opacity:.6}.waiver-table tr.waiver-none>td:last-child{opacity:1}
 .league-card.winning{box-shadow:inset 0 3px 0 var(--green)}.league-card.trailing{box-shadow:inset 0 3px 0 var(--orange)}.league-card.winning .card-standing{color:var(--green)}.league-card.trailing .card-standing{color:#a3401a}
 .league-tile .tile-text{font-family:'DM Sans',system-ui,sans-serif;font-size:19px;font-weight:700;letter-spacing:-.3px;line-height:1.75}
+/* Injury designations, colored by how likely he is to play. The word is always there too, so color is never the only signal. */
+.injury{display:inline-block;font-weight:700;font-size:.92em;line-height:1.35;padding:0 5px;border-radius:4px;white-space:nowrap}.injury-out{color:#a61b12;background:#fde3df}.injury-doubtful{color:#8f3f06;background:#fde6d2}.injury-questionable{color:#6b4e00;background:#fcefb4}.injury-other{color:#44525a;background:#eaeef0}

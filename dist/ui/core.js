@@ -1,5 +1,5 @@
 // Shared pieces every page draws with: escaping, number formats, icons, navigation and page chrome.
-import {projected} from '../engine.js';
+import {projected,ruledOut} from '../engine.js';
 import {S} from './state.js';
 
 export const icon=(name)=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${({watch:'<rect x="3" y="4" width="18" height="14" rx="2"/><path d="m8 22 4-4 4 4M8 10h8M12 6v8"/>',waivers:'<path d="m3 17 6-6 4 3 8-10M15 4h6v6"/>',lineup:'<path d="M9 5h12M9 12h12M9 19h12M3 5h1M3 12h1M3 19h1"/>',trades:'<path d="M3 7h18m-5-5 5 5-5 5M21 17H3m5-5-5 5 5 5"/>','trade-builder':'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 12h8m-4-4v8"/>',defenses:'<path d="m12 2 8 4v6c0 5-8 10-8 10S4 17 4 12V6z"/>',season:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',scoreboard:'<rect x="3" y="3" width="18" height="7" rx="1.5"/><rect x="3" y="14" width="18" height="7" rx="1.5"/><path d="M7 6.5h6M7 17.5h4"/>',league:'<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3"/>',notifications:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10 21a2 2 0 0 0 4 0"/>',settings:'<path d="M3 6h18M3 12h18M3 18h18"/><circle cx="8" cy="6" r="2" fill="currentColor"/><circle cx="16" cy="12" r="2" fill="currentColor"/><circle cx="10" cy="18" r="2" fill="currentColor"/>'})[name]}</svg>`;
@@ -14,7 +14,9 @@ export const isTradeView=()=>S.view==='trades'||S.view==='trade-builder';
 export function toast(t){$('#toast').textContent=t;clearTimeout(toast.t);toast.t=setTimeout(()=>$('#toast').textContent='',4500)}
 export const league=()=>S.data.leagues.find(l=>l.league_id===S.leagueId&&l.enabled)||S.data.leagues.find(l=>l.enabled);
 export const pname=id=>S.data.players[id]?.full_name||[S.data.players[id]?.first_name,S.data.players[id]?.last_name].filter(Boolean).join(' ')||id||'Empty slot';
-export function value(id,l=league(),w=S.data.week){return projected(S.data.projections[w]?.[id]?.stats,l?.scoring_settings)}
+// Before his game this week, a player ruled out projects the zero he will score, not whatever Sleeper still lists
+// for him. Once it has kicked off, the pregame projection is history and is shown as it was.
+export function value(id,l=league(),w=S.data.week){const p=S.data.players[id];if(w===S.data.week&&ruledOut(p)&&(S.data.games?.[p.team]?.state??'pre')==='pre')return 0;return projected(S.data.projections[w]?.[id]?.stats,l?.scoring_settings)}
 export const scoring=l=>l.scoring_settings?.rec===1?'PPR':l.scoring_settings?.rec===.5?'HALF PPR':l.scoring_settings?.rec===0||!l.scoring_settings?.rec?'STANDARD':'CUSTOM';
 export function leagueOptions(selected=S.leagueId,all=false){return (all?'<option value="all">All leagues</option>':'')+S.data.leagues.filter(l=>l.enabled).map(l=>`<option value="${esc(l.league_id)}" ${selected===l.league_id?'selected':''}>${esc(l.name)}</option>`).join('')}
 export function empty(title,body=''){return `<div class="empty"><h3>${esc(title)}</h3>${body?`<p>${esc(body)}</p>`:''}</div>`}
@@ -48,3 +50,5 @@ export const record=r=>`${r.wins}-${r.losses}${r.ties?`-${r.ties}`:''}`;
 export const ordinal=n=>`${n}${['th','st','nd','rd'][n%10>3||Math.floor(n/10)%10===1?0:n%10]}`;
 export const teamCell=(r,note='')=>`<th scope="row" class="team-cell ${r.mine?'mine':''}"><strong>${esc(r.team)}</strong>${r.mine?' <span class="pill you">YOU</span>':''}<div class="muted small">${[r.manager?esc(r.manager):'',note].filter(Boolean).join(' · ')}</div></th>`;
 export const oddsBar=(p,o,label)=>`<div class="odds" title="${esc(label)}"><span class="odds-track"><i style="width:${Math.round(p*100)}%"></i></span><strong>${chance(p,o)}</strong></div>`;
+// An injury designation, colored by how likely he is to play: red when ruled out, orange when doubtful, yellow when questionable.
+export function injury(player){const status=player?.injury_status;if(!status)return '';const tone=ruledOut(player)?'out':status==='Doubtful'?'doubtful':status==='Questionable'?'questionable':'other';return ` · <span class="injury injury-${tone}">${esc(status)}</span>`}
