@@ -15,9 +15,10 @@ import {observeScores} from './ui/pages/watchroom.js';
 import {rememberPage,render} from './ui/render.js';
 import {connect,refresh} from './ui/session.js';
 import {bindEvents} from './ui/events.js';
+import {badge,unread} from './ui/unread.js';
 
 S.data=demo();
-try{const response=await fetch('/api/v1/settings',{signal:AbortSignal.timeout(15000)});if(response.status===401){location.replace('/integrations.html');await new Promise(()=>{})}if(response.ok){S.serviceSettings=(await response.json()).settings;S.serviceMode=true}}catch{}
+try{const response=await fetch('/api/v1/settings',{signal:AbortSignal.timeout(15000)});if(response.status===401){location.replace('/integrations.html');await new Promise(()=>{})}if(response.ok){const result=await response.json();S.serviceSettings=result.settings;S.unread=unread(result.worker);S.serviceMode=true}}catch{}
 let stored=null;try{stored=localStorage.getItem('sunday-preferences')}catch{}
 applyPreferences(readPreferences(stored,S.serviceMode?S.serviceSettings:null));
 try{S.themeId=getTheme(localStorage.getItem('sunday-theme')).id}catch{}
@@ -31,5 +32,7 @@ if(pages.includes(route.get('view')))S.view=route.get('view');else if(pages.incl
 if(route.get('league')){S.leagueId=route.get('league');S.prefs.analysisLeague=S.leagueId}
 rememberPage();
 observeScores();render();
+// Pushes that arrive while the dashboard is open raise the count without redrawing the page.
+if(S.serviceMode)setInterval(async()=>{if(document.hidden)return;try{const response=await fetch('/api/v1/settings');if(!response.ok)return;S.unread=unread((await response.json()).worker);const link=$('[data-nav="notifications"]');if(link){link.querySelector('.nav-count')?.remove();link.insertAdjacentHTML('beforeend',badge(S.unread))}}catch{}},120000);
 if(S.serviceMode&&S.prefs.username){refresh(true)}else if(S.prefs.username){$('#username').value=S.prefs.username;connect(S.prefs.username)}else{if(isTradeView())ensureTradeOutlook();if(S.view==='waivers')ensureWaiverOutlook();if(S.view==='season')ensureSeasonPage();if(isLeagueView())ensureLeagueSeason()}
 if(document.modelContext?.registerTool){try{document.modelContext.registerTool({name:'read_awaker_watchroom',description:'Read tracked fantasy players, league-specific points, and game status currently available in Awaker.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true,untrustedContentHint:true},execute(input){if(Object.keys(input||{}).length)throw Error('This tool takes no arguments.');return {demo:S.data.demo,week:S.data.week,updatedAt:S.data.updatedAt,players:aggregateWatch(S.data.leagues,S.data.players,S.data.games).map(p=>({name:pname(p.id),number:p.player.number,team:p.player.team,status:p.game?.state||'unknown',leagues:p.appearances}))}}})}catch{}}

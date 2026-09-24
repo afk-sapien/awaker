@@ -191,3 +191,4 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
 .league-tile .tile-text{font-family:'DM Sans',system-ui,sans-serif;font-size:19px;font-weight:700;letter-spacing:-.3px;line-height:1.75}
 /* Injury designations, colored by how likely he is to play. The word is always there too, so color is never the only signal. */
 .injury{display:inline-block;font-weight:700;font-size:.92em;line-height:1.35;padding:0 5px;border-radius:4px;white-space:nowrap}.injury-out{color:#a61b12;background:#fde3df}.injury-doubtful{color:#8f3f06;background:#fde6d2}.injury-questionable{color:#6b4e00;background:#fcefb4}.injury-other{color:#44525a;background:#eaeef0}
+.nav-count{margin-left:auto;min-width:20px;padding:1px 6px;border-radius:10px;background:var(--orange);color:#fff;font-size:11px;font-weight:700;line-height:18px;text-align:center}
