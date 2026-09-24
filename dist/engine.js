@@ -9,12 +9,18 @@ export const STAT_FALLBACKS={fgm_50_59:['fgm_50p']};
 // fgm_50p holds the 60-plus makes too. A stat line with fgm_60p but no fgm_50_59 key, which is how a
 // finished week reads when every long kick went 60+, would otherwise score each of them twice.
 export const STAT_OVERLAPS={fgm_50p:['fgm_60p']};
+// Sleeper's kicker projections now carry only the total makes and attempts, the sub-50 buckets and a few miss
+// buckets, with no fgm_50p or fgmiss. Both follow from what is there, so neither the long makes nor the misses
+// that every league scores go missing. Also used only when the key itself is absent.
+const SHORT_MAKES=['fgm_0_19','fgm_20_29','fgm_30_39','fgm_40_49'];
+export const STAT_DERIVED={fgm_50p:s=>Number.isFinite(s.fgm)?Math.max(0,Math.round((s.fgm-SHORT_MAKES.reduce((t,k)=>t+(Number(s[k])||0),0))*100)/100):undefined,fgmiss:s=>Number.isFinite(s.fga)?Math.max(0,Math.round((s.fga-(Number(s.fgm)||0))*100)/100):undefined};
+const stat=(stats,key)=>Number.isFinite(stats[key])?stats[key]:STAT_DERIVED[key]?.(stats);
 // Ruled out for the week: whatever he was projected, he will not play. Doubtful and Questionable players still might.
 export const RULED_OUT=['Out','IR','PUP','Sus','Suspended'];
 export const ruledOut=player=>RULED_OUT.includes(player?.injury_status);
 // Never started, picked up or traded for: ruled out, or doubtful enough not to count on. Every list of statuses is this one.
 export const UNAVAILABLE=[...RULED_OUT,'Doubtful'];
-export function projected(stats,scoring){if(!stats)return null;let found=false,sum=0;for(const [key,mult]of Object.entries(scoring||{})){let value=stats[key];if(!Number.isFinite(value))for(const alt of STAT_FALLBACKS[key]||[])if(Number.isFinite(stats[alt])){value=Math.max(0,(STAT_OVERLAPS[alt]||[]).reduce((v,k)=>Number.isFinite(scoring[k])&&Number.isFinite(stats[k])?v-stats[k]:v,stats[alt]));break}if(Number.isFinite(value)&&Number.isFinite(mult)){sum+=value*mult;found=true;}}return found?Math.round(sum*100)/100:null;}
+export function projected(stats,scoring){if(!stats)return null;let found=false,sum=0;for(const [key,mult]of Object.entries(scoring||{})){let value=stat(stats,key);if(!Number.isFinite(value))for(const alt of STAT_FALLBACKS[key]||[]){const base=stat(stats,alt);if(Number.isFinite(base)){value=Math.max(0,(STAT_OVERLAPS[alt]||[]).reduce((v,k)=>Number.isFinite(scoring[k])&&Number.isFinite(stats[k])?v-stats[k]:v,base));break}}if(Number.isFinite(value)&&Number.isFinite(mult)){sum+=value*mult;found=true;}}return found?Math.round(sum*100)/100:null;}
 // Rectangular assignment (Hungarian algorithm): cost is rows x cols with rows <= cols, lowest total
 // wins, and the result is the column each row takes.
 export function assign(cost){

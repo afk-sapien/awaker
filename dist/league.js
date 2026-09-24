@@ -155,14 +155,15 @@ export function winChance(a,b){
  return .5*(1+erf((a.mean-b.mean)/spread/Math.SQRT2));
 }
 // This week for every team: points so far, where the score is heading, and how much is still to play.
-export function liveWeek({league,players,projections={},games={},spread=24}){
+// current: this is the NFL's current week, the only one today's injury designations decide.
+export function liveWeek({league,players,projections={},games={},spread=24,current=true}){
  // Without the NFL schedule nobody can be called finished: a starter with points is taken as halfway, the rest as yet to play.
  const teams={},known=Object.keys(games).length>0;
  for(const m of league.matchups||[]){
   let open=0,planned=0,remaining=0;const counts={pre:0,live:0,done:0};let top=null;
   const starters=(m.starters||[]).filter(id=>players[id]);
   for(const id of starters){
-   const points=Number(m.players_points?.[id])||0,game=games[players[id].team],left=known?(game?gameRemaining(game):0):points?.5:1,plan=ruledOut(players[id])&&(!game||game.state==='pre')?0:Math.max(0,projected(projections[id]?.stats,league.scoring_settings)||0);
+   const points=Number(m.players_points?.[id])||0,game=games[players[id].team],left=known?(game?gameRemaining(game):0):points?.5:1,plan=current&&ruledOut(players[id])&&(!game||game.state==='pre')?0:Math.max(0,projected(projections[id]?.stats,league.scoring_settings)||0);
    counts[!known?(points?'live':'pre'):!game||game.state==='post'?'done':game.state==='pre'?'pre':'live']++;
    planned+=plan;open+=plan*left;remaining+=left;
    if(points>0&&(!top||points>top.points))top={id,points};
@@ -181,11 +182,11 @@ export function liveWeek({league,players,projections={},games={},spread=24}){
 // Both lineups of one matchup, slot by slot, the way Sleeper lays a matchup out: starters in lineup
 // order, then the bench, each with points so far, the pregame projection and where he is heading.
 export const SLOT_LABELS={FLEX:'FLX',SUPER_FLEX:'SF',REC_FLEX:'W/T',WRRB_FLEX:'W/R',IDP_FLEX:'IDP'};
-export function matchupDetail({league,players,projections={},games={},rosterIds}){
+export function matchupDetail({league,players,projections={},games={},rosterIds,current=true}){
  const slots=activeSlots(league),known=Object.keys(games).length>0;
  const line=(m,id)=>{
   if(!id||id==='0'||!players[id])return {id:null,points:0,projection:null,heading:0,state:'empty',game:null};
-  const points=Number(m.players_points?.[id])||0,game=games[players[id].team]||null,projection=ruledOut(players[id])&&(!game||game.state==='pre')?0:projected(projections[id]?.stats,league.scoring_settings);
+  const points=Number(m.players_points?.[id])||0,game=games[players[id].team]||null,projection=current&&ruledOut(players[id])&&(!game||game.state==='pre')?0:projected(projections[id]?.stats,league.scoring_settings);
   const state=!known?'unknown':!game?'bye':game.state==='post'?'done':game.state==='pre'?'pre':'live',left=state==='pre'||state==='unknown'?1:state==='live'?gameRemaining(game):0;
   return {id,points:round(points),projection:Number.isFinite(projection)?round(projection):null,heading:round(points+Math.max(0,projection||0)*left),state,game};
  };
@@ -240,9 +241,9 @@ export function simulate({league,rating,standing,current=null,future=[],spread=2
 }
 
 // past: [{week, matchups}] before the current week. future: [{week, matchups}] after it, scores empty.
-export function leagueOutlook({league,players,past=[],future=[],currentWeek,projections={},games={},runs=4000,rosterMemo=(weeks,compute)=>compute()}){
+export function leagueOutlook({league,players,past=[],future=[],currentWeek,isNflWeek=true,projections={},games={},runs=4000,rosterMemo=(weeks,compute)=>compute()}){
  const shape=leagueShape(league),regular=currentWeek<shape.playoffStart;
- const first=seasonSoFar({league,players,weeks:past}),live=liveWeek({league,players,projections:projections[currentWeek],games,spread:weeklySpread(first)});
+ const first=seasonSoFar({league,players,weeks:past}),live=liveWeek({league,players,projections:projections[currentWeek],games,spread:weeklySpread(first),current:isNflWeek});
  // Once every game is final the current week is a result like any other.
  const closed=regular&&live.complete,finished=closed?[...past,{week:currentWeek,matchups:league.matchups}]:past,season=closed?seasonSoFar({league,players,weeks:finished}):first;
  const spread=weeklySpread(season),ahead=Object.keys(projections).map(Number).filter(w=>w>=currentWeek+(closed?1:0)&&w<=18).sort((a,b)=>a-b);

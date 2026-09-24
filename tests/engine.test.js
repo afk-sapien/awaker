@@ -147,6 +147,15 @@ test('a 60-yard make with no 50-59 key on the line scores once, as a 60-yard mak
  assert.equal(projected({fgm_60p:.1,fgm_50p:.4},scoring),2.1,'a projection that splits out 60-plus is not double counted either');
  assert.equal(projected({fgm_60p:1,fgm_50p:1},{fgm_50_59:5}),5,'a league without a 60-plus category keeps every long make in 50-59');
 });
+test('a kicker projection with only total makes and attempts still scores long makes and misses',()=>{
+ // Sleeper's current kicker lines, like this one for week 4, carry fgm, fga and the sub-50 buckets and nothing else.
+ const line={fga:2,fgm:1.75,fgm_20_29:.32,fgm_30_39:.48,fgm_40_49:.42,xpm:2.44};
+ assert.equal(projected(line,{fgm_20_29:3,fgm_30_39:3,fgm_40_49:4,fgm_50_59:5,fgm_60p:6,fgmiss:-1,xpm:1}),8.92,'.53 long makes at 5, and .25 misses at -1');
+ assert.equal(projected(line,{fgm_50p:5}),2.65);
+ // A finished week that itemises its buckets and misses is scored from them alone.
+ assert.equal(projected({fga:3,fgm:3,fgm_50_59:1,fgm_40_49:2,fgmiss:0},{fgm_40_49:4,fgm_50p:5,fgmiss:-1}),13);
+ assert.equal(projected({fga:2,fgmiss:2},{fgmiss:-1}),-2,'a kicker who missed everything has no fgm key at all');
+});
 test('an 18-starter IDP lineup is set in full, and a tie keeps the player already in the slot',()=>{
  const slots=['QB','RB','RB','WR','WR','WR','TE','FLEX','FLEX','K','DEF','DL','DL','LB','LB','DB','DB','IDP_FLEX'];
  const players={},points={};let n=0;

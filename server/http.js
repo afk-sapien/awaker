@@ -70,34 +70,40 @@ export function createHttpServer({service, worker, ntfy, adminToken, agentToken,
     try {
       if (req.headers.host !== new URL(origin).host) throw bad('Unrecognized host. Open the address set in AWAKER_PUBLIC_URL, or change it to the one you use.', 403)
       if (req.headers.origin && req.headers.origin !== origin) throw bad('Unrecognized origin.', 403)
-      const path = new URL(req.url, origin).pathname
+      let path
+      try { path = new URL(req.url, origin).pathname } catch { throw bad('Malformed request address.') }
       if (path === '/healthz' && ['GET', 'HEAD'].includes(req.method)) {
         json(res, 200, {status: 'ok'})
         return
       }
       if (path.startsWith('/api/')) {
         // Behind a reverse proxy every client shares one address, so a credential gets its own
-        // bucket and anonymous traffic cannot lock the owner or agent out. Anonymous requests,
-        // share a smaller allowance per address, and sign-in has one of its own so other anonymous
-        // traffic cannot use it up.
+        // bucket and anonymous traffic cannot lock the owner or agent out. Anonymous requests
+        // share a smaller allowance per address. Sign-in counts only failed attempts, in a bucket of
+        // their own: guessing is slowed, but nobody can use up the owner's allowance with bad tokens.
         const auth = role(req)
         const principal = !open && auth
         const login = path === '/api/v1/session' && req.method === 'POST'
-        const key = principal ? `role:${auth}` : `${login ? 'login' : 'ip'}:${req.socket.remoteAddress}`
         const window = Math.floor(now() / 60000)
         for (const [name, value] of rates) if (value.window !== window) rates.delete(name)
-        if (!principal && !rates.has(key) && rates.size >= 1000) throw bad('Too many requests.', 429)
-        const rate = rates.get(key) || {window, count: 0}
-        rates.set(key, rate)
-        if (++rate.count > (principal || open ? 120 : 30)) {
-          res.setHeader('Retry-After', '60')
-          throw bad('Too many requests.', 429)
+        const limit = (key, max) => {
+          if (!principal && !rates.has(key) && rates.size >= 1000) throw bad('Too many requests.', 429)
+          const rate = rates.get(key) || {window, count: 0}
+          rates.set(key, rate)
+          if (++rate.count > max) {
+            res.setHeader('Retry-After', '60')
+            throw bad('Too many requests.', 429)
+          }
         }
-        if (path === '/api/v1/session' && req.method === 'POST') {
+        if (!login) limit(principal ? `role:${auth}` : `ip:${req.socket.remoteAddress}`, principal || open ? 120 : 30)
+        if (login) {
           if (req.headers.origin !== origin) throw bad('Same-origin login required.', 403)
           if (open) throw bad('This service has no owner token, so there is nothing to sign in to.', 409)
           const input = await body(req)
-          if (!equal(input?.token, adminToken)) throw bad('Invalid owner token.', 401)
+          if (!equal(input?.token, adminToken)) {
+            limit(`login:${req.socket.remoteAddress}`, 30)
+            throw bad('Invalid owner token.', 401)
+          }
           for (const [key, until] of sessions) if (until <= now()) sessions.delete(key)
           if (sessions.size >= 100) sessions.delete(sessions.keys().next().value)
           const token = randomBytes(32).toString('hex')

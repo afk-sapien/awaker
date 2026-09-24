@@ -101,7 +101,8 @@ export async function askFor(mode,id){
   if(result.cancelled||run!==S.shopRun)return;S.shopResult={...result,mode:S.tradeAsk,model};render();
  }catch(e){toast(e.message);S.shopId='';S.tradeAsk='any';render()}
 }
-export function tradeResultKey(l,model){return JSON.stringify([identity(model),S.tradeExcluded,S.tradeMinGain,S.tradeMaxGap,protectedPlayers(l),partners(l).map(p=>[p.roster_id,partnerName(l,p)])])}
+// The bias toward your gain decides which packages make the shortlist, so it belongs in the key.
+export function tradeResultKey(l,model){return JSON.stringify([identity(model),S.penalty,S.tradeExcluded,S.tradeMinGain,S.tradeMaxGap,protectedPlayers(l),partners(l).map(p=>[p.roster_id,partnerName(l,p)])])}
 export const atPosition=(id,position)=>(S.data.players[id]?.fantasy_positions||[S.data.players[id]?.position]).includes(position);
 export const targeted=ideas=>ideas&&S.tradeTarget?ideas.filter(r=>r.get.some(id=>atPosition(id,S.tradeTarget))):ideas;
 // How the list is ordered. The numbers sorted on are the ones printed on each card.
@@ -171,7 +172,7 @@ export function tradeBuilder(){
 export async function suggestTrades(){
  const l=league(),model=seasonModel(l);if(!model){toast('Load the season outlook first.');return}
  const resultKey=tradeResultKey(l,model),cached=tradeResults.peek(resultKey);if(cached){S.tradeSuggestions=rankTrades(cached.ideas);render();return}
- const run=++S.tradeRun,key=seasonKey(),btn=$('#suggest-trades');btn.disabled=true;btn.textContent='Comparing the season…';
+ const run=++S.tradeRun,key=seasonKey(),btn=$('#suggest-trades');if(btn){btn.disabled=true;btn.textContent='Comparing the season…'}
  await new Promise(r=>setTimeout(r,20));
  try{const result=await findTradeIdeas(S.data,l,model,{tradeExcluded:S.tradeExcluded,tradeMinGain:S.tradeMinGain,tradeMaxGap:S.tradeMaxGap,tradeOwnBias:S.penalty,waiverProtected:S.prefs.waiverProtected},{limit:10000,cancelled:()=>run!==S.tradeRun||seasonKey()!==key||league()?.league_id!==l.league_id||seasonModel(league())!==model||tradeResultKey(league(),model)!==resultKey});
   if(result.cancelled)return;const ideas=result.ideas;

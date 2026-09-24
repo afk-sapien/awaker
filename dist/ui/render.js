@@ -23,9 +23,11 @@ export function render(){if(!S.data.demo&&S.watchLeague!=='all'&&!S.data.leagues
  // Sections are matched partly by position, so they are only reopened on the page they were opened on.
  if(S.drawnView===S.view)for(const k of openDetails){const el=uiFind(k);if(el)el.open=true}S.drawnView=S.view;
  document.querySelectorAll('[data-trade-detail]').forEach(el=>{el.open=openTrades.has(el.dataset.tradeDetail)});
- if(focusAt&&!active.isConnected){const el=uiFind(focusAt);if(el){el.focus({preventScroll:true});if(typeof sel==='number'&&el.setSelectionRange){try{el.setSelectionRange(sel,sel)}catch{}}}}
+ // A button redrawn as disabled while it works cannot take focus, so focus waits and returns once it is enabled again.
+ const want=focusAt&&!active.isConnected?focusAt:S.pendingFocus&&(!document.activeElement||document.activeElement===document.body)?S.pendingFocus:null;S.pendingFocus=null;
+ if(want){const el=uiFind(want);if(el?.disabled)S.pendingFocus=want;else if(el){el.focus({preventScroll:true});if(want===focusAt&&typeof sel==='number'&&el.setSelectionRange){try{el.setSelectionRange(sel,sel)}catch{}}}}
 }
 export function rememberPage(){
  try{localStorage.setItem('sunday-page',S.view)}catch{}
- const url=new URL(location.href);url.searchParams.set('view',S.view);history.replaceState(history.state,'',url);
+ const url=new URL(location.href);url.searchParams.set('view',S.view);url.searchParams.delete('league');history.replaceState(history.state,'',url);
 }

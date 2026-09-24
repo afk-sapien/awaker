@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased
+
+- Kickers project their long field goals and their misses. Sleeper's kicker projections now list
+  only total makes and attempts plus the under-50 buckets, so 50-plus makes (about half a kick a
+  week, roughly 2.5 points where they score 5) and missed kicks went unscored. Both are now worked
+  out from the totals, and only when the stat itself is missing.
+- Start/sit treats a doubtful starter the way its own optimizer does, as unlikely to play, so benching
+  him shows as a gain instead of a swap "worth" negative points. A starter whose team has no game
+  this week counts as zero instead of making the whole lineup total unknown.
+- Around the league no longer zeroes ruled-out players when the week shown is not the NFL's current
+  one, matching start/sit and the rest of the dashboard.
+- Opening Awaker from a notification no longer pins the analysis league from its link: switching
+  leagues afterwards sticks across reloads.
+- Clicking a depth-chart gap or "See offers" and then moving on before the season outlook loads no
+  longer starts that search later, on whatever page you are on.
+- Refresh updates the standings and odds when only past weeks or the schedule changed, the trade
+  search respects a changed "Bias toward your gain", and clicking your league card while its season
+  loads still opens your matchup.
+- Keyboard focus returns to Refresh-style buttons once they finish working, and to the Theme button
+  however its dialog closes.
+- The service counts only failed sign-ins toward the sign-in limit, so bad attempts from behind a
+  shared proxy address can no longer lock the owner out. An unparseable request address gets a 400
+  instead of a logged server fault.
+
 ## 0.7.0
 
 - Injury designations are colored everywhere a player appears: red when he is ruled out (Out, IR,

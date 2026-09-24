@@ -33,6 +33,15 @@ test('a starter ruled out counts as the zero he will score, and an injured bench
  data.players.a.injury_status='Out';data.games.A.state='in';assert.equal(lineupComparisons(data,league).starters[0].projection,10,'once his game is on, the pregame projection stands');
  data.games.A.state='pre';data.nfl={week:1};assert.equal(lineupComparisons(data,league).baseline,30,'browsing another week, today’s status decides nothing');
 });
+test('a doubtful starter counts as zero, as the optimizer already treats him, so benching him shows as a gain',()=>{
+ const {data,league}=fixture();data.players.a.injury_status='Doubtful';
+ const r=lineupComparisons(data,league);assert.equal(r.starters[0].projection,0);assert.equal(r.bench[0].options[0].delta,15);
+});
+test('a starter whose team has no game this week counts as zero instead of leaving the lineup total unknown',()=>{
+ const {data,league}=fixture();delete data.games.A;delete data.projections[2].a;
+ const r=lineupComparisons(data,league);assert.equal(r.baseline,20);assert.equal(r.bench[0].options[0].delta,15);
+ data.games={};assert.equal(lineupComparisons(data,league).baseline,null,'without a schedule, a missing projection is still unknown');
+});
 test('Sleeper’s Sus is suspended everywhere: never recommended, and never counted',()=>{
  const {data,league}=fixture();data.players.d.injury_status='Sus';data.players.a.injury_status='Sus';
  const r=lineupComparisons(data,league);assert.equal(r.bench[1].reason,'Sus');assert.equal(r.starters[0].projection,0);

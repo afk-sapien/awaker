@@ -9,9 +9,10 @@ const {host, port, publicUrl} = config()
 const server = createServer(async (req, res) => {
   try {
     if (req.headers.host !== new URL(publicUrl).host) return json(res, 403, {error: 'Unrecognized host. Open the address set in AWAKER_PUBLIC_URL, or change it to the one you use.'})
-    const {pathname} = new URL(req.url, publicUrl)
+    let pathname
+    try { ({pathname} = new URL(req.url, publicUrl)) } catch { return json(res, 400, {error: 'Malformed request address.'}) }
     if (pathname === '/healthz' && ['GET', 'HEAD'].includes(req.method)) return json(res, 200, {status: 'ok'})
-    await serveStatic(req, res, resolve(root, 'dist'), new URL(req.url, publicUrl).pathname)
+    await serveStatic(req, res, resolve(root, 'dist'), pathname)
   } catch (error) {
     json(res, error.status || 500, {error: error.status ? error.message : 'Request failed.'})
   }
