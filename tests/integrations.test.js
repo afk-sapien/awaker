@@ -126,6 +126,11 @@ test('event baseline stays quiet, a new opportunity alerts once, and stale/demo 
  const prev=h.service.trades;h.service.trades=async()=>({...await prev(),complete:false,ideas:[idea(10)]});h.at+=7*3600000;await h.worker.tick();assert.equal(h.calls,1);
  h.service.trades=async()=>({...await prev(),demo:true,ideas:[idea(10)]});h.at+=hour;await h.worker.tick();assert.equal(h.calls,1);h.store.close();
 });
+test('the status keeps each sent push readable, so the Notifications page can list it',async()=>{
+ const h=harness();h.config=alerting();await h.worker.tick();h.ideas=[idea()];h.at+=hour;const queued=h.at;await h.worker.tick();
+ const [item]=h.worker.status().outbox;assert.equal(item.status,'accepted');assert.equal(item.createdAt,queued);assert.equal(item.acceptedAt,queued);
+ assert.equal(item.title,'New trade opportunity');assert.match(item.message,/^League: A for B\./);assert.match(item.url,/\?view=trades/);h.store.close();
+});
 test('failed pushes retry durably and expired opportunities are not delivered',async()=>{
  const h=harness();let attempts=0;const worker=createWorker({store:h.store,service:h.service,now:()=>h.at,publish:async()=>{attempts++;throw Error('offline')}});
  await worker.tick();h.at+=60000;await worker.tick();assert.equal(attempts,1);assert.equal(worker.status().outbox[0].status,'pending');

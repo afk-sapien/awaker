@@ -18,6 +18,8 @@
 </section>
 <ul id="scan-found" class="found-list"></ul>
 
+<section class="panel" id="sent-panel"><header class="card-head"><h2>Sent to your phone</h2><button type="button" class="link-button" id="sent-reload">Refresh</button><p class="muted">Everything Awaker has pushed, newest first, so you can read it here instead.</p></header><div id="sent-list" class="sent-list"></div><button type="button" class="link-button" id="sent-more" hidden>Show older</button></section>
+
 <form id="settings-form" novalidate>
 <section class="panel"><header class="card-head"><h2>Your phone</h2><p class="muted">Pushes go through <a href="https://ntfy.sh" target="_blank" rel="noreferrer">ntfy</a>, a free app. No account: choose a topic, then subscribe to the same topic in the ntfy app.</p></header>
  <div class="field-grid"><label class="field"><span>Server</span><input id="ntfy-url" type="url" placeholder="https://ntfy.sh" spellcheck="false"></label>
@@ -56,7 +58,7 @@
 
 </form>
 
-<section class="panel"><header class="card-head"><h2>Recent activity</h2><button type="button" class="link-button" id="reload">Refresh</button></header><p id="worker-status" class="muted small"></p><div id="delivery-status" class="activity-list"></div><div id="reports"></div></section>
+<section class="panel"><header class="card-head"><h2>Recent activity</h2><button type="button" class="link-button" id="reload">Refresh</button></header><p id="worker-status" class="muted small"></p><div id="reports"></div></section>
 </div>
 </div></main></div>
 <script src="/boot.js"></script><script type="module" src="/integrations.js"></script></body></html>

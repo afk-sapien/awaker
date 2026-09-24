@@ -33,13 +33,28 @@ function status(){
  $('status-last-note').textContent=`${found}. ${scan.sent?`Sent ${scan.sent} new.`:scan.held?held[scan.held]+'.':first?'Recorded as the starting point.':'Nothing new.'}`;
  for(const line of scan.top||[]){const li=document.createElement('li');li.textContent=line;$('scan-found').append(li)}
 }
+// Every push the worker queued, newest first, readable here without the phone. Expired and
+// cancelled ones never left the server, so they are not shown. Open entries stay open on refresh.
+const stamp=at=>new Date(at).toLocaleString([], {timeZone:config.timezone,month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+const sentState={pending:'Sending',failed:'Not delivered'};let sentShown=10;
+// Links carry the server's public address, which may not be the one this page was opened on.
+const here=url=>{try{const u=new URL(url);return u.pathname+u.search}catch{return '/'}};
+function sent(){
+ const open=new Set([...$('sent-list').querySelectorAll('details[open]')].map(d=>d.dataset.id)),items=worker.outbox.filter(o=>o.status in sentState||o.status==='accepted').reverse();
+ $('sent-list').replaceChildren();$('sent-more').hidden=items.length<=sentShown;
+ if(!items.length)$('sent-list').textContent=push.configured?'Nothing sent yet.':'Nothing sent yet. Set up your phone below to start receiving notifications.';
+ for(const item of items.slice(0,sentShown)){
+  const d=document.createElement('details'),summary=document.createElement('summary'),title=document.createElement('strong'),when=document.createElement('span'),pre=document.createElement('pre'),a=document.createElement('a');
+  d.dataset.id=item.id;d.open=open.has(item.id);title.textContent=item.title;when.className='muted small';when.textContent=stamp(item.acceptedAt||item.createdAt||item.nextAttempt);summary.append(title,when);
+  if(item.status!=='accepted'){const tag=document.createElement('span');tag.className=`tag ${item.status}`;tag.textContent=item.error&&item.status==='pending'?'Retrying':sentState[item.status];summary.append(tag)}
+  pre.textContent=item.message;a.href=here(item.url);a.textContent='Open in Awaker';d.append(summary,pre,a);$('sent-list').append(d);
+ }
+}
 function activity(){
- status();
+ status();sent();
  $('worker-status').textContent=worker.lastError?`${worker.lastError.message} Last tried ${date(worker.lastError.at)}.`:`Running. Last pass ${date(worker.lastRun)}. Next daily ${date(worker.nextDaily)}, next weekly ${date(worker.nextWeekly)}.`;
- $('delivery-status').replaceChildren();for(const item of worker.outbox.slice(-5).reverse()){const p=document.createElement('p'),title=document.createElement('span'),state=document.createElement('span');title.textContent=item.title;state.className='state';state.textContent=item.error?`${item.status} · ${item.error}`:item.status;p.append(title,state);$('delivery-status').append(p)}
  $('reports').replaceChildren();
  for(const report of worker.reports){const d=document.createElement('details'),summary=document.createElement('summary'),pre=document.createElement('pre');summary.textContent=`${report.period[0].toUpperCase()+report.period.slice(1)} summary · ${date(report.createdAt)} · ${report.delivery}`;pre.textContent=report.text;d.append(summary,pre);$('reports').append(d)}
- if(!worker.outbox.length&&!worker.reports.length)$('delivery-status').textContent='Nothing sent yet.';
 }
 async function load(){const result=await api('/settings');config=result.settings;worker=result.worker;push=result.notifications;fill();phone();activity();$('login-panel').hidden=true;$('connected').hidden=false;$('logout').hidden=!result.authRequired;if(config.username){try{const {data}=await api('/client');const on=data.leagues.filter(l=>l.enabled&&!config.disabled.includes(l.league_id));$('league-list').textContent=on.length?on.map(l=>l.name).join(' · '):'No leagues are turned on.'}catch{}}}
 $('login').addEventListener('submit',async e=>{e.preventDefault();const button=e.currentTarget.querySelector('button');if(button.disabled)return;button.disabled=true;try{await api('/session','POST',{token:$('owner-token').value});$('owner-token').value='';await load();notice('')}catch(e){notice(e.message,true)}finally{button.disabled=false}});
@@ -68,6 +83,11 @@ for(const id of ['ntfy-url','ntfy-topic'])$(id).addEventListener('input',subscri
 $('ntfy-reset').addEventListener('click',async()=>{try{push=(await api('/notifications','DELETE')).notifications;phone();notice(push.configured?'Removed. Using this server’s environment again.':'Phone notifications are off.')}catch(e){notice(e.message,true)}});
 $('test').addEventListener('click',async()=>{$('test').disabled=true;try{await api('/notifications/test','POST',{});notice('Test sent. Check your phone.')}catch(e){notice(`Test failed: ${e.message}`,true)}finally{$('test').disabled=!push.configured}});
 $('scan').addEventListener('click',async()=>{$('scan').disabled=true;notice('Checking trades and waivers. This can take a minute…');try{worker=(await api('/scan','POST',{})).worker;activity();notice(worker.lastError?worker.lastError.message:'Check finished.',!!worker.lastError)}catch(e){notice(e.message,true)}finally{$('scan').disabled=false}});
-$('reload').addEventListener('click',async()=>{try{worker=(await api('/settings')).worker;activity()}catch(e){notice(e.message,true)}});
+$('sent-more').addEventListener('click',()=>{sentShown+=20;sent()});
+const refresh=async(quiet=false)=>{try{worker=(await api('/settings')).worker;activity()}catch(e){if(!quiet)notice(e.message,true)}};
+$('sent-reload').addEventListener('click',()=>refresh());
+// New pushes show up while the page is open, without a reload. Hidden tabs and sign-in screens skip the poll.
+setInterval(()=>{if(!document.hidden&&worker&&!$('connected').hidden)refresh(true)},60000);
+$('reload').addEventListener('click',()=>refresh());
 $('logout').addEventListener('click',async()=>{try{await api('/session','DELETE');location.reload()}catch(e){notice(e.message,true)}});
 load().catch(e=>notice(e.message,true));
