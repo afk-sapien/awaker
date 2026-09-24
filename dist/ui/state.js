@@ -21,6 +21,7 @@ export const S={
  connectRun:0,
  serviceMode:false,
  serviceSettings:null,
+ unread:0,
  prefs:undefined,
  pins:undefined,
  themeId:'default',

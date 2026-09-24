@@ -69,3 +69,13 @@ test('injury designations are colored by how likely he is to play, and a player 
  S.data.nfl={...S.data.nfl,week:S.data.week+1};assert.ok(value(id,league)>0,'on a week other than the NFL’s current one, today’s status decides nothing');S.data.nfl={...S.data.nfl,week:S.data.week};
  S.filter='all';const {before}=await draw('watch');assert.ok(before.includes('class="injury injury-out">Out<'),'his card carries the red badge');
 });
+test('the Notifications count starts at zero in a new browser, then counts pushes delivered since the last visit',async()=>{
+ const {unread,markSeen,badge}=await import('../dist/ui/unread.js'),saved=globalThis.localStorage,kept={};
+ globalThis.localStorage={getItem:k=>kept[k]??null,setItem:(k,v)=>{kept[k]=v}};
+ try{
+  const worker={outbox:[{status:'accepted',acceptedAt:300},{status:'accepted',acceptedAt:100},{status:'failed'},{status:'pending'}]};
+  assert.equal(unread(worker),0,'a first visit does not count the whole history');
+  markSeen(200);assert.equal(unread(worker),1);assert.equal(unread(null),0);
+  assert.match(badge(3),/>3</);assert.match(badge(150),/>99\+</);assert.equal(badge(0),'');
+ }finally{globalThis.localStorage=saved}
+});
