@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.1
 
 - Kickers project their long field goals and their misses. Sleeper's kicker projections now list
   only total makes and attempts plus the under-50 buckets, so 50-plus makes (about half a kick a
