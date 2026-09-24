@@ -96,7 +96,7 @@ export function createWorker({store,service,ntfy=null,publish=null,now=Date.now,
     const report=await service.digest({period});
     state.runs[period]=key;
     const send=notifier.configured()&&!report.demo,entry={id:key,period,createdAt:at,demo:report.demo,delivery:send?'pending':'archived',text:report.text,actions:(report.actions||[]).map(a=>({text:a.text}))};state.reports.unshift(entry);
-    if(send)state.outbox.push({id:key,type:'digest',title:`Awaker ${period} report`,message:report.text,url:link('settings'),status:'pending',attempts:0,nextAttempt:at,expiresAt:at+86400000});
+    if(send)state.outbox.push({id:key,type:'digest',createdAt:at,title:`Awaker ${period} report`,message:report.text,url:link('settings'),status:'pending',attempts:0,nextAttempt:at,expiresAt:at+86400000});
     save();
    }
    const day=localParts(at,settings.timezone).date;if(state.day!==day){state.day=day;state.count=0}
@@ -127,7 +127,7 @@ export function createWorker({store,service,ntfy=null,publish=null,now=Date.now,
      scan.kinds[kind]={found:result.items.length,fresh:fresher,baseline:!baseline};
     }
     if(picked.length){
-     state.outbox.push({id:`alert:${at}`,type:'alert',items:picked,...compose(picked,generatedAt),status:'pending',attempts:0,nextAttempt:at,expiresAt:at+6*3600000});
+     state.outbox.push({id:`alert:${at}`,type:'alert',createdAt:at,items:picked,...compose(picked,generatedAt),status:'pending',attempts:0,nextAttempt:at,expiresAt:at+6*3600000});
      for(const c of picked)Object.assign(fresh[c.key],{lastSent:at,notifiedGain:c.gain,deferred:false});
      state.count++;scan.sent=picked.length;
     }

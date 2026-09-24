@@ -40,7 +40,7 @@ a.nav-btn{text-decoration:none;box-sizing:border-box}
 .switch input+span::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .15s}
 .switch input:checked+span{background:var(--green)}
 .switch input:checked+span::after{transform:translateX(18px)}
-@media(prefers-reduced-motion:reduce){.switch input+span,.switch input+span::after{transition:none}}
+@media(prefers-reduced-motion:reduce){.switch input+span,.switch input+span::after,.sent-list summary::before{transition:none}}
 
 .more{border-top:1px solid var(--line);padding-top:12px;margin-top:2px}
 .more>summary,.more-panel>summary{cursor:pointer;font-size:14px;font-weight:600;color:var(--muted)}
@@ -62,8 +62,17 @@ a.nav-btn{text-decoration:none;box-sizing:border-box}
 .save-state{align-self:flex-end;font-size:13px;font-weight:600;color:var(--muted);text-align:right;max-width:340px;overflow-wrap:anywhere}
 .save-state.saved{color:var(--green)}.save-state.error{color:var(--orange)}
 
-.activity-list p{display:flex;justify-content:space-between;gap:12px;margin:0;padding:10px 0;border-top:1px solid var(--line);font-size:14px}
-.activity-list .state{color:var(--muted);text-transform:capitalize;flex:none}
+.sent-list{font-size:14px;color:var(--muted)}
+.sent-list details{border-top:1px solid var(--line);padding:10px 0;color:var(--ink)}
+.sent-list summary{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;cursor:pointer;list-style-position:outside}
+.sent-list summary::-webkit-details-marker{display:none}
+.sent-list summary::before{content:"›";font-size:18px;line-height:1;color:var(--muted);transition:transform .15s;align-self:center}
+.sent-list details[open]>summary::before{transform:rotate(90deg)}
+.sent-list summary strong{flex:1;min-width:0;font-size:14px;overflow-wrap:anywhere}
+.sent-list .tag{font-size:12px;font-weight:700;padding:1px 8px;border-radius:10px;background:#edf1f2;color:var(--muted)}
+.sent-list .tag.failed{color:var(--orange)}
+.sent-list details>a{display:inline-block;margin-top:8px;font-size:14px;font-weight:600}
+#sent-more{margin-top:6px}
 #reports details{border-top:1px solid var(--line);padding:10px 0}#reports summary{cursor:pointer;font-size:14px}
 .notify-page pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:14px;background:#edf1f2;padding:16px;border-radius:8px;margin:12px 0 0}
 
