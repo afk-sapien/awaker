@@ -1,6 +1,6 @@
 // League outlook: playoff odds, power rankings and team shapes.
 import * as api from '../../api.js';
-import {createMemo,rosterKey} from '../../cache.js';
+import {createMemo,identity,rosterKey} from '../../cache.js';
 import {leagueShape,leagueOutlook} from '../../league.js';
 import {S} from '../state.js';
 import {analysisHeader,chance,empty,esc,fmt,isLeagueView,isTradeView,league,oddsBar,ordinal,record,signed,teamCell} from '../core.js';
@@ -11,9 +11,11 @@ export const leagueOutlooks=createMemo(6),rosterOutlooks=createMemo(12),projecti
 export function leagueSeasonKey(l=league()){return JSON.stringify([S.data.demo?'demo':S.data.user.user_id,S.data.nfl?.season,l?.league_id,S.data.week])}
 export async function ensureLeagueSeason(force=false){
  const l=league();if(!l)return;const key=leagueSeasonKey(l);
- if(S.leagueSeasonState?.key===key&&!force&&(S.leagueSeasonState.loading||S.leagueSeasonState.past))return;
+ if(S.leagueSeasonState?.key===key&&!force&&(S.leagueSeasonState.loading||S.leagueSeasonState.past))return S.leagueSeasonState.done;
  // A retry after a failure keeps the message up instead of flashing the loading state every refresh.
  const retry=S.leagueSeasonState?.key===key?S.leagueSeasonState.error:null,state={key,loading:true,past:null,future:null,error:null,retry};S.leagueSeasonState=state;if(isLeagueView()&&!retry)render();
+ // Callers that arrive while this load runs wait on it rather than returning early.
+ let finish;state.done=new Promise(r=>finish=r);
  try{
   const shape=leagueShape(l),range=(from,to)=>Array.from({length:Math.max(0,to-from+1)},(_,i)=>from+i);
   // The demo has no history, so its one matchup repeats for the rest of the schedule.
@@ -21,14 +23,14 @@ export async function ensureLeagueSeason(force=false){
   const [past,future]=await Promise.all([S.data.demo?[]:load(range(shape.startWeek,Math.min(S.data.week,shape.playoffStart)-1)),load(range(S.data.week+1,shape.playoffStart-1))]);
   state.future=future;state.past=past;
  }catch(e){state.error=`Could not load this league’s schedule from Sleeper. ${e.message}`}
- finally{state.loading=false;if(S.leagueSeasonState===state&&(isLeagueView()||isTradeView()||S.view==='waivers'))render()}
+ finally{state.loading=false;if(S.leagueSeasonState===state&&(isLeagueView()||isTradeView()||S.view==='waivers'))render();finish()}
 }
 export function projectionStamp(rows){if(!projectionStamps.has(rows)){let latest=0,count=0;for(const p of Object.values(rows)){count++;if(p.updated_at>latest)latest=p.updated_at}projectionStamps.set(rows,`${count}:${latest}`)}return projectionStamps.get(rows)}
 export function currentLeagueOutlook(){
  const l=league(),state=S.leagueSeasonState;if(!l||state?.key!==leagueSeasonKey(l)||!state.past)return null;
  const stamps=Object.entries(S.data.projections).map(([week,rows])=>[week,projectionStamp(rows)]),rosters=rosterKey(l);
- const key=JSON.stringify([state.key,rosters,stamps,l.matchups.map(m=>[m.roster_id,m.matchup_id,m.points,m.custom_points,m.starters]),Object.entries(S.data.games).map(([team,g])=>[team,g.state,g.period,g.clock]),l.matchups.flatMap(m=>m.starters||[]).map(id=>S.data.players[id]?.injury_status||'')]);
- return leagueOutlooks.get(key,()=>leagueOutlook({league:l,players:S.data.players,past:state.past,future:state.future,currentWeek:S.data.week,projections:S.data.projections,games:S.data.games,rosterMemo:(weeks,compute)=>rosterOutlooks.get(JSON.stringify([rosters,stamps,weeks]),compute)}));
+ const key=JSON.stringify([state.key,S.data.nfl?.week,identity(state.past),identity(state.future),rosters,stamps,l.matchups.map(m=>[m.roster_id,m.matchup_id,m.points,m.custom_points,m.starters]),Object.entries(S.data.games).map(([team,g])=>[team,g.state,g.period,g.clock]),l.matchups.flatMap(m=>m.starters||[]).map(id=>S.data.players[id]?.injury_status||'')]);
+ return leagueOutlooks.get(key,()=>leagueOutlook({league:l,players:S.data.players,past:state.past,future:state.future,currentWeek:S.data.week,isNflWeek:S.data.week===(S.data.nfl?.week??S.data.week),projections:S.data.projections,games:S.data.games,rosterMemo:(weeks,compute)=>rosterOutlooks.get(JSON.stringify([rosters,stamps,weeks]),compute)}));
 }
 export function leagueGate(head){
  const state=S.leagueSeasonState?.key===leagueSeasonKey()?S.leagueSeasonState:null;

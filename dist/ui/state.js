@@ -67,4 +67,6 @@ export const S={
  radarLeague:null,
  // One matchup opened up: both lineups slot by slot, then the benches, the way Sleeper shows a matchup.
  openGame:null,
+ // A control that had focus but was redrawn disabled; render() gives focus back once it is enabled.
+ pendingFocus:null,
 };

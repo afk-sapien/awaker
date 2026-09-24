@@ -133,12 +133,13 @@ test('anonymous traffic from a reverse proxy address cannot lock out the owner o
   for (const attempt of Array.from({length: 31})) await request('/api/v1/settings')
   // A wrong credential counts as anonymous, so it cannot be used to guess tokens any faster.
   assert.equal((await request('/api/v1/settings', {headers: {Authorization: 'Bearer wrong'}})).status, 429)
-  // Signing in has its own allowance, so the same traffic cannot keep the owner from signing in either,
-  // and guessing the owner token is still capped.
+  // Signing in counts only failed attempts, so the same traffic cannot keep the owner from signing in,
+  // and guessing the owner token is still capped. Using up the failures does not lock the owner out either.
   const login = token => request('/api/v1/session', {method: 'POST', headers: {Origin: origin, 'Content-Type': 'application/json'}, body: JSON.stringify({token})})
   assert.equal((await login(owner)).status, 200)
-  for (const attempt of Array.from({length: 29})) await login('x'.repeat(64))
-  assert.equal((await login(owner)).status, 429)
+  for (const attempt of Array.from({length: 30})) assert.equal((await login('x'.repeat(64))).status, 401)
+  assert.equal((await login('x'.repeat(64))).status, 429)
+  assert.equal((await login(owner)).status, 200)
   assert.equal((await request('/api/v1/settings', {headers: {Authorization: `Bearer ${owner}`}})).status, 200)
   assert.equal((await request('/api/v1/status', {headers: {Authorization: `Bearer ${agent}`}})).status, 200)
   // Each credential still has its own ceiling, and using it up does not touch the other one.
@@ -328,4 +329,14 @@ test('the Python launcher keeps a configured public URL, points mcp at --port, a
   assert.equal(mcp.AWAKER_API_URL, 'http://127.0.0.1:5000')
   assert.equal(mcp.AWAKER_AGENT_TOKEN, agent)
   assert.equal(JSON.stringify(mcp).includes(owner), false)
+})
+
+test('a request address that cannot be parsed is refused as a bad request, not logged as a fault', async t => {
+  const {request} = await harness(t)
+  const errors = []
+  const log = console.error
+  console.error = (...args) => errors.push(args)
+  t.after(() => { console.error = log })
+  assert.equal((await request('//')).status, 400)
+  assert.equal(errors.length, 0)
 })
