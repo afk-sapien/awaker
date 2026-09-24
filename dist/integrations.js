@@ -1,4 +1,5 @@
 import {getTheme,applyTheme} from './themes.js';
+import {markSeen} from './ui/unread.js';
 try{applyTheme(getTheme(localStorage.getItem('sunday-theme')).id)}catch{}
 const $=id=>document.getElementById(id);let config,worker,push;
 const icons={watch:'<rect x="3" y="4" width="18" height="14" rx="2"/><path d="m8 22 4-4 4 4M8 10h8M12 6v8"/>',waivers:'<path d="m3 17 6-6 4 3 8-10M15 4h6v6"/>',lineup:'<path d="M9 5h12M9 12h12M9 19h12M3 5h1M3 12h1M3 19h1"/>',trades:'<path d="M3 7h18m-5-5 5 5-5 5M21 17H3m5-5-5 5 5 5"/>','trade-builder':'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 12h8m-4-4v8"/>',defenses:'<path d="m12 2 8 4v6c0 5-8 10-8 10S4 17 4 12V6z"/>',season:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',scoreboard:'<rect x="3" y="3" width="18" height="7" rx="1.5"/><rect x="3" y="14" width="18" height="7" rx="1.5"/><path d="M7 6.5h6M7 17.5h4"/>',league:'<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3"/>',notifications:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10 21a2 2 0 0 0 4 0"/>',settings:'<path d="M3 6h18M3 12h18M3 18h18"/><circle cx="8" cy="6" r="2" fill="currentColor"/><circle cx="16" cy="12" r="2" fill="currentColor"/><circle cx="10" cy="18" r="2" fill="currentColor"/>'};
@@ -51,7 +52,7 @@ function sent(){
  }
 }
 function activity(){
- status();sent();
+ status();sent();markSeen();
  $('worker-status').textContent=worker.lastError?`${worker.lastError.message} Last tried ${date(worker.lastError.at)}.`:`Running. Last pass ${date(worker.lastRun)}. Next daily ${date(worker.nextDaily)}, next weekly ${date(worker.nextWeekly)}.`;
  $('reports').replaceChildren();
  for(const report of worker.reports){const d=document.createElement('details'),summary=document.createElement('summary'),pre=document.createElement('pre');summary.textContent=`${report.period[0].toUpperCase()+report.period.slice(1)} summary · ${date(report.createdAt)} · ${report.delivery}`;pre.textContent=report.text;d.append(summary,pre);$('reports').append(d)}
