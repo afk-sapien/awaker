@@ -52,3 +52,60 @@ test('the week being played is refetched within minutes, a week long settled is 
   clock+=6*3600000;assert.equal((await api.stats(2096,4)).a.stats.pts_ppr,3,'a settled week is not fetched again');
  }finally{globalThis.fetch=original;Date.now=originalNow}
 });
+
+test('dropped connections retry within the same bounded request',async()=>{
+ const original=globalThis.fetch
+ let calls=0
+ globalThis.fetch=async()=>{
+  calls++
+  if(calls<3)throw new TypeError('fetch failed')
+  return Response.json({ok:true})
+ }
+ try{
+  assert.deepEqual(await api.json('https://api.sleeper.app/v1/state/nfl'),{ok:true})
+  assert.equal(calls,3)
+  calls=0
+  globalThis.fetch=async()=>{calls++
+   throw new TypeError('fetch failed')
+  }
+  await assert.rejects(api.json('https://api.sleeper.app/v1/state/nfl'),/fetch failed/)
+  assert.equal(calls,3)
+  calls=0
+  globalThis.fetch=async()=>{calls++
+   throw new DOMException('aborted','AbortError')
+  }
+  await assert.rejects(api.json('https://api.sleeper.app/v1/state/nfl'),{name:'AbortError'})
+  assert.equal(calls,1)
+ }finally{globalThis.fetch=original}
+})
+
+test('league failures identify the resource without exposing response bodies or internal errors',async()=>{
+ const {leagueFailure}=await import('../server/provider.js')
+ const original=globalThis.fetch
+ let failed='users',kind='http'
+ globalThis.fetch=async url=>{
+  if(url.includes('/'+failed)){
+   if(kind==='http')return new Response('upstream private detail',{status:503,headers:{'retry-after':'0'}})
+   return Response.json(null)
+  }
+  return Response.json(url.endsWith('/rosters')?[{roster_id:1,owner_id:'me'}]:[])
+ }
+ const l={league_id:'failure-details',name:'My league'}
+ try{
+  await assert.rejects(api.leagueDetails(l,'me',6,{force:true}),error=>{
+   assert.equal(error.code,'LEAGUE_DATA')
+   assert.match(leagueFailure(l,error),/My league \(failure-details\): Sleeper managers: HTTP 503/)
+   assert.doesNotMatch(leagueFailure(l,error),/private/)
+   return true
+  })
+  failed='matchups'
+  kind='invalid'
+  await assert.rejects(api.leagueDetails(l,'me',6,{force:true}),/week 6 matchups: invalid response/)
+  failed='rosters'
+  await assert.rejects(api.leagueDetails(l,'me',6,{force:true}),/rosters: invalid response/)
+  failed='nothing'
+  await assert.rejects(api.leagueDetails(l,'someone-else',6,{force:true}),/Check league membership/)
+  assert.equal((await api.leagueDetails(l,'me',6,{force:true})).mine.roster_id,1)
+  assert.doesNotMatch(leagueFailure(l,new Error('private token')),/private token/)
+ }finally{globalThis.fetch=original}
+})

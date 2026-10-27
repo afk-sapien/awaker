@@ -79,3 +79,73 @@ test('the Notifications count starts at zero in a new browser, then counts pushe
   assert.match(badge(3),/>3</);assert.match(badge(150),/>99\+</);assert.equal(badge(0),'');
  }finally{globalThis.localStorage=saved}
 });
+
+test('selected player decisions stay scoped and compare trades with the same future window',async()=>{
+ const {selectedWaiverDrop,protectionKey,waiverRows}=await import('../dist/ui/pages/waiver-wire.js')
+ const {askFor}=await import('../dist/ui/pages/trade-finder.js')
+ start()
+ const l=S.data.leagues[0]
+ S.leagueId=l.league_id
+ S.waiverHorizon='next'
+ S.waiverDropSelection={key:protectionKey(l),id:'8155'}
+ assert.equal(selectedWaiverDrop(l),'8155')
+ assert.equal(selectedWaiverDrop(S.data.leagues[1]),null)
+ const html=(await draw('waivers')).after
+ assert.match(html,/Find trade returns/)
+ assert.match(html,/Beyond projections/)
+ assert.ok(waiverRows().filter(r=>r.status==='upgrade'||r.status==='bench').every(r=>r.drop==='8155'))
+ await draw('trades')
+ await askFor('shop','8155')
+ assert.match(app.innerHTML,/Keep, replace, or trade/)
+ assert.match(app.innerHTML,/Same weeks 3 to 4/)
+ assert.match(app.innerHTML,/LINEUP GAIN \/ WEEK/)
+ l.mine.players=l.mine.players.filter(id=>id!=='8155')
+ assert.equal(selectedWaiverDrop(l),null)
+ S.waiverDropSelection=null
+})
+
+test('research failures pause partial results and an old week cannot appear as current research',async()=>{
+ const {scoutingKey,scoutingPanel,loadScouting}=await import('../dist/ui/scouting.js')
+ start()
+ const l=S.data.leagues[0]
+ S.view='waivers'
+ await loadScouting()
+ assert.match(scoutingPanel(l),/Illustrative sample stats/)
+ assert.match(scoutingPanel(l),/Small sample/)
+ S.scoutingState.errors=[1]
+ assert.match(scoutingPanel(l),/Research results are paused/)
+ assert.doesNotMatch(scoutingPanel(l),/<table>/)
+ const previousKey=scoutingKey()
+ S.data.week=3
+ assert.notEqual(scoutingKey(),previousKey)
+ assert.match(scoutingPanel(l),/Explore recent performance/)
+ assert.doesNotMatch(scoutingPanel(l),/Research results are paused/)
+})
+
+test('opening research reuses the stored weekly results and only the refresh refetches them',async()=>{
+ const {loadScouting}=await import('../dist/ui/scouting.js')
+ const api=await import('../dist/api.js')
+ const original=globalThis.fetch
+ const calls=[]
+ const weekly=()=>calls.filter(u=>u.includes('/stats/nfl/')).length
+ globalThis.fetch=async url=>{
+  calls.push(String(url))
+  return Response.json(String(url).includes('/stats/nfl/')?[{player_id:'4984',stats:{gp:1,pts_ppr:12}}]:{})
+ }
+ try{
+  start()
+  S.data.demo=false
+  S.data.nfl.season='2099'
+  S.data.week=4
+  S.view='waivers'
+  for(const week of [1,2,3])await api.stats('2099',week)
+  const warmed=weekly()
+  assert.equal(warmed,3)
+  await loadScouting()
+  assert.equal(weekly(),warmed,'the first load reads the weeks already held')
+  assert.deepEqual(Object.keys(S.scoutingState.history),['1','2','3'])
+  assert.deepEqual(S.scoutingState.errors,[])
+  await loadScouting()
+  assert.equal(weekly(),warmed+3,'the refresh retries every week against Sleeper')
+ }finally{globalThis.fetch=original}
+})

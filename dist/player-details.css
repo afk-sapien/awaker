@@ -1,0 +1,29 @@
+.player-link{color:inherit;background:none;padding:0;font:inherit;font-weight:inherit;text-align:inherit;text-decoration:underline;text-decoration-color:color-mix(in srgb,currentColor 28%,transparent);text-underline-offset:3px;border-radius:3px}
+.player-link:hover{color:var(--green);text-decoration-color:currentColor}
+.player-chip .player-link{max-width:100%}
+#player-dialog{width:min(920px,calc(100vw - 32px));max-width:920px;max-height:90dvh;padding:28px;overflow:auto;overscroll-behavior:contain;color:var(--ink)}
+.player-dialog-top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:20px}
+.player-profile-heading{display:flex;gap:20px;align-items:center;margin-bottom:24px}
+.player-profile-heading h2{font-size:34px;line-height:1.1;margin:0 0 8px}
+.player-profile-heading p{margin:0}
+.player-profile-heading .player-portrait{flex-shrink:0}
+.player-controls{display:flex;gap:16px;margin-bottom:12px}
+.player-controls label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700;min-width:0}
+.player-controls label:last-child{flex:1}
+.player-controls select{width:100%;max-width:100%}
+.player-totals{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:20px 0 28px;padding:20px;background:var(--bg);border-radius:12px}
+.player-totals dt{font-size:12px;color:var(--muted)}
+.player-totals dd{font-size:28px;font-weight:700;margin:4px 0 0;font-variant-numeric:tabular-nums}
+.player-chart{overflow-x:auto;margin:0 0 14px}
+.player-chart svg{width:100%;min-width:550px;display:block}
+.player-chart text{font:10px 'DM Sans',sans-serif;fill:var(--muted)}
+.player-game-log{border:1px solid var(--line);border-radius:8px;margin-bottom:12px}
+.player-game-log table{width:100%;white-space:nowrap;font-variant-numeric:tabular-nums}
+.player-game-log caption{text-align:left;font-weight:700;padding:14px}
+.player-game-log th,.player-game-log td{padding:10px 12px}
+.player-game-log td:not(:nth-child(2)){text-align:right}
+.player-external{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding-top:18px;border-top:1px solid var(--line);font-size:13px}
+.depth-cell .depth-target{font-size:10px;padding:2px;margin-bottom:6px;min-height:0}
+@media(max-width:600px){#player-dialog{padding:18px;width:calc(100vw - 16px);max-height:94dvh}.player-profile-heading{gap:12px}.player-profile-heading h2{font-size:27px}.player-totals{grid-template-columns:repeat(2,minmax(0,1fr));padding:16px}.player-controls{gap:10px}.player-external{align-items:flex-start;flex-direction:column}}
+.player-dialog-top{position:sticky;top:-28px;z-index:2;background:#fff;padding:12px 0}
+@media(max-width:600px){.player-dialog-top{top:-18px}}

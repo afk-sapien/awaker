@@ -127,6 +127,23 @@ Configure certificates and HTTPS redirects in the proxy. The application does no
 
 `GET /healthz` checks service HTTP liveness and returns only `{"status":"ok"}`. It does not check provider freshness, schedule success, or notification delivery. The image includes a healthcheck. Inspect worker activity in **Notifications** for provider and delivery failures.
 
+## Sleeper connections timing out early
+
+On the Tynet deployment, intermittent league failures reproduced on the previous image.
+Node reported IPv4 `ETIMEDOUT` and IPv6 `ENETUNREACH` after about 500 ms, with a
+250 ms default per-address connection attempt. Allowing 1500 ms per attempt succeeded
+in comparative probes and three consecutive full refreshes.
+
+For this failure, the deployed Compose service uses this startup override:
+
+```yaml
+command: ["node", "--network-family-autoselection-attempt-timeout=1500", "server/start.js"]
+```
+
+Keep this override when replacing the image. It leaves TLS verification and the app's
+overall request deadline intact. A healthy container alone does not establish that
+Sleeper requests are succeeding, so verify a fresh sync includes every expected league.
+
 ## Backups and upgrades
 
 Run one service process per database. Preserve `.env` and the complete data directory or Docker volume. Stop the service before a filesystem backup so SQLite writes and notification updates have finished:

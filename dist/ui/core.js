@@ -14,6 +14,11 @@ export const isTradeView=()=>S.view==='trades'||S.view==='trade-builder';
 export function toast(t){$('#toast').textContent=t;clearTimeout(toast.t);toast.t=setTimeout(()=>$('#toast').textContent='',4500)}
 export const league=()=>S.data.leagues.find(l=>l.league_id===S.leagueId&&l.enabled)||S.data.leagues.find(l=>l.enabled);
 export const pname=id=>S.data.players[id]?.full_name||[S.data.players[id]?.first_name,S.data.players[id]?.last_name].filter(Boolean).join(' ')||id||'Empty slot';
+// Use a button so opening a profile also works with a keyboard and inside selection labels.
+export function playerLink(id,label=pname(id)){
+ if(!id||id==='0')return esc('Empty slot')
+ return `<button type="button" class="player-link" data-player="${esc(id)}" aria-haspopup="dialog" aria-controls="player-dialog">${esc(label)}</button>`
+}
 // Before his game in the current NFL week, a player ruled out projects the zero he will score, not whatever Sleeper
 // still lists for him. Once it has kicked off the pregame projection is history, and other weeks are not his status's to decide.
 export function value(id,l=league(),w=S.data.week){const p=S.data.players[id];if(w===(S.data.nfl?.week??S.data.week)&&ruledOut(p)&&(S.data.games?.[p.team]?.state??'pre')==='pre')return 0;return projected(S.data.projections[w]?.[id]?.stats,l?.scoring_settings)}
@@ -39,8 +44,8 @@ export function playerPortrait(id,p,compact=false){
 // Face, jersey number and name for lists and tables. The name beside it labels the photo, so the image is decorative.
 export function playerChip(id,detail='',heading='strong'){
  const p=id&&id!=='0'?S.data.players[id]:null;
- if(!p)return `<${heading}>${esc(!id||id==='0'?'Empty slot':pname(id))}</${heading}>${detail}`;
- return `<div class="player-chip" style="--team:${teamColors[p.team]||'#567587'}">${playerPortrait(id,p,true)}<div class="player-chip-text"><${heading}>${esc(pname(id))}</${heading}>${detail}</div></div>`;
+ if(!p)return `<${heading}>${playerLink(id)}</${heading}>${detail}`;
+ return `<div class="player-chip" style="--team:${teamColors[p.team]||'#567587'}">${playerPortrait(id,p,true)}<div class="player-chip-text"><${heading}>${playerLink(id)}</${heading}>${detail}</div></div>`;
 }
 export const failedHeadshots=new Set();
 export const isLeagueView=()=>S.view==='league'||S.view==='scoreboard';

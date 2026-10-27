@@ -88,13 +88,13 @@ export function benchMove(id,drops,value,margin=BENCH_MARGIN,samePosition=()=>tr
  const benchGain=Math.round((mine-value(weakest))*100)/100;
  return benchGain>=margin?{drop:weakest,gain:null,benchGain,status:'bench'}:null;
 }
-export function waiverMove({id,roster,slots,players,value,locked={},protectedIds=[],starterIds=[],excludedDropPositions=[],capacity,samePosition=true,baseline}){
+export function waiverMove({id,roster,slots,players,value,locked={},protectedIds=[],starterIds=[],excludedDropPositions=[],capacity,samePosition=true,baseline,dropId=null}){
  const before=baseline||optimize(roster,slots,players,value,locked);
  // A slot nobody can fill, such as an injured only tight end, is exactly when a pickup matters, so an
  // incomplete lineup is compared as it stands instead of hiding every candidate.
  if(!Number.isFinite(value(id)))return {drop:null,gain:null,status:'unavailable'};
  const lockedIds=Object.values(locked);
- const drops=roster.length<capacity?[null]:roster.filter(drop=>!waiverDropReason(drop,{players,value,protectedIds,starterIds,lockedIds,excludedDropPositions})&&(!samePosition||(players[drop]?.fantasy_positions||[players[drop]?.position]).some(pos=>(players[id]?.fantasy_positions||[players[id]?.position]).includes(pos))));
+ const drops=!dropId&&roster.length<capacity?[null]:roster.filter(drop=>(!dropId||drop===dropId)&&!waiverDropReason(drop,{players,value,protectedIds,starterIds,lockedIds,excludedDropPositions})&&(!samePosition||(players[drop]?.fantasy_positions||[players[drop]?.position]).some(pos=>(players[id]?.fantasy_positions||[players[id]?.position]).includes(pos))))
  if(!drops.length)return {drop:null,gain:null,status:'no_safe_drop'};
  let best=null;const spare=[],shares=drop=>(players[drop]?.fantasy_positions||[players[drop]?.position]).some(pos=>(players[id]?.fantasy_positions||[players[id]?.position]).includes(pos));
  for(const drop of drops){

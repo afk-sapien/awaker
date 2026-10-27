@@ -37,8 +37,18 @@ export async function json(url) {
  if (target.protocol !== 'https:' || target.username || target.password || !['https://api.sleeper.app', 'https://site.api.espn.com'].includes(target.origin)) throw Error('Unrecognized data provider.')
  const signal = AbortSignal.timeout(22000)
  for (let attempt = 0; ; attempt++) {
-  const response = await fetch(target.href, {redirect: 'error', credentials: 'omit', signal})
-  if (response.ok) return readJsonResponse(response)
+  let response
+  try {
+   response = await fetch(target.href, {redirect: 'error', credentials: 'omit', signal})
+   if (response.ok) return await readJsonResponse(response)
+  } catch (error) {
+   // Fetch and interrupted response bodies can fail before an HTTP status exists.
+   if (attempt < RETRIES && !signal.aborted && (error instanceof TypeError || error?.name === 'NetworkError')) {
+    await pause(retryDelay(null, attempt), signal)
+    continue
+   }
+   throw error
+  }
   await response.body?.cancel()
   if (attempt < RETRIES && (response.status === 429 || response.status >= 500)) { await pause(retryDelay(response.headers.get('retry-after'), attempt), signal); continue }
   throw Error(`Data service returned ${response.status}. Please try again.`)
@@ -50,16 +60,52 @@ export function loadPlayers(options={}){return cache.get('directory',async()=>{
  if(!options.force){const legacy=await storage('players');if(legacy&&Date.now()-legacy.time<24*HOUR)return legacy.data}
  return json(BASE+'/players/nfl');
 },{ttl:24*HOUR,...options});}
+// Player logs load only when opened, independently of dashboard refreshes.
+export function playerHistory(playerId,season,options={}){
+ if(!/^(?:\d+|[A-Z]{2,3})$/.test(String(playerId))||!/^\d{4}$/.test(String(season)))return Promise.reject(Error('Invalid player or season.'))
+ return cache.get(`player-history:${playerId}:${season}`,async()=>{
+  const data=await json(`https://api.sleeper.app/stats/nfl/player/${encodeURIComponent(playerId)}?season=${season}&season_type=regular&grouping=week`)
+  if(!data||typeof data!=='object'||Array.isArray(data)||Object.keys(data).some(key=>!/^([1-9]|1[0-8])$/.test(key)))throw Error('Player stats unavailable.')
+  const rows={}
+  for(const [week,row] of Object.entries(data)){
+   if(row===null)continue
+   if(!row||typeof row!=='object'||!row.stats||typeof row.stats!=='object'||Array.isArray(row.stats))throw Error('Player stats unavailable.')
+   rows[week]={week:Number(week),stats:Object.fromEntries(Object.entries(row.stats).filter(([,v])=>Number.isFinite(v))),team:row.team,opponent:row.opponent,date:row.date,away:row.is_away_team}
+  }
+  return rows
+ },{ttl:10*MINUTE,...options})
+}
 export async function discover(username){const [user,nfl]=await Promise.all([sleeper('/user/'+encodeURIComponent(username.trim().toLowerCase()),{ttl:24*HOUR}),sleeper('/state/nfl',{ttl:5*MINUTE})]);
  if(!user?.user_id)throw Error('Sleeper username not found. Check the spelling and try again.');
  const leagues=await sleeper(`/user/${user.user_id}/leagues/nfl/${nfl.league_season||nfl.season}`,{ttl:10*MINUTE});
  if(!leagues?.length)throw Error(`No NFL leagues found for ${username} in ${nfl.league_season||nfl.season}.`);return {user,nfl,leagues};}
-export async function leagueDetails(l,userId,week,options={}){const [rosters,users,matchups]=await Promise.all([
- sleeper(`/league/${l.league_id}/rosters`,{ttl:MINUTE,...options}),
- sleeper(`/league/${l.league_id}/users`,{ttl:HOUR,...options}),
- sleeper(`/league/${l.league_id}/matchups/${week}`,{ttl:30000,...options})]);
- const mine=rosters.find(r=>r.owner_id===userId||(r.co_owners||[]).includes(userId));if(!mine)throw Error('No roster found for this user.');
- return {...l,rosters,users,matchups,mine,enabled:l.status!=='complete',syncedAt:Date.now()};}
+export async function leagueDetails(l,userId,week,options={}){
+ const resource=async(tail,label,ttl)=>{
+  try {
+   const rows=await sleeper(`/league/${l.league_id}/${tail}`,{ttl,...options})
+   if(!Array.isArray(rows)||rows.some(row=>!row||typeof row!=='object'||Array.isArray(row)))throw new SyntaxError('Invalid league response')
+   return rows
+  } catch(cause) {
+   const status=/^Data service returned (\d{3})\./.exec(cause?.message||'')?.[1]
+   const reason=status?`HTTP ${status}`:['TimeoutError','AbortError'].includes(cause?.name)?'request timed out':cause instanceof SyntaxError?'invalid response':cause instanceof TypeError||cause?.name==='NetworkError'?'network connection failed':'request failed'
+   const error=new Error(`Sleeper ${label}: ${reason}. Try Refresh.`,{cause})
+   error.code='LEAGUE_DATA'
+   throw error
+  }
+ }
+ const [rosters,users,matchups]=await Promise.all([
+  resource('rosters','rosters',MINUTE),
+  resource('users','managers',HOUR),
+  resource(`matchups/${week}`,`week ${week} matchups`,30000)
+ ])
+ const mine=rosters.find(r=>r.owner_id===userId||(Array.isArray(r.co_owners)&&r.co_owners.includes(userId)))
+ if(!mine){
+  const error=new Error('No roster found for this Sleeper account. Check league membership and the configured username.')
+  error.code='LEAGUE_DATA'
+  throw error
+ }
+ return {...l,rosters,users,matchups,mine,enabled:l.status!=='complete',syncedAt:Date.now()}
+}
 const teamAlias=t=>({WSH:'WAS',WSN:'WAS',LA:'LAR',JAC:'JAX'}[t]||t);
 export function scoreboard(season,week,options={}){return cache.get(`games:${season}:${week}`,async()=>{const d=await json(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=${season}&seasontype=2&week=${week}&limit=100`);const games={};for(const e of d.events||[]){const c=e.competitions?.[0];if(!c)continue;for(const team of c.competitors||[]){const other=c.competitors.find(x=>x.id!==team.id);games[teamAlias(team.team.abbreviation)]={id:e.id,state:e.status.type.state,detail:e.status.type.shortDetail,start:e.date,opponent:teamAlias(other?.team?.abbreviation),home:team.homeAway==='home',score:team.score,oppScore:other?.score,channel:c.broadcasts?.flatMap(b=>b.names||[]).join(' / ')||null,period:e.status.period??null,clock:e.status.displayClock??null};}}return games;},{ttl:30000,...options});}
 export function projections(season,week,options={}){return cache.get(`projections:${season}:${week}`,async()=>{
