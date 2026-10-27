@@ -13,33 +13,48 @@ const missingMarker = marker => Object.assign(
   {name: 'MissingMarkerError', marker}
 )
 const escaped = value => String(value).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]))
-const text = (value, what) => {
+const given = (value, what) => {
   if (typeof value !== 'string' || !value.trim()) throw Error(`${what} must be a string with something in it.`)
-  return escaped(value.trim())
+  return value.trim()
 }
-const insert = (html, marker, part) => {
+// before: the part goes in front of the marker, so headEnd lands last in the head. after: behind it,
+// so headStart lands first. Either way the marker itself stays, and the part is placed by index
+// rather than by a replacement, so nothing in it is read as a pattern.
+const insert = (html, marker, part, where = 'before') => {
   const at = html.indexOf(comment(marker))
   if (at === -1) throw missingMarker(marker)
-  return html.slice(0, at) + part + html.slice(at)
+  const cut = where === 'after' ? at + comment(marker).length : at
+  return html.slice(0, cut) + part + html.slice(cut)
 }
 
 // The brand is written three ways, as Awaker in prose, awaker in the sidebar and AWAKER in one
 // eyebrow, so a rename keeps the case of each occurrence. The markers are the one place the word is
 // not the brand, so they are skipped and survive a rename.
-export const rename = (value, name) => String(value).replace(/awaker(?!:)/gi, match =>
-  match === match.toUpperCase() ? name.toUpperCase() : match[0] === match[0].toLowerCase() ? name.toLowerCase() : name)
+//
+// show is how each occurrence is written out: escaped when the result is HTML, left alone when it is
+// the text of one node. It runs after the case is settled, so an escape written by it stays the
+// entity it was, rather than being upper-cased into a different one.
+export const rename = (value, name, show = part => part) => String(value).replace(/awaker(?!:)/gi, match =>
+  show(match === match.toUpperCase() ? name.toUpperCase() : match[0] === match[0].toLowerCase() ? name.toLowerCase() : name))
 
-// head goes just inside </head>, body just inside </body>. title replaces what the page's title
-// says. name renames the brand throughout. The markers stay in the result, so a page can be
-// wrapped again.
-export function injectHtml(html, {head = '', body = '', title, name} = {}) {
+// headStart goes first in the head, just after the charset meta, for a tag that has to come before
+// the page's own: a base, a CSP meta, a preconnect. head goes last in the head, body just inside
+// </body>. title replaces what the page's title says. name renames the brand throughout. The
+// markers stay in the result, so a page can be wrapped again.
+export function injectHtml(html, {headStart = '', head = '', body = '', title, name} = {}) {
   if (typeof html !== 'string') throw Error('injectHtml needs the page as a string.')
   for (const marker of Object.values(MARKERS)) if (!html.includes(comment(marker))) throw missingMarker(marker)
   let out = html
-  if (name !== undefined) out = rename(out, text(name, 'The app name'))
-  if (title !== undefined) out = out.replace(/<title>[^<]*<\/title>/, `<title>${text(title, 'The page title')}</title>`)
+  if (name !== undefined) out = rename(out, given(name, 'The app name'), escaped)
+  // A replacer function, because a title holding $& or $' in a replacement string would be read as a
+  // reference to the match rather than printed.
+  if (title !== undefined) {
+    const titled = escaped(given(title, 'The page title'))
+    out = out.replace(/<title>[^<]*<\/title>/, () => `<title>${titled}</title>`)
+  }
   // Injected last, so nothing the caller passes in is rewritten by the brand or title replacement.
-  return insert(insert(out, MARKERS.bodyEnd, body), MARKERS.headEnd, head)
+  out = insert(insert(out, MARKERS.bodyEnd, body), MARKERS.headEnd, head)
+  return insert(out, MARKERS.headStart, headStart, 'after')
 }
 
 // dist/site.json, if whoever is hosting this writes one. A name and a list of links, and

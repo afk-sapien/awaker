@@ -25,7 +25,13 @@ S.staticMode=globalThis.awaker?.staticMode===true;
 const siteFile=loadSiteFile();
 if(!S.staticMode)try{const response=await fetch('/api/v1/settings',{signal:AbortSignal.timeout(15000)});if(response.status===401){location.replace('/integrations.html');await new Promise(()=>{})}if(response.ok){const result=await response.json();S.serviceSettings=result.settings;S.unread=unread(result.worker);S.serviceMode=true}}catch{}
 S.site=await siteFile;
-if(S.site.name!==DEFAULT_SITE.name)document.title=rename(document.title,S.site.name);
+// The title and the theme dialog's eyebrow are written in the page rather than drawn, so they are
+// the two places a configured name has to be applied by hand. Everything the dashboard draws reads
+// the name through named() in ui/core.js.
+if(S.site.name!==DEFAULT_SITE.name){
+ document.title=rename(document.title,S.site.name);
+ for(const el of document.querySelectorAll('.theme-preview-label'))el.textContent=rename(el.textContent,S.site.name);
+}
 let stored=null;try{stored=localStorage.getItem('sunday-preferences')}catch{}
 applyPreferences(readPreferences(stored,S.serviceMode?S.serviceSettings:null));
 try{S.themeId=getTheme(localStorage.getItem('sunday-theme')).id}catch{}

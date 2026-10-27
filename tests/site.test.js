@@ -5,7 +5,7 @@ import {join} from 'node:path'
 import {DEFAULT_SITE, MARKERS, SITE_FILE, injectHtml, loadSiteFile, siteConfig} from '../dist/site.js'
 
 const pages = readdirSync('dist').filter(name => name.endsWith('.html'))
-const page = (head = '', body = '') => `<!doctype html><html lang="en"><head><!--${MARKERS.headStart}--><meta charset="UTF-8"><title>Awaker · Fantasy HQ</title>${head}<!--${MARKERS.headEnd}--></head><body><div class="brand">awaker／</div><span>AWAKER HQ</span><p>Loading Awaker…</p>${body}<!--${MARKERS.bodyEnd}--></body></html>`
+const page = (head = '', body = '') => `<!doctype html><html lang="en"><head><meta charset="UTF-8"><!--${MARKERS.headStart}--><title>Awaker · Fantasy HQ</title>${head}<!--${MARKERS.headEnd}--></head><body><div class="brand">awaker／</div><span>AWAKER HQ</span><p>Loading Awaker…</p>${body}<!--${MARKERS.bodyEnd}--></body></html>`
 
 test('every shipped page carries all three markers',() => {
  assert.ok(pages.length >= 2, 'both pages are being read')
@@ -21,6 +21,21 @@ test('head and body are injected just inside their closing tags',() => {
  assert.match(out, /<meta name="robots" content="noindex"><!--awaker:head-end--><\/head>/)
  assert.match(out, /<footer id="site">Site<\/footer><!--awaker:body-end--><\/body>/)
  assert.equal(injectHtml(page()), page(), 'injecting nothing changes nothing')
+})
+
+test('headStart goes first in the head, and never in front of the charset',() => {
+ // A tag that has to come before the page's own: a base, a CSP meta, a preconnect. The charset is
+ // only read if it is inside the first 1024 bytes of the document, so nothing is ever put in front
+ // of it, however much a host injects.
+ const out = injectHtml(page(), {headStart: '<base href="/app/"><link rel="preconnect" href="https://example.com">', head: '<meta name="robots" content="noindex">'})
+ assert.match(out, /<head><meta charset="UTF-8"><!--awaker:head-start--><base href="\/app\/"><link rel="preconnect" href="https:\/\/example.com"><title>/)
+ assert.ok(out.indexOf('<base') < out.indexOf('<title'), 'it lands before the page’s own tags')
+ assert.match(out, /<meta name="robots" content="noindex"><!--awaker:head-end-->/, 'and head still lands last')
+ for (const name of pages) {
+  const html = readFileSync(join('dist', name), 'utf8')
+  assert.match(html, /<head><meta charset="[^"]+"><!--awaker:head-start-->/, `dist/${name} marks the head after its charset`)
+  assert.ok(injectHtml(html, {headStart: '<base href="/">'}).includes('<!--awaker:head-start--><base href="/">'), `dist/${name} takes a tag first in head`)
+ }
 })
 
 test('a page with a marker missing is an error naming the marker',() => {
@@ -57,6 +72,20 @@ test('a name or title that would break the page is refused, and injected markup 
  assert.match(out, /<title>A &amp; B<\/title>/)
  const kept = injectHtml(page(), {name: 'WideAwake', body: '<p>awaker built this</p>'})
  assert.match(kept, /<p>awaker built this<\/p>/, 'what the caller passes in is never rewritten')
+})
+
+test('a title or a name is printed, not read as a pattern',() => {
+ // $& and friends mean something inside a replacement string, so the title and the brand are both
+ // written by a replacer function and a host can call its site whatever it likes.
+ const shown = value => value.replace(/&/g, '&amp;')
+ for (const title of ['Sunday HQ $& Co', '$\'$`$0$1', 'Week $& of $&', '100$ HQ']) {
+  assert.ok(injectHtml(page(), {title}).includes(`<title>${shown(title)}</title>`), title)
+ }
+ const out = injectHtml(page(), {name: 'A$&B'})
+ assert.match(out, /<div class="brand">a\$&amp;b／<\/div>/)
+ assert.match(out, /<span>A\$&amp;B HQ<\/span>/, 'and an escape stays the entity it was through the upper case')
+ assert.match(injectHtml(page(), {headStart: '<base href="/$&/">'}), /<base href="\/\$&\/">/)
+ assert.match(injectHtml(page(), {body: '<p>$&</p>'}), /<p>\$&<\/p>/)
 })
 
 test('the site config carries a name and links, and nothing else survives it',() => {

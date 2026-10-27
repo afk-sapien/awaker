@@ -90,17 +90,23 @@ string and regex matches. Any of those breaks on an unrelated edit to `dist/inde
 Add comment markers to `dist/index.html` and `dist/integrations.html`:
 
 ```html
-<!--awaker:head-start--> ... <!--awaker:head-end-->
+<meta charset="UTF-8"><!--awaker:head-start--> ... <!--awaker:head-end-->
 ... <!--awaker:body-end-->
 ```
+
+`awaker:head-start` sits just after the charset meta rather than at the top of the head,
+because the charset is only read if it falls inside the first 1024 bytes of the document.
+Nothing a host injects is put in front of it.
 
 Add `dist/site.js`, tier 1 and browser safe, exporting:
 
 ```js
-injectHtml(html, {head = '', body = '', title, name}) -> string
+injectHtml(html, {headStart = '', head = '', body = '', title, name}) -> string
 ```
 
-It inserts `head` before `awaker:head-end`, inserts `body` before `awaker:body-end`,
+It inserts `headStart` after `awaker:head-start`, for a tag that has to come before the
+page's own: a base, a CSP meta, a preconnect. It inserts
+`head` before `awaker:head-end`, inserts `body` before `awaker:body-end`,
 replaces the `<title>` contents when `title` is given, and replaces every occurrence of the
 app name when `name` is given. It throws a named error if a marker is missing, so a
 breaking change to the HTML fails the hosted build loudly instead of silently producing a
@@ -108,7 +114,10 @@ page with nothing injected.
 
 The app name is a separate concern worth doing properly rather than by substitution. The
 dashboard hard-codes `awaker／` in two places in `dist/ui/render.js` plus the sidebar
-brand. Read it from the site config in step 4 and default to `Awaker`.
+brand. Read it from the site config in step 4 and default to `Awaker`. Every string the
+dashboard draws that holds the name goes through `named()` in `dist/ui/core.js`, so a
+configured name reaches the nav label, the breadcrumb, the watchroom heading, the theme
+named after the app and the service messages, not only the wordmark.
 
 A test asserts that both shipped HTML files contain all three markers, so the markers
 cannot be dropped by accident.

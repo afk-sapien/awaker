@@ -160,12 +160,24 @@ test('a host can rename the app and add footer links, and nothing else about the
   const html=(await draw('watch')).before;
   assert.match(html,/<div class="brand">wideawake<em>/,'the sidebar wordmark stays lower case');
   assert.match(html,/<div class="mobile-brand">wideawake／<\/div>/);
-  assert.match(html,/<span><a href="\/about">About<\/a><\/span>/,'a page on this site opens in this tab');
-  assert.match(html,/<span><a href="https:\/\/example.com\/blog" target="_blank" rel="noopener">Blog<\/a><\/span>/);
+  assert.match(html,/<span class="site-link"><a href="\/about">About<\/a><\/span>/,'a page on this site opens in this tab');
+  assert.match(html,/<span class="site-link"><a href="https:\/\/example.com\/blog" target="_blank" rel="noopener">Blog<\/a><\/span>/);
   assert.ok(!html.includes('javascript:'),'a link the config could not vouch for is never drawn');
   assert.ok(!html.includes('>Bad<'));
   assert.match(html,/docs.sleeper.com/,'the data credits stay in the footer');
   assert.match(html,/NFL game status: ESPN/);
+  // The name is the name of the app everywhere it is read, not only on the wordmark.
+  assert.ok(!/awaker/i.test(html),'no page the dashboard draws still says the old name');
+  assert.match(html,/<h1[^>]*>WideAwake watchroom/,'the page heading');
+  assert.match(html,/data-nav="watch"[^>]*>.*?WideAwake watchroom/s,'the nav label');
+  assert.match(html,/<strong>WideAwake watchroom<\/strong>/,'the breadcrumb');
+  const {themePicker}=await import('../dist/ui/theme.js');
+  const fields={'#theme-team':node(),'#theme-preview-name':node(),'#theme-status':node()};
+  const before=globalThis.document.querySelector;
+  globalThis.document.querySelector=s=>fields[s]||before(s);
+  try{themePicker()}finally{globalThis.document.querySelector=before}
+  assert.match(fields['#theme-team'].innerHTML,/>WideAwake original</,'and the theme named after the app');
+  assert.equal(fields['#theme-preview-name'].textContent,'WideAwake original');
   const named=siteConfig({name:'Sunday <b>HQ</b> & Co',links:[{label:'<img src=x onerror=alert(1)>',href:'/x'}]});
   S.site=named;
   const escaped=(await draw('watch')).before;

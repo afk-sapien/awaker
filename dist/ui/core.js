@@ -1,9 +1,16 @@
 // Shared pieces every page draws with: escaping, number formats, icons, navigation and page chrome.
 import {projected,ruledOut} from '../engine.js';
+import {DEFAULT_SITE,rename} from '../site.js';
 import {S} from './state.js';
 
 export const icon=(name)=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${({watch:'<rect x="3" y="4" width="18" height="14" rx="2"/><path d="m8 22 4-4 4 4M8 10h8M12 6v8"/>',waivers:'<path d="m3 17 6-6 4 3 8-10M15 4h6v6"/>',lineup:'<path d="M9 5h12M9 12h12M9 19h12M3 5h1M3 12h1M3 19h1"/>',trades:'<path d="M3 7h18m-5-5 5 5-5 5M21 17H3m5-5-5 5 5 5"/>','trade-builder':'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 12h8m-4-4v8"/>',defenses:'<path d="m12 2 8 4v6c0 5-8 10-8 10S4 17 4 12V6z"/>',season:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',scoreboard:'<rect x="3" y="3" width="18" height="7" rx="1.5"/><rect x="3" y="14" width="18" height="7" rx="1.5"/><path d="M7 6.5h6M7 17.5h4"/>',league:'<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3"/>',notifications:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10 21a2 2 0 0 0 4 0"/>',settings:'<path d="M3 6h18M3 12h18M3 18h18"/><circle cx="8" cy="6" r="2" fill="currentColor"/><circle cx="16" cy="12" r="2" fill="currentColor"/><circle cx="10" cy="18" r="2" fill="currentColor"/>'})[name]}</svg>`;
 export const nav=[['watch','Awaker watchroom'],['scoreboard','Around the league'],['waivers','Waiver wire'],['lineup','Start / sit'],['trades','Auto trades'],['trade-builder','Trade builder'],['defenses','Defense planner'],['season','Season review'],['league','League outlook'],['notifications','Notifications'],['settings','My leagues']];
+// A configured name is the name of the app everywhere it is read, not only on the wordmark: the nav
+// label, the breadcrumb, the watchroom heading, the theme names and anything a message says. Every
+// string holding the app name is written once, in the default name, and passed through here on its
+// way to the page. The default renames to itself, so the usual case does nothing.
+// It returns text, not HTML, so a caller writing it into markup still escapes it.
+export const named=value=>S.site.name===DEFAULT_SITE.name?String(value):rename(value,S.site.name);
 export const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),fmt=(n,d=1)=>Number.isFinite(n)?(Math.abs(n)<Math.pow(10,-d)/2?0:n).toFixed(d):'—',signed=n=>`${n>0?'+':''}${fmt(n)}`;
 export const colors=['#aebee8','#e4ba6f','#82b9a7','#b89bc7','#92b9da'];
 export const teamColors={CIN:'#d96527',BUF:'#2761a4',ATL:'#a3434c',MIN:'#7460a3',LV:'#64747a',DET:'#2980a4',KC:'#b94340',PHI:'#27675c',BAL:'#70659c',SF:'#ab4744',DAL:'#4b7195',NYJ:'#387565',GB:'#376c51',LAR:'#3876bb',HOU:'#365e79',MIA:'#298e92'};
