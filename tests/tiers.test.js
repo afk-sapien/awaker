@@ -5,7 +5,7 @@ import {DASHBOARD_MODULES, distTarget, serviceProblem, tierProblem} from '../scr
 
 // Tier 1 as docs/core-split.md names it. The list is here as well as in the document so that adding
 // a module to dist/ without deciding which tier it belongs to fails rather than passing quietly.
-const CORE_MODULES = ['analysis.js', 'api.js', 'cache.js', 'defenses.js', 'demo.js', 'engine.js', 'league.js', 'lineup.js', 'network.js', 'scouting.js', 'season.js', 'themes.js', 'trades.js', 'waivers.js']
+const CORE_MODULES = ['analysis.js', 'api.js', 'cache.js', 'defenses.js', 'demo.js', 'engine.js', 'league.js', 'lineup.js', 'network.js', 'origins.js', 'scouting.js', 'season.js', 'themes.js', 'trades.js', 'waivers.js']
 
 const problem = (from, spec) => tierProblem(from, spec, distTarget(`dist/${from}`, spec))
 
