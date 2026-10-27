@@ -189,11 +189,16 @@ To put your own name and links on it, write `dist/site.json`:
 {"name": "Sunday HQ", "links": [{"label": "About", "href": "/about"}]}
 ```
 
-`name` replaces the wordmark and the page title, and up to six links are drawn in the
-footer beside the Sleeper and ESPN credits. A link is either a path on the same site or an
+`name` is the name of the app everywhere the dashboard says it: the wordmark, the page
+title, the watchroom heading and tab, the theme named after it, and any message about the
+service. Up to six links are drawn in the footer beside the Sleeper and ESPN credits. A link is either a path on the same site or an
 `https://` address. The file carries a name and links and nothing else, by design: no
 script to load, no third-party origin, no identifier and no analytics. Anything in it that
 does not fit is ignored, and no file at all means the page looks exactly as it does now.
+
+The notifications page is not renamed this way. It is served only with the service
+running, and the name is written into its markup rather than drawn, so a host that
+renames the app injects that page through `injectHtml` in `dist/site.js` instead.
 
 ## Sleeper connections timing out early
 
