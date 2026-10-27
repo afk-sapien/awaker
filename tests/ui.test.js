@@ -149,3 +149,27 @@ test('opening research reuses the stored weekly results and only the refresh ref
   assert.equal(weekly(),warmed+3,'the refresh retries every week against Sleeper')
  }finally{globalThis.fetch=original}
 })
+
+test('a host can rename the app and add footer links, and nothing else about the page moves',async()=>{
+ const {DEFAULT_SITE,siteConfig}=await import('../dist/site.js');
+ start();
+ const plain=(await draw('watch')).before;
+ assert.match(plain,/<div class="brand">awaker<em>/,'the default name is the one in the page today');
+ try{
+  S.site=siteConfig({name:'WideAwake',links:[{label:'About',href:'/about'},{label:'Blog',href:'https://example.com/blog'},{label:'Bad',href:'javascript:alert(1)'}]});
+  const html=(await draw('watch')).before;
+  assert.match(html,/<div class="brand">wideawake<em>/,'the sidebar wordmark stays lower case');
+  assert.match(html,/<div class="mobile-brand">wideawake／<\/div>/);
+  assert.match(html,/<span><a href="\/about">About<\/a><\/span>/,'a page on this site opens in this tab');
+  assert.match(html,/<span><a href="https:\/\/example.com\/blog" target="_blank" rel="noopener">Blog<\/a><\/span>/);
+  assert.ok(!html.includes('javascript:'),'a link the config could not vouch for is never drawn');
+  assert.ok(!html.includes('>Bad<'));
+  assert.match(html,/docs.sleeper.com/,'the data credits stay in the footer');
+  assert.match(html,/NFL game status: ESPN/);
+  const named=siteConfig({name:'Sunday <b>HQ</b> & Co',links:[{label:'<img src=x onerror=alert(1)>',href:'/x'}]});
+  S.site=named;
+  const escaped=(await draw('watch')).before;
+  assert.ok(!escaped.includes('<b>HQ</b>')&&!escaped.includes('<img src=x'),'a name or label from a file is printed, not run');
+ }finally{S.site=DEFAULT_SITE}
+ assert.equal((await draw('watch')).before,plain,'and a host that configured nothing sees the page it had');
+})
