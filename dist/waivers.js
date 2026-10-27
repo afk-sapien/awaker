@@ -9,7 +9,7 @@ export function waiverWeeks(week,horizon,endWeek=17){
 
 // A pickup and its chosen drop are held for the entire window. Re-optimize each
 // week's lineup, never invent a different drop or extra waiver move each week.
-export function buildWaiverOutlook({league,players,outlook,protectedIds=[],starterIds=[],excludedDropPositions=[],samePosition=true}){
+export function buildWaiverOutlook({league,players,outlook,protectedIds=[],starterIds=[],excludedDropPositions=[],samePosition=true,dropId=null}){
  const weeks=outlook.weeks,slots=activeSlots(league),roster=playableIds(league.mine),values={},totals={};
  for(const id of Object.keys(players)){
   values[id]=weeks.map(w=>futurePoints(id,outlook.data[w],players,league.scoring_settings));
@@ -17,10 +17,10 @@ export function buildWaiverOutlook({league,players,outlook,protectedIds=[],start
  }
  const lineup=(ids,i)=>seasonLineup(ids,slots,players,id=>values[id]?.[i]??null);
  const before=weeks.map((_,i)=>lineup(roster,i)),capacity=league.roster_positions.filter(s=>!['IR','TAXI'].includes(s)).length;
- const safeDrops=roster.filter(id=>!waiverDropReason(id,{players,value:id=>totals[id],protectedIds,starterIds,excludedDropPositions}));
+ const safeDrops=roster.filter(id=>(!dropId||id===dropId)&&!waiverDropReason(id,{players,value:id=>totals[id],protectedIds,starterIds,excludedDropPositions}))
  return {totals,values,evaluate(id){
   if(!weeks.length||totals[id]===null||!Number.isFinite(totals[id])||UNAVAILABLE.includes(players[id]?.injury_status))return {drop:null,gain:null,status:'unavailable'};
-  const drops=roster.length<capacity?[null]:safeDrops.filter(drop=>!samePosition||(players[id]?.fantasy_positions||[players[id]?.position]).some(pos=>eligible(players[drop],pos)));
+  const drops=!dropId&&roster.length<capacity?[null]:safeDrops.filter(drop=>!samePosition||(players[id]?.fantasy_positions||[players[id]?.position]).some(pos=>eligible(players[drop],pos)))
   if(!drops.length)return {drop:null,gain:null,status:'no_safe_drop'};
   let best=null;const spare=[];
   for(const drop of drops){

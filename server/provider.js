@@ -6,6 +6,10 @@ import * as api from '../dist/api.js';
 const FIELDS=['full_name','first_name','last_name','position','fantasy_positions','team','number','injury_status','active'];
 const FANTASY=new Set(['QB','RB','WR','TE','K','DEF']);
 const slimCache=new WeakMap();
+export function leagueFailure(league,error){
+ const label=league.name?`${league.name} (${league.league_id})`:`League ${league.league_id}`
+ return `${label}: ${error?.code==='LEAGUE_DATA'?error.message:'league refresh failed. Try Refresh.'}`
+}
 export function slimPlayers(players,leagues=[]){
  if(!slimCache.has(players)){
   const base={};
@@ -31,7 +35,17 @@ export function createProvider(store){
   const source=(name,key,ttl)=>{const at=store.at(`cache:${key}`);sources.push({name,fetchedAt:at,sourceUpdatedAt:null,maxAgeMs:ttl,stale:!at||now-at>ttl})};
   const directory=await api.loadPlayers();source('players','directory',86400000);
   const jobs=await Promise.allSettled(leagues.map(l=>api.leagueDetails(l,found.user.user_id,week,{force})));
-  const details=jobs.flatMap((r,i)=>{if(r.status==='rejected'){errors.push(`League ${leagues[i].league_id} unavailable`);return []}for(const [tail,ttl]of [['rosters',900000],['users',3600000],[`matchups/${week}`,900000]])source(`${leagues[i].league_id}/${tail}`,`https://api.sleeper.app/v1/league/${leagues[i].league_id}/${tail}`,ttl);return [{...r.value,enabled:r.value.enabled&&!settings.disabled.includes(r.value.league_id)&&!['pre_draft','drafting'].includes(r.value.status),inactive:['pre_draft','drafting'].includes(r.value.status)?'Not drafted yet':null}]});
+  const details=jobs.flatMap((result,i)=>{
+   if(result.status==='rejected'){
+    errors.push(leagueFailure(leagues[i],result.reason))
+    return []
+   }
+   for(const [tail,ttl] of [['rosters',900000],['users',3600000],[`matchups/${week}`,900000]]){
+    source(`${leagues[i].league_id}/${tail}`,`https://api.sleeper.app/v1/league/${leagues[i].league_id}/${tail}`,ttl)
+   }
+   const league=result.value,undrafted=['pre_draft','drafting'].includes(league.status)
+   return [{...league,enabled:league.enabled&&!settings.disabled.includes(league.league_id)&&!undrafted,inactive:undrafted?'Not drafted yet':null}]
+  })
   const players=slimPlayers(directory,details);
   const data={user:found.user,nfl:found.nfl,week,players,leagues:details,projections:{},games:{},schedules:{},trends:[],updatedAt:now,playersAt:store.at('cache:directory'),demo:false,errors,notes:[],sources};
   const jobsExtra=defenseWeeks(week).flatMap(w=>[{name:`schedule/${w}`,key:`games:${season}:${w}`,ttl:w===week?900000:3600000,week:w,type:'schedule',run:api.scoreboard(season,w,{force,ttl:w===week?30000:3600000})},{name:`projections/${w}`,key:`projections:${season}:${w}`,ttl:3600000,week:w,type:'projection',run:api.projections(season,w,{force})}]);

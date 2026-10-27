@@ -27,13 +27,13 @@ export function waiverRows(data,league,prefs={}){
  // Shortlisted by what a player can still score this week. By raw projection, players whose games are
  // over fill every spot from Sunday night on and the Monday pickup that would help is never looked at.
  const candidates=[...new Set([...free.filter(id=>trending.has(id)).sort((a,b)=>trending.get(b)-trending.get(a)).slice(0,30),...shortlist(free.filter(id=>value(id)!==null),data.players,value)])];
- return candidates.map(id=>({id,count:trending.get(id)||0,projection:projection(id),...waiverMove({id,roster,slots,players:data.players,value,locked:locks,protectedIds:prefs.waiverProtected?.[`${data.user.user_id}:${league.league_id}`]||[],starterIds:prefs.protectStarters!==false?ids:[],capacity:league.roster_positions.filter(s=>!['IR','TAXI'].includes(s)).length,samePosition:prefs.samePositionDrops!==false,excludedDropPositions:excluded.drop,baseline})})).sort((a,b)=>moveRank(b)-moveRank(a)||b.count-a.count).slice(0,25);
+ return candidates.map(id=>({id,count:trending.get(id)||0,projection:projection(id),...waiverMove({id,roster,slots,dropId:prefs.waiverDropId||null,players:data.players,value,locked:locks,protectedIds:prefs.waiverProtected?.[`${data.user.user_id}:${league.league_id}`]||[],starterIds:prefs.protectStarters!==false?ids:[],capacity:league.roster_positions.filter(s=>!['IR','TAXI'].includes(s)).length,samePosition:prefs.samePositionDrops!==false,excludedDropPositions:excluded.drop,baseline})})).sort((a,b)=>moveRank(b)-moveRank(a)||b.count-a.count).slice(0,25);
 }
 // The same pickup and drop held across a window of future weeks. Used by the waiver view and by
 // background alerts, so both rank a pickup the same way.
 export function futureWaiverRows(data,league,outlook,prefs={}){
  const excluded=prefs.waiverExcluded||{add:['K'],drop:[]},slots=activeSlots(league),trending=new Map(data.trends.map(t=>[t.player_id,t.count]));
- const model=buildWaiverOutlook({league,players:data.players,outlook,protectedIds:prefs.waiverProtected?.[`${data.user.user_id}:${league.league_id}`]||[],starterIds:prefs.protectStarters!==false?lockedLineup(data,league).ids:[],excludedDropPositions:excluded.drop,samePosition:prefs.samePositionDrops!==false});
+ const model=buildWaiverOutlook({league,players:data.players,outlook,dropId:prefs.waiverDropId||null,protectedIds:prefs.waiverProtected?.[`${data.user.user_id}:${league.league_id}`]||[],starterIds:prefs.protectStarters!==false?lockedLineup(data,league).ids:[],excludedDropPositions:excluded.drop,samePosition:prefs.samePositionDrops!==false});
  const free=tradeCandidateIds(availableIds(league,data.players),data.players,excluded.add).filter(id=>slots.some(slot=>eligible(data.players[id],slot)));
  const candidates=[...new Set([...free.filter(id=>trending.has(id)).sort((a,b)=>trending.get(b)-trending.get(a)).slice(0,30),...shortlist(free.filter(id=>model.totals[id]>0),data.players,id=>model.totals[id])])];
  return candidates.map(id=>({id,count:trending.get(id)||0,projection:model.totals[id],...model.evaluate(id)})).sort((a,b)=>moveRank(b)-moveRank(a)||b.count-a.count).slice(0,25);

@@ -2,7 +2,7 @@
 import {UNAVAILABLE,activeSlots,optimize,playableIds,ruledOut} from '../../engine.js';
 import {lineupComparisons} from '../../lineup.js';
 import {S} from '../state.js';
-import {analysisHeader,empty,esc,fmt,injury,league,playerChip,pname,signed,value} from '../core.js';
+import {analysisHeader,empty,esc,fmt,injury,league,playerChip,playerLink,signed,value} from '../core.js';
 import {lineupResults,lockedLineup,usableValue} from '../outlook.js';
 import {weeklyAnalysisKey} from './waiver-wire.js';
 
@@ -15,12 +15,11 @@ export function lineup(){
  const swaps=slots.map((_,i)=>i).filter(i=>best.ids[i]&&best.ids[i]!==ids[i]&&!(i in locks)),open=slots.length-Object.keys(locks).length;
  const deltaLabel=n=>Number.isFinite(n)?`${signed(n)} pts`:'Unavailable';
  const deltaClass=n=>Number.isFinite(n)?n>0?'gain':n<0?'loss':'muted':'muted';
- const playerLabel=id=>!id||id==='0'?'Empty slot':pname(id);
  const playerInfo=id=>id&&id!=='0'?`<div class="small muted">${esc(S.data.players[id]?.team||'FA')} · ${esc(S.data.players[id]?.position||'Unknown')}${injury(S.data.players[id])}</div>`:'';
- const optionRow=option=>`<div class="bench-comparison"><span>${esc(option.slot)} · ${esc(playerLabel(option.id))}<span class="muted"> (${fmt(option.projection)} pts)</span></span><strong class="num ${deltaClass(option.delta)}">${deltaLabel(option.delta)}</strong></div>`;
+ const optionRow=option=>`<div class="bench-comparison"><span>${esc(option.slot)} · ${playerLink(option.id)}<span class="muted"> (${fmt(option.projection)} pts)</span></span><strong class="num ${deltaClass(option.delta)}">${deltaLabel(option.delta)}</strong></div>`;
  return analysisHeader('Start / sit','Compare your starters and bench, using this league’s scoring.')+`
  ${unknown.length?`<p class="data-alert">${unknown.length} rostered player(s) have no projection. Review them before following the optimizer.</p>`:''}
- <div class="panel decision lineup-summary verdict-${!complete?'unsure':swaps.length?'act':'set'}"><div><div class="eyebrow">${!complete?'PARTIAL ESTIMATE':swaps.length?'CHANGE YOUR LINEUP':'YOUR LINEUP IS SET'}</div><h2>${!complete?'Some slots have no projection':swaps.length?`${swaps.length} swap${swaps.length===1?'':'s'} worth <span class="gain">${deltaLabel(best.total-baseline)}</span>`:open?'Nothing on your bench projects higher':'Every game has started'}</h2><p class="muted small">${swaps.length?swaps.map(i=>`${esc(starters[i]?.slot||'')}: start ${esc(playerLabel(best.ids[i]))} over ${esc(playerLabel(ids[i]))}`).join(' · '):`${Object.keys(locks).length} of ${slots.length} slots are locked by games that have started.`}</p></div><div class="lineup-totals"><div><div class="big-number">${fmt(baseline)}</div><div class="muted small">current projection</div></div><div><div class="big-number">${best.complete?fmt(best.total):'—'}</div><div class="muted small">optimized projection</div></div></div></div>
+ <div class="panel decision lineup-summary verdict-${!complete?'unsure':swaps.length?'act':'set'}"><div><div class="eyebrow">${!complete?'PARTIAL ESTIMATE':swaps.length?'CHANGE YOUR LINEUP':'YOUR LINEUP IS SET'}</div><h2>${!complete?'Some slots have no projection':swaps.length?`${swaps.length} swap${swaps.length===1?'':'s'} worth <span class="gain">${deltaLabel(best.total-baseline)}</span>`:open?'Nothing on your bench projects higher':'Every game has started'}</h2><p class="muted small">${swaps.length?swaps.map(i=>`${esc(starters[i]?.slot||'')}: start ${playerLink(best.ids[i])} over ${playerLink(ids[i])}`).join(' · '):`${Object.keys(locks).length} of ${slots.length} slots are locked by games that have started.`}</p></div><div class="lineup-totals"><div><div class="big-number">${fmt(baseline)}</div><div class="muted small">current projection</div></div><div><div class="big-number">${best.complete?fmt(best.total):'—'}</div><div class="muted small">optimized projection</div></div></div></div>
  <div class="panel table-wrap"><table class="lineup-table"><thead><tr><th scope="col">SLOT</th><th scope="col">CURRENT STARTER</th><th scope="col">START INSTEAD</th><th scope="col">GAIN</th><th scope="col">DECISION</th></tr></thead><tbody>${starters.map(({slot,index:i,projection,locked:lock})=>{
   const id=best.ids[i],same=id===ids[i],points=id?value(id,l):null,delta=Number.isFinite(points)&&Number.isFinite(projection)?points-projection:null;
   const swap=!same&&!lock&&id,status=S.data.players[ids[i]]?.injury_status,unlikely=UNAVAILABLE.includes(status),out=!lock&&projection===0&&!!S.data.players[ids[i]]&&(unlikely||Object.keys(S.data.games).length>0&&!S.data.games[S.data.players[ids[i]]?.team]);

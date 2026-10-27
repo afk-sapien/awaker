@@ -16,7 +16,9 @@ It also answers the questions you actually ask on a Sunday morning. Who should I
 
 ## What it does
 
-Every league lands in one watchroom, with your players and your opponents' side by side, favorites pinned, and a focus mode for game day. Start/sit comparisons use your league's actual scoring, flex rules and started-game locks, so the advice matches the league you're in and not a generic average.
+Every league lands in one watchroom, with your players and your opponents' side by side, favorites pinned, and a focus mode for game day. Click a player name anywhere to open a profile with weekly fantasy points, game logs, and a season picker. Compare your league’s current scoring with PPR, half PPR, or standard scoring, with links to more stats and news when needed. Start/sit comparisons use your league's actual scoring, flex rules and started-game locks, so the advice matches the league you're in and not a generic average.
+
+On the Waiver wire, choose a player to replace or use **Find trade returns** to compare keeping him, a replacement, and the trade returns found. **Beyond projections** is an optional research view with recent scoring, target and carry trends, and touchdown dependence, including players outside the projection shortlist. These experimental signals also appear in player profiles. They do not change forecasts or automatic advice. See the [evaluation notes and research plan](docs/player-evaluation.md).
 
 Beyond that there's the waiver wire, trade ideas and defense streaming. Around the league follows every matchup live, and League outlook simulates the rest of the season for playoff odds and ranks every team by what it has scored and by the roster it has now.
 
