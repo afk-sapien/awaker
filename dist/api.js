@@ -60,7 +60,8 @@ export const sleeper=(path,options={})=>cache.get(BASE+path,()=>json(BASE+path),
 // statuses and new signings go stale, so it is used only while it is as fresh as a live fetch would
 // have been. An older, unreadable, foreign or short file is ignored and the full directory is
 // fetched instead.
-export const SLIM_PLAYERS='players.json',SLIM_MINIMUM=500;
+// SLIM_MAX_AGE is the one copy of the freshness rule: the browser and the service route both read it.
+export const SLIM_PLAYERS='players.json',SLIM_MINIMUM=500,SLIM_MAX_AGE=24*HOUR;
 export async function slimPlayerFile(){
  if(typeof location==='undefined'||!location?.href)return null;
  let url;try{url=new URL(SLIM_PLAYERS,location.href)}catch{return null}
@@ -70,7 +71,7 @@ export async function slimPlayerFile(){
  try{
   const file=await readJsonResponse(response,8*1024*1024);
   const at=Date.parse(file?.generatedAt);
-  if(!Number.isFinite(at)||Date.now()-at>24*HOUR)return null;
+  if(!Number.isFinite(at)||Date.now()-at>SLIM_MAX_AGE)return null;
   const players=file.players;
   if(!players||typeof players!=='object'||Array.isArray(players))return null;
   // A directory this short is a truncated or unrelated file, and would hide most of the league.

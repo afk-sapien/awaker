@@ -5,9 +5,9 @@ import {bad} from './settings.js'
 import {publicOrigin} from './config.js'
 import {json, serveJson, serveStatic} from './static.js'
 import {playerFile} from './provider.js'
-
-// The browser only trusts the file while it is as fresh as a live fetch would have been.
-const PLAYERS_FRESH = 24 * 3600000
+// The browser only trusts the file while it is as fresh as a live fetch would have been, and it is
+// the browser's rule, so the window is read from the module the browser reads it from.
+import {SLIM_MAX_AGE} from '../dist/api.js'
 
 const equal = (a, b) => typeof a === 'string' && typeof b === 'string' &&
   Buffer.byteLength(a) === Buffer.byteLength(b) && timingSafeEqual(Buffer.from(a), Buffer.from(b))
@@ -86,7 +86,7 @@ export function createHttpServer({service, worker, ntfy, adminToken, agentToken,
       // Sleeper through this. A stale snapshot falls through to the file, which may be newer.
       if (path === '/players.json' && ['GET', 'HEAD'].includes(req.method)) {
         const current = service.playerDirectory?.()
-        if (current && now() - current.at < PLAYERS_FRESH) {
+        if (current && now() - current.at < SLIM_MAX_AGE) {
           serveJson(req, res, 'players.json', String(current.at), () => playerFile(current.players, current.at))
           return
         }

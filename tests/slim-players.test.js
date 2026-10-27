@@ -9,8 +9,8 @@ import {createHttpServer} from '../server/http.js'
 import {createService} from '../server/service.js'
 import {openStore} from '../server/store.js'
 import {httpRequest} from '../scripts/http-request.js'
-import {options, slimFile, writeSlimPlayers, DEFAULT_OUT} from '../scripts/slim-players.js'
-import {loadPlayers, slimPlayerFile, SLIM_MINIMUM} from '../dist/api.js'
+import {buildPlayersFile, options, slimFile, writeSlimPlayers, DEFAULT_OUT} from '../scripts/slim-players.js'
+import {loadPlayers, slimPlayerFile, SLIM_MINIMUM, SLIM_MAX_AGE} from '../dist/api.js'
 
 const directory = (count = 4) => {
  const players = {}
@@ -51,6 +51,26 @@ test('the generator writes one file to the chosen path and reports its size',() 
   assert.equal(written.count, 600)
   assert.ok(written.gzipBytes < written.bytes)
   assert.equal(JSON.parse(readFileSync(out, 'utf8')).count, 600, 'the file is replaced, not appended to')
+ } finally { rmSync(folder, {recursive: true, force: true}) }
+})
+
+test('the generator is callable from Node and reports what it wrote',async () => {
+ const folder = mkdtempSync(join(tmpdir(), 'awaker-build-'))
+ try {
+  const source = join(folder, 'directory.json')
+  const out = join(folder, 'nested', 'players.json')
+  writeFileSync(source, JSON.stringify(directory(600)))
+  const before = Date.now()
+  const result = await buildPlayersFile({out, from: source})
+  assert.deepEqual(Object.keys(result), ['path', 'count', 'generatedAt', 'bytes', 'gzipBytes'])
+  assert.equal(result.path, resolve(out))
+  assert.equal(result.count, 600)
+  assert.ok(result.gzipBytes < result.bytes)
+  const written = JSON.parse(readFileSync(out, 'utf8'))
+  assert.equal(written.generatedAt, result.generatedAt, 'the caller is told the time that travels with the file')
+  assert.ok(Date.parse(result.generatedAt) >= before, 'and it is when the file was written, not when it was asked for')
+  assert.ok(Date.now() - Date.parse(result.generatedAt) < SLIM_MAX_AGE, 'so the file it just wrote counts as fresh')
+  await assert.rejects(() => buildPlayersFile({out, from: join(folder, 'missing.json')}), /ENOENT/)
  } finally { rmSync(folder, {recursive: true, force: true}) }
 })
 
@@ -96,7 +116,7 @@ test('the dashboard serves itself the slimmed directory only while it is fresh a
 
   for (const [label, file] of [
    ['a short file', slim(SLIM_MINIMUM - 1)],
-   ['an old file', {...slim(SLIM_MINIMUM), generatedAt: new Date(Date.now() - 25 * 3600000).toISOString()}],
+   ['an old file', {...slim(SLIM_MINIMUM), generatedAt: new Date(Date.now() - SLIM_MAX_AGE - 1000).toISOString()}],
    ['an undated file', {...slim(SLIM_MINIMUM), generatedAt: 'last Tuesday'}],
    ['a directory with no players', {generatedAt: new Date().toISOString(), players: null}],
    ['a bare directory', slim(SLIM_MINIMUM).players],
@@ -177,7 +197,11 @@ test('the service answers players.json itself and leaves the written file as the
   assert.equal(head.status, 200)
   assert.equal(await head.text(), '')
 
-  current = {at: at - 25 * 3600000, players: live(600)}
+  // The route and the browser read one window, so the boundary is asserted against that constant
+  // rather than against a copy of the number.
+  current = {at: at - SLIM_MAX_AGE + 1000, players: live(600)}
+  assert.equal((await (await ask()).json()).players['5000'].full_name, 'Live 0', 'a snapshot inside the window is still served')
+  current = {at: at - SLIM_MAX_AGE, players: live(600)}
   const stale = await ask()
   assert.equal((await stale.json()).players['1001'].full_name, 'Player 1', 'a stale snapshot must not shadow a newer file')
   current = {at: Number.NaN, players: live(600)}
