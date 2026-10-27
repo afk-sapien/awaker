@@ -55,10 +55,33 @@ export async function json(url) {
  }
 }
 export const sleeper=(path,options={})=>cache.get(BASE+path,()=>json(BASE+path),options);
+// A slimmed directory written by scripts/slim-players.js and served from this origin, about 300 KB
+// against 15 MB. Injury statuses and new signings go stale, so it is used only while it is as fresh
+// as a live fetch would have been. An older, unreadable, foreign or short file is ignored and the
+// full directory is fetched instead.
+export const SLIM_PLAYERS='players.json',SLIM_MINIMUM=500;
+export async function slimPlayerFile(){
+ if(typeof location==='undefined'||!location?.href)return null;
+ let url;try{url=new URL(SLIM_PLAYERS,location.href)}catch{return null}
+ if(url.origin!==location.origin)return null;
+ let response;try{response=await fetch(url.href,{redirect:'error',credentials:'omit',cache:'no-cache'})}catch{return null}
+ if(!response.ok){try{await response.body?.cancel()}catch{}return null}
+ try{
+  const file=await readJsonResponse(response,8*1024*1024);
+  const at=Date.parse(file?.generatedAt);
+  if(!Number.isFinite(at)||Date.now()-at>24*HOUR)return null;
+  const players=file.players;
+  if(!players||typeof players!=='object'||Array.isArray(players))return null;
+  // A directory this short is a truncated or unrelated file, and would hide most of the league.
+  const ids=Object.keys(players);
+  if(ids.length<SLIM_MINIMUM||ids.some(id=>!players[id]||typeof players[id]!=='object'))return null;
+  return players;
+ }catch{return null}
+}
 export function loadPlayers(options={}){return cache.get('directory',async()=>{
  // Reuse the directory saved by earlier versions of the app.
  if(!options.force){const legacy=await storage('players');if(legacy&&Date.now()-legacy.time<24*HOUR)return legacy.data}
- return json(BASE+'/players/nfl');
+ return await slimPlayerFile()||json(BASE+'/players/nfl');
 },{ttl:24*HOUR,...options});}
 // Player logs load only when opened, independently of dashboard refreshes.
 export function playerHistory(playerId,season,options={}){

@@ -61,8 +61,9 @@ export async function serveStatic(req, res, dist, path) {
   res.end(req.method === 'HEAD' ? undefined : body)
 }
 
-const types = {'.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8'}
-const compressible = new Set(['.html', '.js', '.css', '.svg', '.txt'])
+// .json is here for the slimmed player directory scripts/slim-players.js writes into dist.
+const types = {'.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8'}
+const compressible = new Set(['.html', '.js', '.css', '.json', '.svg', '.txt'])
 const gzipped = new Map()
 function gzipCached(filename, etag, file) {
   const hit = gzipped.get(filename)
