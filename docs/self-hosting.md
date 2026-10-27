@@ -127,6 +127,29 @@ Configure certificates and HTTPS redirects in the proxy. The application does no
 
 `GET /healthz` checks service HTTP liveness and returns only `{"status":"ok"}`. It does not check provider freshness, schedule success, or notification delivery. The image includes a healthcheck. Inspect worker activity in **Notifications** for provider and delivery failures.
 
+## Serving a smaller player directory
+
+Without `SLEEPER_USERNAME` the dashboard runs entirely in the browser and fetches
+Sleeper's player directory itself, about 15 MB before the first page is drawn. Write a
+slimmed copy next to the dashboard instead:
+
+```sh
+node scripts/slim-players.js
+```
+
+That keeps only the fields the dashboard reads, around 3,300 players and 500 KB, which
+the service compresses to roughly 70 KB on the wire. It writes `dist/players.json`, which
+is not part of the repository or the image, so generate it where the dashboard is served.
+Use `--out` for another path and `--from directory.json` to slim a directory you already
+have.
+
+The browser uses the file only while it is less than 24 hours old, the same freshness the
+full directory is held to, because injury designations and new signings change daily. An
+older, partial or missing file is ignored and the full directory is fetched as before, so
+nothing breaks if the file is never regenerated. Run it on a daily schedule to keep the
+smaller download, for example from cron a few hours before kickoff. This has no effect on
+a service with `SLEEPER_USERNAME` set, which already sends the browser the same subset.
+
 ## Sleeper connections timing out early
 
 On the Tynet deployment, intermittent league failures reproduced on the previous image.
