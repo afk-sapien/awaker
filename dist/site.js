@@ -1,0 +1,43 @@
+// Anything that wraps this dashboard in a site of its own has to put its own tags in the head and
+// its own markup at the end of the body. Searching the page for </head>, or for the charset meta, or
+// for the title, breaks on any unrelated edit to it, and breaks quietly: the search finds nothing,
+// nothing is inserted, and the page ships looking almost right.
+//
+// So the pages carry comment markers, this is the only thing that reads them, and a marker that goes
+// missing is an error here rather than a surprise in the output.
+export const MARKERS = {headStart: 'awaker:head-start', headEnd: 'awaker:head-end', bodyEnd: 'awaker:body-end'}
+
+const comment = marker => `<!--${marker}-->`
+const missingMarker = marker => Object.assign(
+  Error(`The page carries no ${comment(marker)}, so there is nowhere to inject. A dist page lost its markers.`),
+  {name: 'MissingMarkerError', marker}
+)
+const escaped = value => String(value).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]))
+const text = (value, what) => {
+  if (typeof value !== 'string' || !value.trim()) throw Error(`${what} must be a string with something in it.`)
+  return escaped(value.trim())
+}
+const insert = (html, marker, part) => {
+  const at = html.indexOf(comment(marker))
+  if (at === -1) throw missingMarker(marker)
+  return html.slice(0, at) + part + html.slice(at)
+}
+
+// head goes just inside </head>, body just inside </body>. title replaces what the page's title
+// says. name replaces the brand wherever the page writes it, keeping the case of each occurrence,
+// because the pages write it three ways: Awaker in prose, awaker in the sidebar, AWAKER in an
+// eyebrow. The markers stay in the result, so a page can be wrapped again.
+export function injectHtml(html, {head = '', body = '', title, name} = {}) {
+  if (typeof html !== 'string') throw Error('injectHtml needs the page as a string.')
+  for (const marker of Object.values(MARKERS)) if (!html.includes(comment(marker))) throw missingMarker(marker)
+  let out = html
+  if (name !== undefined) {
+    const safe = text(name, 'The app name')
+    // The markers are the one place the word is not the brand, so they are left alone and survive.
+    out = out.replace(/awaker(?!:)/gi, match => match === match.toUpperCase() ? safe.toUpperCase()
+      : match[0] === match[0].toLowerCase() ? safe.toLowerCase() : safe)
+  }
+  if (title !== undefined) out = out.replace(/<title>[^<]*<\/title>/, `<title>${text(title, 'The page title')}</title>`)
+  // Injected last, so nothing the caller passes in is rewritten by the brand or title replacement.
+  return insert(insert(out, MARKERS.bodyEnd, body), MARKERS.headEnd, head)
+}
