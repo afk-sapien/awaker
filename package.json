@@ -9,6 +9,7 @@
     "service": "node --env-file-if-exists=.env server/main.js",
     "mcp": "node --env-file-if-exists=.env server/mcp.js",
     "setup": "node scripts/setup.js",
+    "manifest": "node scripts/dist-manifest.js",
     "check": "node scripts/check.js",
     "verify": "npm run check && npm test"
   },

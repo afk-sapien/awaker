@@ -155,6 +155,46 @@ downloads is never older than the one the service is analysing. The generated fi
 useful as the fallback: it is served while the service has no refresh yet, or one older
 than 24 hours, which is also what a preview deployment without a username serves.
 
+## Serving the dashboard from a static host
+
+Everything except notifications works with no service behind it. Copy `dist/` to any
+static host and the dashboard runs in the browser against Sleeper directly, the same way
+it does without `SLEEPER_USERNAME`.
+
+Which files to copy is a generated list rather than a judgement call:
+
+```sh
+npm run manifest
+```
+
+That rewrites `dist/manifest.json`, whose `shared` list is what any host needs and whose
+`service` list is the notifications page, which only does something with the service
+running. A static host copies `shared` and leaves `service` behind. The list is checked by
+a test, so a file added to `dist/` cannot be left out of it.
+
+Then tell the pages there is no service, by adding this to the `<head>` of each HTML file
+you serve:
+
+```html
+<meta name="awaker:mode" content="static">
+```
+
+Without it the dashboard asks `/api/v1/settings` on every load and waits up to 15 seconds
+for an answer that is not coming. It also sends anyone arriving at `?view=notifications`
+to a page that is not there. With it, neither happens.
+
+To put your own name and links on it, write `dist/site.json`:
+
+```json
+{"name": "Sunday HQ", "links": [{"label": "About", "href": "/about"}]}
+```
+
+`name` replaces the wordmark and the page title, and up to six links are drawn in the
+footer beside the Sleeper and ESPN credits. A link is either a path on the same site or an
+`https://` address. The file carries a name and links and nothing else, by design: no
+script to load, no third-party origin, no identifier and no analytics. Anything in it that
+does not fit is ignored, and no file at all means the page looks exactly as it does now.
+
 ## Sleeper connections timing out early
 
 On the Tynet deployment, intermittent league failures reproduced on the previous image.

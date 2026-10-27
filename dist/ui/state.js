@@ -1,5 +1,7 @@
 // Everything the page remembers between redraws, in one place. Fields left undefined are set at
 // startup from saved preferences and the service, before the first render.
+import {DEFAULT_SITE} from '../site.js';
+
 export const S={
  data:undefined,
  view:'watch',
@@ -20,6 +22,10 @@ export const S={
  tradeManual:null,
  connectRun:0,
  serviceMode:false,
+ // A static host has nothing to ask, so the app does not ask it. site is the optional site.json,
+ // which is read at startup and defaults to the name and no links.
+ staticMode:false,
+ site:DEFAULT_SITE,
  serviceSettings:null,
  unread:0,
  prefs:undefined,

@@ -4,6 +4,7 @@
 import {demo} from './demo.js';
 import {aggregateWatch} from './engine.js';
 import {getTheme,applyTheme} from './themes.js';
+import {DEFAULT_SITE,loadSiteFile,rename} from './site.js';
 import {S} from './ui/state.js';
 import {$,isLeagueView,isTradeView,nav,pname} from './ui/core.js';
 import {readPreferences,applyPreferences} from './ui/preferences.js';
@@ -18,7 +19,13 @@ import {bindEvents} from './ui/events.js';
 import {badge,unread} from './ui/unread.js';
 
 S.data=demo();
-try{const response=await fetch('/api/v1/settings',{signal:AbortSignal.timeout(15000)});if(response.status===401){location.replace('/integrations.html');await new Promise(()=>{})}if(response.ok){const result=await response.json();S.serviceSettings=result.settings;S.unread=unread(result.worker);S.serviceMode=true}}catch{}
+S.staticMode=globalThis.awaker?.staticMode===true;
+// Both requests go out together, so the optional file costs no extra wait. On a static host there is
+// no service to ask, and asking anyway cost up to 15 seconds and a request that cannot succeed.
+const siteFile=loadSiteFile();
+if(!S.staticMode)try{const response=await fetch('/api/v1/settings',{signal:AbortSignal.timeout(15000)});if(response.status===401){location.replace('/integrations.html');await new Promise(()=>{})}if(response.ok){const result=await response.json();S.serviceSettings=result.settings;S.unread=unread(result.worker);S.serviceMode=true}}catch{}
+S.site=await siteFile;
+if(S.site.name!==DEFAULT_SITE.name)document.title=rename(document.title,S.site.name);
 let stored=null;try{stored=localStorage.getItem('sunday-preferences')}catch{}
 applyPreferences(readPreferences(stored,S.serviceMode?S.serviceSettings:null));
 try{S.themeId=getTheme(localStorage.getItem('sunday-theme')).id}catch{}
@@ -27,7 +34,8 @@ bindEvents();
 
 const route=new URLSearchParams(location.search);let savedPage;try{savedPage=localStorage.getItem('sunday-page')}catch{}
 const pages=nav.map(([id])=>id).filter(id=>id!=='notifications');
-if(route.get('view')==='notifications'){location.replace('/integrations.html');await new Promise(()=>{})}
+// integrations.html belongs to the service, so a static host does not ship it and nobody is sent there.
+if(!S.staticMode&&route.get('view')==='notifications'){location.replace('/integrations.html');await new Promise(()=>{})}
 if(pages.includes(route.get('view')))S.view=route.get('view');else if(pages.includes(savedPage))S.view=savedPage;
 if(route.get('league')){S.leagueId=route.get('league');S.prefs.analysisLeague=S.leagueId}
 rememberPage();
