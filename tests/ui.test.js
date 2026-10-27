@@ -121,3 +121,31 @@ test('research failures pause partial results and an old week cannot appear as c
  assert.match(scoutingPanel(l),/Explore recent performance/)
  assert.doesNotMatch(scoutingPanel(l),/Research results are paused/)
 })
+
+test('opening research reuses the stored weekly results and only the refresh refetches them',async()=>{
+ const {loadScouting}=await import('../dist/ui/scouting.js')
+ const api=await import('../dist/api.js')
+ const original=globalThis.fetch
+ const calls=[]
+ const weekly=()=>calls.filter(u=>u.includes('/stats/nfl/')).length
+ globalThis.fetch=async url=>{
+  calls.push(String(url))
+  return Response.json(String(url).includes('/stats/nfl/')?[{player_id:'4984',stats:{gp:1,pts_ppr:12}}]:{})
+ }
+ try{
+  start()
+  S.data.demo=false
+  S.data.nfl.season='2099'
+  S.data.week=4
+  S.view='waivers'
+  for(const week of [1,2,3])await api.stats('2099',week)
+  const warmed=weekly()
+  assert.equal(warmed,3)
+  await loadScouting()
+  assert.equal(weekly(),warmed,'the first load reads the weeks already held')
+  assert.deepEqual(Object.keys(S.scoutingState.history),['1','2','3'])
+  assert.deepEqual(S.scoutingState.errors,[])
+  await loadScouting()
+  assert.equal(weekly(),warmed+3,'the refresh retries every week against Sleeper')
+ }finally{globalThis.fetch=original}
+})

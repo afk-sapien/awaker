@@ -12,6 +12,9 @@ const sample=(data,week)=>Object.fromEntries(Object.entries(data.players).filter
 export async function loadScouting(){
  const key=scoutingKey()
  if(S.scoutingState?.key===key&&S.scoutingState.loading)return
+ // Prior weeks are already held for a day once settled, so the first load reads that copy.
+ // Only a second click, the Refresh, is a request to retry every week against Sleeper.
+ const refresh=S.scoutingState?.key===key
  const data=S.data,weeks=scoutingWeeks(data.week)
  const state={key,loading:true,history:{},errors:[],weeks,loadedAt:null}
  S.scoutingState=state
@@ -21,7 +24,7 @@ export async function loadScouting(){
  await Promise.all(Array.from({length:3},async()=>{
   while(pending.length){
    const week=pending.shift()
-   try{state.history[week]=data.demo?sample(data,week):await api.stats(data.nfl.season,week,{force:true})}
+   try{state.history[week]=data.demo?sample(data,week):await api.stats(data.nfl.season,week,{force:refresh})}
    catch{state.errors.push(week)}
   }
  }))
