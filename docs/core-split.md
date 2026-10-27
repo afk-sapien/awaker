@@ -60,7 +60,7 @@ it as three tiers and enforce the rule with a check.
 
 **Tier 1, the core.** `dist/engine.js`, `analysis.js`, `trades.js`, `waivers.js`,
 `league.js`, `season.js`, `defenses.js`, `lineup.js`, `scouting.js`, `cache.js`,
-`network.js`, `api.js`, `themes.js`, `origins.js`, `demo.js`. Pure functions over plain data, plus the
+`network.js`, `api.js`, `themes.js`, `origins.js`, `site.js`, `demo.js`. Pure functions over plain data, plus the
 Sleeper and ESPN clients. No Node built-ins, and nothing runs at import time, which is
 what lets `scripts/check.js` load every one of them under Node today. Browser globals are
 reached only where they can be absent or supplied: `applyTheme` takes its root as a
