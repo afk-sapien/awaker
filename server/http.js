@@ -3,7 +3,11 @@ import {timingSafeEqual, randomBytes} from 'node:crypto'
 import {contracts, validate} from './contracts.js'
 import {bad} from './settings.js'
 import {publicOrigin} from './config.js'
-import {json, serveStatic} from './static.js'
+import {json, serveJson, serveStatic} from './static.js'
+import {playerFile} from './provider.js'
+
+// The browser only trusts the file while it is as fresh as a live fetch would have been.
+const PLAYERS_FRESH = 24 * 3600000
 
 const equal = (a, b) => typeof a === 'string' && typeof b === 'string' &&
   Buffer.byteLength(a) === Buffer.byteLength(b) && timingSafeEqual(Buffer.from(a), Buffer.from(b))
@@ -75,6 +79,17 @@ export function createHttpServer({service, worker, ntfy, adminToken, agentToken,
       if (path === '/healthz' && ['GET', 'HEAD'].includes(req.method)) {
         json(res, 200, {status: 'ok'})
         return
+      }
+      // A service already holds the slimmed directory from its last refresh, so it answers with that
+      // instead of the generated file and there is no window where the file on disk is the older of
+      // the two. Reading the snapshot never starts a refresh, so anonymous traffic cannot reach
+      // Sleeper through this. A stale snapshot falls through to the file, which may be newer.
+      if (path === '/players.json' && ['GET', 'HEAD'].includes(req.method)) {
+        const current = service.playerDirectory?.()
+        if (current && now() - current.at < PLAYERS_FRESH) {
+          serveJson(req, res, 'players.json', String(current.at), () => playerFile(current.players, current.at))
+          return
+        }
       }
       if (path.startsWith('/api/')) {
         // Behind a reverse proxy every client shares one address, so a credential gets its own

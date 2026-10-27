@@ -1,7 +1,7 @@
 // Sleeper's player directory is about 15 MB of everyone who ever played, and a browser-only
 // visitor downloads all of it before the first page is drawn. The service already reduces it to
 // the handful of fields the dashboard reads, and this writes that same subset to disk so a
-// self-hoster can serve roughly 300 KB from their own origin instead.
+// self-hoster can serve roughly 500 KB, near 70 KB compressed, from their own origin instead.
 //
 // Usage: node scripts/slim-players.js [--out dist/players.json] [--from directory.json]
 //
@@ -11,7 +11,7 @@ import {mkdirSync, readFileSync, writeFileSync} from 'node:fs'
 import {dirname, resolve} from 'node:path'
 import {gzipSync} from 'node:zlib'
 import {pathToFileURL} from 'node:url'
-import {slimPlayers} from '../server/provider.js'
+import {playerFile, slimPlayers} from '../server/provider.js'
 import * as api from '../dist/api.js'
 
 export const DEFAULT_OUT = 'dist/players.json'
@@ -33,10 +33,9 @@ export function options(argv) {
 // The generated time is what the dashboard checks before using the file, so it travels with it.
 export function slimFile(directory, now = Date.now()) {
   if (!directory || typeof directory !== 'object' || Array.isArray(directory)) throw Error('The player directory must be an object keyed by player id.')
-  const players = slimPlayers(directory)
-  const count = Object.keys(players).length
-  if (!count) throw Error('No fantasy players were found in that directory.')
-  return {generatedAt: new Date(now).toISOString(), count, players}
+  const file = playerFile(slimPlayers(directory), now)
+  if (!file.count) throw Error('No fantasy players were found in that directory.')
+  return file
 }
 
 export function writeSlimPlayers(directory, out = DEFAULT_OUT, now = Date.now()) {

@@ -10,6 +10,12 @@ export function leagueFailure(league,error){
  const label=league.name?`${league.name} (${league.league_id})`:`League ${league.league_id}`
  return `${label}: ${error?.code==='LEAGUE_DATA'?error.message:'league refresh failed. Try Refresh.'}`
 }
+// The one shape of players.json, whether scripts/slim-players.js writes it or a running service
+// answers with the directory from its last refresh. The browser checks generatedAt before using it.
+export function playerFile(players,at){
+ if(!players||typeof players!=='object'||Array.isArray(players))throw Error('The player directory must be an object keyed by player id.')
+ return {generatedAt:new Date(at).toISOString(),count:Object.keys(players).length,players}
+}
 export function slimPlayers(players,leagues=[]){
  if(!slimCache.has(players)){
   const base={};
