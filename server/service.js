@@ -109,7 +109,11 @@ export function createService({store,provider,now=Date.now,username:pinned=''}){
   const complete=state.complete&&opps.complete&&trade.complete,sources=[...new Map([...state.sources,...opps.sources,...trade.sources].map(s=>[s.name,s])).values()];
   return {...state,generatedAt:now(),sources,complete,health:complete?'healthy':'degraded',warnings,period,actions,changes:changed.length,text};
  }
- return {settings,saveSettings,usernameLocked:()=>!!pinned,load,status,trades,evaluate,opportunities,recap,digest,envelope,client:async(force=false,have=null)=>{const loaded=await load({force}),{outlook,...data}=loaded;
+ // The slimmed player directory from the last refresh, for a browser that would otherwise fetch 15 MB
+ // of it from Sleeper. It never starts a refresh, so public traffic cannot reach Sleeper through it,
+ // and it holds nothing but the public player list.
+ const playerDirectory=()=>snapshot?.players&&Number.isFinite(snapshot.playersAt)?{at:snapshot.playersAt,players:snapshot.players}:null;
+ return {settings,saveSettings,usernameLocked:()=>!!pinned,load,status,trades,evaluate,opportunities,recap,digest,envelope,playerDirectory,client:async(force=false,have=null)=>{const loaded=await load({force}),{outlook,...data}=loaded;
   // The browser loads its own outlook, and it keeps the player directory it already has.
   if(have&&String(have)===String(data.playersAt))delete data.players;
   return {data,settings:settings()}}};

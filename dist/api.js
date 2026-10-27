@@ -55,10 +55,11 @@ export async function json(url) {
  }
 }
 export const sleeper=(path,options={})=>cache.get(BASE+path,()=>json(BASE+path),options);
-// A slimmed directory written by scripts/slim-players.js and served from this origin, about 300 KB
-// against 15 MB. Injury statuses and new signings go stale, so it is used only while it is as fresh
-// as a live fetch would have been. An older, unreadable, foreign or short file is ignored and the
-// full directory is fetched instead.
+// A slimmed directory served from this origin, written by scripts/slim-players.js or answered live
+// by a service from its last refresh: about 500 KB, near 70 KB compressed, against 15 MB. Injury
+// statuses and new signings go stale, so it is used only while it is as fresh as a live fetch would
+// have been. An older, unreadable, foreign or short file is ignored and the full directory is
+// fetched instead.
 export const SLIM_PLAYERS='players.json',SLIM_MINIMUM=500;
 export async function slimPlayerFile(){
  if(typeof location==='undefined'||!location?.href)return null;

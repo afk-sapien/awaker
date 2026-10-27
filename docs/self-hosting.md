@@ -147,8 +147,13 @@ The browser uses the file only while it is less than 24 hours old, the same fres
 full directory is held to, because injury designations and new signings change daily. An
 older, partial or missing file is ignored and the full directory is fetched as before, so
 nothing breaks if the file is never regenerated. Run it on a daily schedule to keep the
-smaller download, for example from cron a few hours before kickoff. This has no effect on
-a service with `SLEEPER_USERNAME` set, which already sends the browser the same subset.
+smaller download, for example from cron a few hours before kickoff.
+
+A service with `SLEEPER_USERNAME` set needs no schedule. It already holds the same subset
+from its last refresh and answers `players.json` with that, so the directory a visitor
+downloads is never older than the one the service is analysing. The generated file stays
+useful as the fallback: it is served while the service has no refresh yet, or one older
+than 24 hours, which is also what a preview deployment without a username serves.
 
 ## Sleeper connections timing out early
 

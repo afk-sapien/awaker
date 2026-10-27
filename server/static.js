@@ -61,6 +61,31 @@ export async function serveStatic(req, res, dist, path) {
   res.end(req.method === 'HEAD' ? undefined : body)
 }
 
+// A JSON body the service holds in memory rather than on disk, revalidated and compressed like a
+// file. Both are kept until the version changes, so reloads never rebuild half a megabyte of
+// player directory, and an anonymous caller cannot make the service compress it over and over.
+const computed = new Map()
+export function serveJson(req, res, name, version, build) {
+  if (!['GET', 'HEAD'].includes(req.method)) {
+    res.setHeader('Allow', 'GET, HEAD')
+    throw bad('Method not allowed.', 405)
+  }
+  let held = computed.get(name)
+  if (held?.version !== version) {
+    const file = Buffer.from(JSON.stringify(build()))
+    held = {version, file, hash: createHash('sha256').update(file).digest('base64url').slice(0, 27)}
+    computed.set(name, held)
+  }
+  const gzip = held.file.length > 1024 && /\bgzip\b/.test(String(req.headers['accept-encoding'] || ''))
+  const etag = `"${held.hash}${gzip ? '-gz' : ''}"`
+  const headers = {...securityHeaders, 'Content-Type': types['.json'], 'Cache-Control': 'no-cache', ETag: etag, Vary: 'Accept-Encoding'}
+  const match = String(req.headers['if-none-match'] || '').split(',').map(tag => tag.trim().replace(/^W\//, ''))
+  if (match.includes(etag) || match.includes('*')) { res.writeHead(304, headers); return res.end() }
+  const body = gzip ? gzipCached(name, etag, held.file) : held.file
+  res.writeHead(200, {...headers, ...(gzip ? {'Content-Encoding': 'gzip'} : {}), 'Content-Length': body.length})
+  res.end(req.method === 'HEAD' ? undefined : body)
+}
+
 // .json is here for the slimmed player directory scripts/slim-players.js writes into dist.
 const types = {'.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8'}
 const compressible = new Set(['.html', '.js', '.css', '.json', '.svg', '.txt'])
