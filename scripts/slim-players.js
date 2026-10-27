@@ -44,13 +44,19 @@ export function writeSlimPlayers(directory, out = DEFAULT_OUT, now = Date.now())
   const path = resolve(out)
   mkdirSync(dirname(path), {recursive: true})
   writeFileSync(path, body)
-  return {path, count: file.count, bytes: Buffer.byteLength(body), gzipBytes: gzipSync(Buffer.from(body), {level: 6}).length}
+  return {path, count: file.count, generatedAt: file.generatedAt, bytes: Buffer.byteLength(body), gzipBytes: gzipSync(Buffer.from(body), {level: 6}).length}
+}
+
+// Fetching the directory and writing the file is the whole job, so anything that generates the file
+// as part of a larger build calls this and reads the numbers back, rather than spawning this script
+// and parsing what it prints.
+export async function buildPlayersFile({out = DEFAULT_OUT, from = null} = {}) {
+  const directory = from ? JSON.parse(readFileSync(resolve(from), 'utf8')) : await api.loadPlayers()
+  return writeSlimPlayers(directory, out)
 }
 
 async function main(argv) {
-  const {out, from} = options(argv)
-  const directory = from ? JSON.parse(readFileSync(resolve(from), 'utf8')) : await api.loadPlayers()
-  const result = writeSlimPlayers(directory, out)
+  const result = await buildPlayersFile(options(argv))
   const kb = n => `${(n / 1024).toFixed(0)} KB`
   console.log(`${result.path}: ${result.count} players, ${kb(result.bytes)} (${kb(result.gzipBytes)} gzipped)`)
   console.log('Serve it beside index.html and regenerate it daily, or the dashboard fetches the full directory instead.')
