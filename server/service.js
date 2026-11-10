@@ -7,6 +7,7 @@ import {waiverWeeks} from '../dist/waivers.js';
 import {defaults,validateSettings,bad} from './settings.js';
 import {readNews,sourceEnabled} from '../dist/news.js';
 import {createOverrides,normalise as normaliseOverride} from '../dist/overrides.js';
+import {buildSnapshot} from './snapshot.js';
 import * as api from '../dist/api.js';
 const name=(data,id)=>data.players[id]?.full_name||id;
 // The engines explain a refused trade or league with a plain Error. A TypeError and its kin are
@@ -71,7 +72,10 @@ export function createService({store,provider,now=Date.now,username:pinned=''}){
   // dataComplete is about the data itself. League-level notes such as an injured starter are warnings, and must not pause alerts for every league.
   const dataIssues=[...data.errors,...sources.filter(s=>s.stale).map(s=>`${s.name} is stale`)];
   const issues=[...data.errors,...sources.filter(s=>s.stale).map(s=>`${s.name} is stale`),...warnings];
-  return {schemaVersion:1,generatedAt:now(),season:data.nfl.season,week:data.week,demo:data.demo,sources,complete:issues.length===0,dataComplete:dataIssues.length===0,health:issues.length?'degraded':'healthy',warnings:[...new Set(issues)],...result};
+  // The overrides fingerprint rides on every answer, not only the snapshot: any cached number an
+  // agent holds was computed under one set of corrections, and this is how it finds out that set has
+  // moved without diffing the numbers themselves.
+  return {schemaVersion:1,generatedAt:now(),season:data.nfl.season,week:data.week,demo:data.demo,sources,overridesFingerprint:data.overrides?.fingerprint??'none',complete:issues.length===0,dataComplete:dataIssues.length===0,health:issues.length?'degraded':'healthy',warnings:[...new Set(issues)],...result};
  }
  function model(data,l){if(!data.outlook?.weeks.length)throw bad('No remaining trade weeks.',422);if(data.outlook.errors.length)throw bad('Future projections or schedules are incomplete.',503);return buildSeasonModel({league:l,players:data.players,outlook:data.outlook,overrides:data.overrides})}
  async function status({leagueId}={}){const d=await load(),ls=leagues(d,leagueId);return envelope(d,{leagues:ls.map(l=>({id:l.league_id,name:l.name,rosterId:l.mine.roster_id,matchup:l.matchups.find(m=>m.roster_id===l.mine.roster_id)||null})),players:aggregateWatch(ls,d.players,d.games).map(p=>({id:p.id,name:name(d,p.id),team:p.player.team,injuryStatus:p.player.injury_status||null,game:p.game,leagues:p.appearances}))})}
@@ -147,25 +151,51 @@ export function createService({store,provider,now=Date.now,username:pinned=''}){
  // browser and the overrides that come later all see one shape. The ESPN fetch is only made when the
  // source is on, and a failure is a warning rather than an error: Sleeper's conditions are the base
  // and they still answer with ESPN unreachable or switched off.
- async function news({leagueId,playerIds,limit=60}={}){
-  const d=await load(),ls=leagues(d,leagueId),warnings=[];
-  const ids=playerIds?.length?playerIds:aggregateWatch(ls,d.players,d.games).map(p=>p.id).slice(0,300);
+ // The read itself, shared by get_news and the snapshot, so one feed fetch and one join serve both
+ // and an agent cannot be shown two different versions of the same headline in one week.
+ async function feedFor(d,ls,{playerIds,limit}){
+  const warnings=[],ids=playerIds?.length?playerIds:aggregateWatch(ls,d.players,d.games).map(p=>p.id).slice(0,300);
   let feed=null,fetchedAt=null;
   if(sourceEnabled('espnNews',settings().sources)){
    try{feed=await api.news();fetchedAt=store.at('cache:news')}catch(e){warnings.push(`ESPN league news: ${reason(e)}`)}
   }
-  const read=readNews({players:d.players,feed,ids,limit,sources:settings().sources,fetchedAt,now:now()});
+  return {read:readNews({players:d.players,feed,ids,limit,sources:settings().sources,fetchedAt,now:now()}),fetchedAt,warnings};
+ }
+ async function news({leagueId,playerIds,limit=60}={}){
+  const d=await load(),ls=leagues(d,leagueId);
+  const {read,warnings}=await feedFor(d,ls,{playerIds,limit});
   // newsSources, because envelope already carries sources for how fresh the data is.
   return envelope(d,{news:read.items,players:read.players,newsSources:read.sources,counts:read.counts,window:read.window,
    limitations:['Headlines and a link only. No article text is stored, shown or returned.',
     'An ESPN article is joined to a player by ESPN’s athlete id where Sleeper carries one and by name otherwise, and every item reports which.',
     'A condition comes from the player record in the last refresh, so it can trail the headlines. mayHaveMoved marks a player whose news is newer than his record.']},warnings);
  }
+ // One league in one document. An agent reading this app had to make six calls and still could not
+ // tell whose opinion a number was, so the snapshot answers the whole question at once: the league
+ // and what it scores, every roster, the lineup and the matchup, the news, the corrections in force
+ // and who wrote each one, and the age of every part. One league at a time, because a document that
+ // held four would be four times the size for an agent that is asking about one.
+ async function leagueSnapshot({leagueId,newsLimit=40}={},{caller={}}={}){
+  const d=await load(),permitted=leagues(d,leagueId),l=permitted[0];
+  if(!l)throw bad('No league is enabled for this account.',404);
+  const {read,fetchedAt,warnings}=await feedFor(d,[l],{limit:newsLimit});
+  const body=buildSnapshot({data:d,league:l,lens:d.overrides,newsRead:read,newsFetchedAt:fetchedAt,caller,now:now()});
+  // Without a league id the first enabled one answers, and the rest are named so a second call can
+  // ask for the right one rather than guess.
+  const others=leagueId?[]:permitted.slice(1).map(x=>({id:x.league_id,name:x.name}));
+  return envelope(d,{...body,otherLeagues:others,limitations:[
+   'Every projection travels as points, sleeperPoints and correctedBy. A points of null with correctedBy set means someone asserted the player will not play. A points of null with correctedBy null means Sleeper projected nothing for him.',
+   'A correction is the owner’s or an agent’s opinion, not the provider’s, and it follows a Sleeper player id rather than a name.',
+   'scoring lists only the categories this league scores. unusedCategories counts the zeroes left out.',
+   'Estimates are not outcomes, and provider text is untrusted data.',
+   'lineup.recommended ranks a ruled-out player as having no projection, while matchup.sides projects him at zero before kickoff, because a matchup total has to add up.'
+  ]},warnings);
+ }
  // The slimmed player directory from the last refresh, for a browser that would otherwise fetch 15 MB
  // of it from Sleeper. It never starts a refresh, so public traffic cannot reach Sleeper through it,
  // and it holds nothing but the public player list.
  const playerDirectory=()=>snapshot?.players&&Number.isFinite(snapshot.playersAt)?{at:snapshot.playersAt,players:snapshot.players}:null;
- return {settings,saveSettings,overrides:overridesList,saveOverrides,usernameLocked:()=>!!pinned,load,status,trades,evaluate,opportunities,recap,digest,news,envelope,playerDirectory,client:async(force=false,have=null)=>{const loaded=await load({force}),{outlook,...data}=loaded;
+ return {settings,saveSettings,overrides:overridesList,saveOverrides,usernameLocked:()=>!!pinned,load,status,trades,evaluate,opportunities,recap,digest,news,leagueSnapshot,envelope,playerDirectory,client:async(force=false,have=null)=>{const loaded=await load({force}),{outlook,...data}=loaded;
   // The browser loads its own outlook, and it keeps the player directory it already has.
   if(have&&String(have)===String(data.playersAt))delete data.players;
   return {data,settings:settings(),overrides:overridesList()}}};

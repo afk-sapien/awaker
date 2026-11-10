@@ -9,8 +9,9 @@ import {createService,reason} from '../server/service.js';
 import {validateSettings,defaults} from '../server/settings.js';
 import {createWorker,occurrence,nextRun,quiet} from '../server/scheduler.js';
 import {createNtfy,validateNtfy} from '../server/ntfy.js';
-import {createMcpHandler} from '../server/mcp.js';
+import {createMcpHandler,clientName} from '../server/mcp.js';
 import {createHttpServer} from '../server/http.js';
+import {scoringTable} from '../server/snapshot.js';
 import {contracts,validate} from '../server/contracts.js';
 import {demo} from '../dist/demo.js';
 import {buildSeasonModel} from '../dist/trades.js';
@@ -51,15 +52,20 @@ test('agent service reuses UI calculations, prevents excluded leagues, and marks
  at+=7200000;assert.equal((await service.status()).complete,false);store.close();
 });
 test('MCP negotiates, validates tools, and preview calls cannot send notifications',async()=>{
- const calls=[],handle=createMcpHandler({call:async(c,input)=>{calls.push(c.call);return {period:input.period||'daily'}}});
+ const calls=[],named=[],handle=createMcpHandler({call:async(c,input,client)=>{calls.push(c.call);named.push(client);return {period:input.period||'daily'}}});
  assert.equal((await handle({jsonrpc:'2.0',id:0,method:'tools/list'})).error.code,-32000);
  const init=await handle({jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-11-25',clientInfo:{name:'test',version:'1'},capabilities:{}}});assert.equal(init.result.protocolVersion,'2025-11-25');
  assert.equal(await handle({jsonrpc:'2.0',method:'notifications/initialized'}),null);
  // Named rather than counted: a tool that reaches an agent unnoticed is the failure worth catching.
  const list=await handle({jsonrpc:'2.0',id:2,method:'tools/list'});assert.ok(list.result.tools.every(t=>t.annotations.readOnlyHint));
- assert.deepEqual(list.result.tools.map(t=>t.name),['get_status','find_trades','evaluate_trade','get_opportunities','preview_digest','get_news','get_recap']);
+ assert.deepEqual(list.result.tools.map(t=>t.name),['get_status','find_trades','evaluate_trade','get_opportunities','preview_digest','get_news','get_snapshot','get_recap']);
  const bad=await handle({jsonrpc:'2.0',id:3,method:'tools/call',params:{name:'evaluate_trade',arguments:{}}});assert.equal(bad.error.code,-32602);
  const report=await handle({jsonrpc:'2.0',id:4,method:'tools/call',params:{name:'preview_digest',arguments:{period:'weekly'}}});assert.equal(report.result.structuredContent.period,'weekly');assert.deepEqual(calls,['digest']);
+ // The name the client gave at initialize travels with every call it makes, because a correction has
+ // to record which agent wrote it. It is a label the client chose, not a credential.
+ assert.deepEqual(named,['test']);
+ assert.equal(clientName({name:'  Scout 1.0  '}),'Scout 1.0');
+ for(const info of [{name:'bad/name'},{name:''},{},null,{name:7}])assert.equal(clientName(info),null,JSON.stringify(info));
 });
 test('the recap grades a finished week and degrades to a warning when a past week cannot be read',async()=>{
  const store=openStore(':memory:'),at=Date.now(),data=fixture(at),league=data.leagues[0];
@@ -143,6 +149,66 @@ test('only the owner may read or replace the corrections, and a saved one moves 
   assert.equal((await call('PUT',{overrides:Array.from({length:501},()=>({player:id}))})).status,400);
  }finally{await new Promise(r=>server.close(r));store.close()}
 });
+// An agent that writes a correction and then reads its own number back would otherwise agree with
+// itself forever, so the snapshot carries Sleeper's number beside the adjusted one and says who
+// moved it. The two kinds of null matter just as much: one is an assertion that a player will not
+// play, the other is Sleeper having nothing to say, and they lead to opposite decisions.
+test('the snapshot answers one league whole, says whose opinion moved each number, and tells the two nulls apart',async()=>{
+ const store=openStore(':memory:'),at=Date.parse('2026-09-18T07:59:00Z'),data=fixture(at)
+ const service=createService({store,provider:async()=>data,now:()=>at})
+ service.saveSettings({username:'example',sources:{espnNews:false}})
+ const worker=createWorker({store,service}),port=18477,base=`http://127.0.0.1:${port}`
+ const server=createHttpServer({service,worker,adminToken:owner,agentToken:agent,publicUrl:base,dist:resolve('dist')})
+ await new Promise(r=>server.listen(port,'127.0.0.1',r))
+ const league=data.leagues.find(l=>l.enabled),week=data.week
+ // The agent names itself at the MCP handshake and the bridge forwards that name, so the header is
+ // how the server knows whose opinion a record is.
+ const read=(name='scout')=>fetch(base+'/api/v1/snapshot',{method:'POST',headers:{Authorization:`Bearer ${agent}`,'Content-Type':'application/json',...(name?{'X-Awaker-Agent':name}:{})},body:JSON.stringify({leagueId:league.league_id})}).then(r=>r.json())
+ try{
+  const contract=contracts.find(c=>c.name==='get_snapshot')
+  assert.deepEqual([contract.path,contract.method,contract.call],['/snapshot','POST','leagueSnapshot'])
+  assert.match(contract.description,/points, sleeperPoints and correctedBy/,'the caller is told the shape before it reads one')
+  const projectable=league.mine.starters.filter(id=>data.projections[week]?.[id]?.stats)
+  const [moved,ruled]=projectable
+  // And one player Sleeper simply has no projection for, which is the other kind of null.
+  const silent=league.mine.players.find(id=>!league.mine.starters.includes(id))
+  delete data.projections[week][silent]
+
+  const before=await read()
+  assert.equal(before.league.id,league.league_id)
+  assert.equal(before.overridesFingerprint,'none','the envelope dates every number in the document')
+  assert.equal(before.overrides.youAre,'agent:scout')
+  assert.deepEqual(before.overrides.records,[])
+  assert.equal(before.ages.projections.at,at,'freshness is per part, not one generatedAt for all of it')
+  assert.ok(before.teams.some(t=>t.mine)&&before.teams.length===before.league.size)
+  assert.ok(before.lineup.current.length>0&&before.lineup.currentTotal>0)
+  assert.ok(Object.values(before.league.scoring.scores).every(v=>v!==0))
+  assert.deepEqual(scoringTable({rec:.5,rush_yd:.1,blk_kick:0,fum_lost:0}),{scores:{rec:.5,rush_yd:.1},unusedCategories:2},'the hundred zeroes Sleeper sends are counted, not carried')
+  assert.ok(before.players[moved].projection.points>0)
+  assert.equal(before.players[moved].projection.points,before.players[moved].projection.sleeperPoints)
+  assert.equal(before.players[moved].projection.correctedBy,null)
+  assert.deepEqual(before.players[silent].projection,{points:null,sleeperPoints:null,correctedBy:null},'Sleeper having nothing is a null nobody asserted')
+
+  assert.equal(service.saveOverrides([{player:moved,points:{multiplier:.5},reason:'his snap count fell off a cliff',source:'agent:scout'},
+   {player:ruled,status:'Out',reason:'ruled out on the practice report',source:'owner'}]).length,2)
+  const after=await read()
+  assert.notEqual(after.overridesFingerprint,before.overridesFingerprint,'so a cached number can be told to be out of date')
+  assert.equal(after.overridesFingerprint,after.overrides.fingerprint)
+  assert.equal(after.players[moved].projection.sleeperPoints,before.players[moved].projection.sleeperPoints,'Sleeper’s own number survives the correction')
+  assert.equal(after.players[moved].projection.points,Math.round(before.players[moved].projection.sleeperPoints*50)/100)
+  assert.equal(after.players[moved].projection.correctedBy,'agent:scout')
+  assert.deepEqual(after.players[ruled].projection,{points:null,sleeperPoints:before.players[ruled].projection.sleeperPoints,correctedBy:'owner'},'a ruled-out player is a null somebody asserted')
+  assert.equal(after.players[ruled].injuryStatus,'Out')
+  assert.ok(after.lineup.currentTotal<before.lineup.currentTotal,'and the lineup the agent reads moved with it')
+  assert.equal(after.overrides.count,2)
+  assert.equal(after.overrides.mine,1,'an agent is shown which of the corrections are its own')
+  const own=after.overrides.records.find(o=>o.player===moved)
+  assert.equal(own.mine,true);assert.equal(own.active,true);assert.equal(own.reason,'his snap count fell off a cliff')
+  assert.equal(after.overrides.records.find(o=>o.player===ruled).mine,false,'and never that the owner’s is its own')
+  assert.equal((await read('other-scout')).overrides.mine,0,'a different name owns none of them')
+  assert.equal((await read(null)).overrides.youAre,'agent:unnamed','an agent token with no name is still an agent')
+ }finally{await new Promise(r=>server.close(r));store.close()}
+})
 test('daily digest persists occurrence across worker restart and coalesces missed dates',async()=>{
  const h=harness();await h.worker.tick();assert.equal(h.calls,0);h.at+=60000;await h.worker.tick();assert.equal(h.calls,1);
  const restarted=createWorker({store:h.store,service:h.service,publish:h.publish,now:()=>h.at});await restarted.tick();assert.equal(h.calls,1);

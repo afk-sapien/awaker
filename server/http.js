@@ -44,6 +44,17 @@ export function createHttpServer({service, worker, ntfy, adminToken, agentToken,
     catch { throw bad('Invalid JSON.') }
   }
 
+  // Who is asking, by name. An agent that may write a correction has to be identifiable in the
+  // record it writes, and the name is the client's own, so it is sanitised to exactly what an
+  // override source accepts and never trusted for anything but a label. An agent token with no name
+  // is still an agent. A request with no name at all and owner access is the owner: the dashboard
+  // sends no such header, and an MCP client always does.
+  const agentName = req => {
+    const raw = req.headers['x-awaker-agent']
+    const name = typeof raw === 'string' ? raw.trim().slice(0, 40) : ''
+    return /^[\w .-]{1,40}$/.test(name) ? name : null
+  }
+
   function role(req) {
     if (open) return 'admin'
     // An explicit credential must never inherit owner access from a cookie.
@@ -134,7 +145,9 @@ export function createHttpServer({service, worker, ntfy, adminToken, agentToken,
         const contract = contracts.find(item => path === `/api/v1${item.path}` && req.method === item.method)
         if (contract) {
           const input = validate(req.method === 'GET' ? Object.fromEntries(new URL(req.url, origin).searchParams) : await body(req), contract.inputSchema)
-          json(res, 200, await compute(res, () => service[contract.call](input)))
+          const named = agentName(req)
+          const caller = {role: auth, agent: auth === 'agent' ? (named || 'unnamed') : named}
+          json(res, 200, await compute(res, () => service[contract.call](input, {caller})))
           return
         }
         if (auth !== 'admin') throw bad('Owner access required.', 403)
