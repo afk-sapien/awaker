@@ -60,6 +60,7 @@
   "service": [
     "integrations.css",
     "integrations.html",
-    "integrations.js"
+    "integrations.js",
+    "llms.txt"
   ]
 }

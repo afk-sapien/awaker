@@ -230,3 +230,53 @@ test('a correction says so on the number it moved, and the manage view can take 
   assert.doesNotMatch(plain,/class="adjusted"/);
  }finally{await removeOverride(id)}
 })
+
+// An agent's correction is somebody else's reasoning sitting on the owner's numbers, so the page has
+// to say whose it is, say why they wrote it, and never let the owner's editor put their own name on
+// it. The two sections and the two clear controls are the whole point: one hand's work cannot be
+// thrown out by a control meant for the other's.
+test('an agent’s correction is shown apart from the owner’s, with its reason and its own controls',async()=>{
+ const {agentRecords,clearAgentOverrides,clearOverrides,isOwn,lens,ownRecords,writeOverrides}=await import('../dist/ui/overrides.js');
+ const {overrideBlockHTML,overrideFormHTML,overrideListHTML,overridesPanelHTML}=await import('../dist/ui/override-editor.js');
+ start();
+ const l=S.data.leagues.find(x=>x.enabled);S.leagueId=l.league_id;
+ const [mine,theirs]=l.mine.starters;
+ try{
+  await writeOverrides([
+   {player:mine,points:{multiplier:.5},note:'he is on a snap count',source:'owner',at:1},
+   {player:theirs,points:{delta:-4},note:'beat writer says he is limited',reason:'beat writer says he is limited',source:'agent:scout',until:S.data.week,at:2}
+  ]);
+  assert.deepEqual([ownRecords().length,agentRecords().length,isOwn({source:'agent:scout'})],[1,1,false]);
+  const list=overrideListHTML();
+  assert.match(list,/2 corrections on file/);
+  assert.match(list,/>YOURS</,'the owner’s own work is its own section');
+  assert.match(list,/>WRITTEN BY AN AGENT</);
+  assert.match(list,/agent:scout/);
+  assert.match(list,/Reason given: beat writer says he is limited/);
+  assert.match(list,new RegExp(`data-agent-remove="${theirs}"`));
+  assert.match(list,new RegExp(`data-override-open="${mine}"`));
+  // The agent's section offers one action, Remove. Editing it in place would file the agent's
+  // reasoning under the owner's name, so the only way to disagree with it is to take it back or write
+  // your own, which the picker below still offers on that same player.
+  const agentSection=list.slice(list.indexOf('WRITTEN BY AN AGENT'),list.indexOf('override-picker'));
+  assert.match(agentSection,new RegExp(`data-agent-remove="${theirs}"`));
+  assert.doesNotMatch(agentSection,/data-override-open=/,'the owner’s editor never opens on an agent’s record');
+  assert.match(list,/id="override-clear-agents"/,'one control removes every agent correction at once');
+  assert.match(list,/id="override-clear"/);
+  // The profile names whose correction moved the number, and the form offers to write the owner's own
+  // rather than editing the agent's under the owner's name.
+  assert.match(overrideBlockHTML(theirs,l),/Correction by agent:scout/);
+  assert.match(overrideBlockHTML(theirs,l),/Reason given: beat writer/);
+  assert.match(overrideFormHTML(theirs),/ADD A CORRECTION/);
+  assert.match(overrideFormHTML(theirs),/scout has a correction on this player/);
+  assert.doesNotMatch(overrideFormHTML(theirs),/value="-4"/,'and never prefills from it');
+  assert.match(overrideFormHTML(mine),/EDIT YOUR CORRECTION/);
+  assert.match(overridesPanelHTML(),/2 on file · 2 in force in week 2 · 1 written by an agent/);
+  // Clearing the owner's corrections leaves the agent's standing, which is the whole reason there are
+  // two controls.
+  await clearOverrides();
+  assert.deepEqual(lens().list.map(r=>r.source),['agent:scout']);
+  await clearAgentOverrides();
+  assert.deepEqual(lens().list,[]);
+ }finally{await writeOverrides([])}
+})

@@ -166,13 +166,21 @@ export function createHttpServer({service, worker, ntfy, adminToken, agentToken,
           return
         }
         // The owner's corrections are read and replaced as a whole list, exactly as the settings are.
-        // They are not an MCP contract: an agent writing to someone's roster is its own decision.
+        // The list this replaces is the owner's own: an agent's records are held by the service and
+        // merged back, so an old tab cannot delete one by not knowing it existed. Writing one
+        // correction at a time is a contract above, which is the only write an agent has.
         if (path === '/api/v1/overrides' && req.method === 'GET') {
           json(res, 200, {overrides: service.overrides()})
           return
         }
         if (path === '/api/v1/overrides' && req.method === 'PUT') {
           json(res, 200, {overrides: service.saveOverrides(await body(req))})
+          return
+        }
+        // One control for taking back everything the agents wrote, since the whole-list save above
+        // deliberately cannot.
+        if (path === '/api/v1/overrides/agents' && req.method === 'DELETE') {
+          json(res, 200, {overrides: service.clearAgentOverrides()})
           return
         }
         if (path === '/api/v1/client' && req.method === 'GET') {

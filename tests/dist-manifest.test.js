@@ -11,7 +11,8 @@ test('the committed manifest is what the folder actually holds',() => {
  for (const name of ['index.html', 'app.js', 'boot.js', 'site.js', 'styles.css', 'favicon.svg', 'ui/render.js', 'ui/pages/watchroom.js', 'fonts/dm-sans-variable.woff2', 'fonts/OFL-DMSans.txt']) {
   assert.ok(shared.includes(name), `${name} is needed by any host and belongs in shared`)
  }
- assert.deepEqual(service, SERVICE_ONLY, 'only the notifications page is service only')
+ assert.deepEqual(service, SERVICE_ONLY, 'only the notifications page and llms.txt are service only')
+ assert.ok(SERVICE_ONLY.includes('llms.txt'), 'llms.txt describes the tool surface, which a static host does not have')
  assert.equal(shared.filter(name => service.includes(name)).length, 0, 'the two lists do not overlap')
  for (const name of GENERATED) assert.ok(!shared.includes(name) && !service.includes(name), `${name} is written, not copied`)
 })

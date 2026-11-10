@@ -11,8 +11,10 @@ import {join, relative, resolve, sep} from 'node:path'
 import {pathToFileURL} from 'node:url'
 
 export const DEFAULT_OUT = 'dist/manifest.json'
-// The notifications page talks to the service and only to the service.
-export const SERVICE_ONLY = ['integrations.css', 'integrations.html', 'integrations.js']
+// The notifications page talks to the service and only to the service, and llms.txt describes a tool
+// surface that exists only where the service is running, so a static host would be advertising tools
+// it does not have.
+export const SERVICE_ONLY = ['integrations.css', 'integrations.html', 'integrations.js', 'llms.txt']
 // Written or optional, so they are nobody's to copy: the slimmed directory is regenerated daily, the
 // site config is whatever the host wrote, and this file is this file.
 export const GENERATED = ['manifest.json', 'players.json', 'site.json']

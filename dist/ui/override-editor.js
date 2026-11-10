@@ -13,7 +13,7 @@ import {suspectStats} from '../engine.js';
 import {ROSTER_STATUSES,STATUSES,describePoints} from '../overrides.js';
 import {S} from './state.js';
 import {esc,fmt,league,pname,sleeperValue,toast,value} from './core.js';
-import {activeOverrides,lens,removeOverride,setOverride,writeOverrides} from './overrides.js';
+import {activeOverrides,agentRecords,clearAgentOverrides,clearOverrides,isOwn,lens,ownRecords,removeAgentOverride,removeOverride,setOverride} from './overrides.js';
 import {render} from './render.js';
 
 const RESULTS=12;
@@ -84,25 +84,45 @@ export function pickerHTML(){
 // here, only in the editor, because the handler for it lives on the dialog.
 export function overrideBlockHTML(id,l=league(),w=S.data?.week){
  const record=lens().find(id,w),numbers=comparison(id,l,w),suspect=suspectNote(id,l,w);
- return `<div class="override-block">${record?`<p class="small"><span class="adjusted" aria-hidden="true">✎</span> Your correction: ${esc(describeRecord(record))}. <span class="muted">${esc(windowText(record))}.</span></p><p class="num small">${esc(numbers.text)} <span class="muted">this week</span></p>`:''}${suspect?`<p class="data-alert">${esc(suspect)}</p>`:''}<button type="button" class="secondary" data-override-open="${esc(id)}">${record?'Edit your correction':'Add a correction'}</button></div>`;
+ const own=record?isOwn(record):false,mine=ownRecords().find(r=>r.player===String(id))||null;
+ const why=record&&!own?(record.reason||record.note||'').trim():'';
+ return `<div class="override-block">${record?`<p class="small"><span class="adjusted" aria-hidden="true">✎</span> ${own?'Your correction':`Correction by ${esc(record.source)}`}: ${esc(describeRecord(record))}. <span class="muted">${esc(windowText(record))}.</span></p>${why?`<p class="muted small">Reason given: ${esc(why)}</p>`:''}<p class="num small">${esc(numbers.text)} <span class="muted">this week</span></p>`:''}${suspect?`<p class="data-alert">${esc(suspect)}</p>`:''}<button type="button" class="secondary" data-override-open="${esc(id)}">${mine?'Edit your correction':'Add a correction'}</button></div>`;
+}
+
+// One row, for either kind of record. An agent's row carries the reason it gave and the name it gave
+// it under, and offers only Remove: the form writes the owner's records, and editing an agent's would
+// quietly put the owner's name on reasoning that was not theirs.
+function overrideRowHTML(record,week,inForce){
+ const live=inForce.has(record.player),own=isOwn(record),numbers=comparison(record.player);
+ const why=own?'':(record.reason||record.note||'').trim();
+ const id=esc(record.player),league=record.league?` data-agent-league="${esc(record.league)}"`:'';
+ return `<li class="override-row ${own?'':'override-agent'} ${live?'':'override-inert'}"><div class="override-row-main"><strong>${esc(pname(record.player))}</strong> <span class="muted small">${esc(S.data.players[record.player]?.team||'FA')} · ${esc(S.data.players[record.player]?.position||'')}</span>
+  <div class="small">${esc(describeRecord(record))}</div>
+  ${why?`<div class="small">Reason given: ${esc(why)}</div>`:''}
+  <div class="muted small">${own?'':esc(record.source)+' · '}${esc(windowText(record))}${live?'':' · not in force in week '+week}</div>
+  <div class="muted small num">${live?esc(numbers.text):'Sleeper '+fmt(numbers.original)}</div></div>
+  <div class="override-row-actions">${own?`<button type="button" class="secondary" data-override-open="${id}">Edit</button><button type="button" class="secondary" data-override-remove="${id}">Remove</button>`
+   :`<button type="button" class="secondary" data-agent-remove="${id}"${league}>Remove</button>`}</div></li>`;
 }
 
 // The list. Every stored record, not only the ones in force this week, because a record outside its
 // window is inert rather than gone and the owner has to be able to see and remove it.
+//
+// The owner's corrections and the agents' are two sections, never one list. They come from different
+// hands and carry different weight: the owner's are this browser's own work and are replaced as a
+// whole list, an agent's is somebody else's reasoning the owner is entitled to read and throw out.
 export function overrideListHTML(){
  const week=S.data?.week,records=lens().list,inForce=new Set(activeOverrides(week).map(r=>r.player));
- const confirming=S.overrideEditor?.confirming;
- return `<div class="override-top"><div><span class="eyebrow">YOUR CORRECTIONS</span><h2 id="override-title">${records.length?`${records.length} correction${records.length===1?'':'s'} on file`:'No corrections yet'}</h2></div><button type="button" class="secondary" id="override-dialog-close">Close</button></div>
+ const mine=ownRecords(records),theirs=agentRecords(records);
+ const confirming=S.overrideEditor?.confirming,confirmingAgents=S.overrideEditor?.confirmingAgents;
+ return `<div class="override-top"><div><span class="eyebrow">CORRECTIONS</span><h2 id="override-title">${records.length?`${records.length} correction${records.length===1?'':'s'} on file`:'No corrections yet'}</h2></div><button type="button" class="secondary" id="override-dialog-close">Close</button></div>
  <p class="muted small">A correction follows the Sleeper player id, never a name, and every projection the app reads passes through it: the start and sit call, the waiver rows, the defense plan and the trade model all move together. Finished weeks are graded against what was projected before kickoff, so a correction written today never rewrites a past decision.</p>
- ${records.length?`<ul class="override-list">${records.map(record=>{
-  const live=inForce.has(record.player),numbers=comparison(record.player);
-  return `<li class="override-row ${live?'':'override-inert'}"><div class="override-row-main"><strong>${esc(pname(record.player))}</strong> <span class="muted small">${esc(S.data.players[record.player]?.team||'FA')} · ${esc(S.data.players[record.player]?.position||'')}</span>
-   <div class="small">${esc(describeRecord(record))}</div>
-   <div class="muted small">${esc(windowText(record))}${live?'':' · not in force in week '+week}${record.source==='owner'?'':' · '+esc(record.source)}</div>
-   <div class="muted small num">${live?esc(numbers.text):'Sleeper '+fmt(numbers.original)}</div></div>
-   <div class="override-row-actions"><button type="button" class="secondary" data-override-open="${esc(record.player)}">Edit</button><button type="button" class="secondary" data-override-remove="${esc(record.player)}">Remove</button></div></li>`;
- }).join('')}</ul>
- <button type="button" class="secondary ${confirming?'disconnect':''}" id="override-clear">${confirming?'Remove all of them · confirm':'Remove all corrections'}</button>`:'<p class="muted small">Nothing is being adjusted. Every number on the page is Sleeper’s own.</p>'}
+ ${mine.length?`<span class="eyebrow">YOURS</span><ul class="override-list">${mine.map(record=>overrideRowHTML(record,week,inForce)).join('')}</ul>
+ <button type="button" class="secondary ${confirming?'disconnect':''}" id="override-clear">${confirming?'Remove all of yours · confirm':'Remove all of your corrections'}</button>`:'<p class="muted small">You have corrected nothing yourself. Every number on the page is Sleeper’s own, or an agent’s correction below.</p>'}
+ ${theirs.length?`<span class="eyebrow">WRITTEN BY AN AGENT</span>
+ <p class="muted small">An agent wrote these under its own name and had to say why. They expire at the end of the week they name, and nothing an agent writes here ever reaches Sleeper.</p>
+ <ul class="override-list">${theirs.map(record=>overrideRowHTML(record,week,inForce)).join('')}</ul>
+ <button type="button" class="secondary ${confirmingAgents?'disconnect':''}" id="override-clear-agents">${confirmingAgents?`Remove all ${theirs.length} of them · confirm`:'Remove every agent correction'}</button>`:''}
  <div class="override-picker"><label for="override-search">Add a correction</label>
  <input id="override-search" class="search" type="search" value="${esc(S.overrideQuery||'')}" placeholder="Search every Sleeper player…" autocomplete="off" spellcheck="false">
  <ul class="override-results" id="override-results">${pickerHTML()}</ul></div>`;
@@ -110,12 +130,17 @@ export function overrideListHTML(){
 
 // The form. One record per player, so opening it on a player who already has one edits that record
 // rather than adding a second.
+//
+// It prefills from the owner's record only. An agent's record on the same player is named rather than
+// loaded, because saving replaces it and the owner should be told that before they type, not after.
 export function overrideFormHTML(id){
- const record=lens().find(id,S.data?.week)||lens().list.find(r=>r.player===String(id))||null;
+ const record=ownRecords().find(r=>r.player===String(id))||null;
+ const theirs=agentRecords().find(r=>r.player===String(id))||null;
  const p=S.data?.players?.[id]||{},numbers=comparison(id),suspect=suspectNote(id);
  const points=record?.points||{};
  return `<div class="override-top"><div><span class="eyebrow">${record?'EDIT YOUR CORRECTION':'ADD A CORRECTION'}</span><h2 id="override-title">${esc(pname(id))}</h2><p class="muted small">${esc(p.team||'FA')} · ${esc(p.position||'Player')} · Sleeper id ${esc(id)}</p></div><button type="button" class="secondary" id="override-dialog-close">Close</button></div>
  <p class="override-compare num">${esc(numbers.text)} <span class="muted small">this week, ${esc(league()?.name||'league scoring')}</span></p>
+ ${theirs?`<p class="muted small">${esc(theirs.source)} has a correction on this player: ${esc(describeRecord(theirs))}. Saving yours replaces it, because you have the last word on your own roster.</p>`:''}
  ${suspect?`<p class="data-alert">${esc(suspect)}</p>`:''}
  <div class="override-form">
   <fieldset><legend>Projected points</legend>
@@ -145,8 +170,9 @@ export function overrideEditorHTML(){
 }
 // On the My leagues page, so the list is reachable without a number on screen to click.
 export function overridesPanelHTML(){
- const week=S.data?.week,records=lens().list,live=activeOverrides(week).length;
- return `<div class="panel"><div class="section-bar"><div><h3>Your corrections</h3><p class="muted small">${records.length?`${records.length} on file · ${live} in force in week ${week}`:'None. Every number on the page is Sleeper’s own.'}</p></div><button type="button" class="secondary" data-override-manage>${records.length?'See and remove them':'Add a correction'}</button></div><p class="muted small">A correction moves every number the app works out from a projection, and says so wherever it shows one. It is kept in this browser${S.serviceMode?' and in the Awaker service, where the digest and the alerts read it too':''}.</p></div>`;
+ const week=S.data?.week,records=lens().list,live=activeOverrides(week).length,theirs=agentRecords(records).length;
+ const counts=records.length?`${records.length} on file · ${live} in force in week ${week}${theirs?` · ${theirs} written by an agent`:''}`:'None. Every number on the page is Sleeper’s own.';
+ return `<div class="panel"><div class="section-bar"><div><h3>Corrections</h3><p class="muted small">${counts}</p></div><button type="button" class="secondary" data-override-manage>${records.length?'See and remove them':'Add a correction'}</button></div><p class="muted small">A correction moves every number the app works out from a projection, and says so wherever it shows one. It is kept in this browser${S.serviceMode?' and in the Awaker service, where the digest, the alerts and an agent read it too':''}. Nothing is ever written back to Sleeper.</p></div>`;
 }
 
 export function drawOverrideDialog(){const el=dialog();if(el&&S.overrideEditor)el.innerHTML=overrideEditorHTML()}
@@ -187,6 +213,14 @@ function remove(id){
  drawOverrideDialog();render();
  announce(promise,`Correction removed. ${name} is back to Sleeper’s own number.`);
 }
+// An agent's record is the service's, so taking it back is a call of its own rather than a whole-list
+// save. It is hidden here at once and the toast says so if the service could not be told.
+function removeAgent(id,leagueId){
+ const name=pname(id),promise=removeAgentOverride(id,leagueId||null);
+ S.overrideEditor={id:null,view:'list'};
+ drawOverrideDialog();render();
+ announce(promise,`That agent correction is removed. ${name} is back to Sleeper’s own number.`);
+}
 export function bindOverrideEditor(){
  // Openers are anywhere on the page, including inside the player profile dialog, so they are caught
  // at the document rather than wired by each page that offers one.
@@ -203,15 +237,28 @@ export function bindOverrideEditor(){
   if(t.closest('#override-save')){save();return}
   const gone=t.closest('[data-override-remove]');
   if(gone){remove(gone.dataset.overrideRemove);return}
+  const agentGone=t.closest('[data-agent-remove]');
+  if(agentGone){removeAgent(agentGone.dataset.agentRemove,agentGone.dataset.agentLeague);return}
   if(t.closest('#override-back')){S.overrideEditor={id:null,view:'list'};drawOverrideDialog();el.querySelector('#override-search')?.focus();return}
   if(t.closest('#override-clear')){
    // Removing every correction at once is asked twice, because the records are the owner's own work
-   // and nothing else on the page can put them back.
-   if(!S.overrideEditor?.confirming){S.overrideEditor={...S.overrideEditor,confirming:true};drawOverrideDialog();el.querySelector('#override-clear')?.focus();return}
-   const promise=writeOverrides([]);
+   // and nothing else on the page can put them back. It clears only the owner's: an agent's record is
+   // not the owner's to lose by accident, and has a control of its own below.
+   if(!S.overrideEditor?.confirming){S.overrideEditor={...S.overrideEditor,confirming:true,confirmingAgents:false};drawOverrideDialog();el.querySelector('#override-clear')?.focus();return}
+   const promise=clearOverrides();
    S.overrideEditor={id:null,view:'list'};
    drawOverrideDialog();render();
-   announce(promise,'Every correction is removed. The page is back to Sleeper’s numbers.');
+   announce(promise,'Every correction of yours is removed. The page is back to Sleeper’s numbers, or an agent’s.');
+   return;
+  }
+  if(t.closest('#override-clear-agents')){
+   // The one control that takes back everything the agents wrote. Asked twice as well, because an
+   // agent cannot be told to write its reasoning again.
+   if(!S.overrideEditor?.confirmingAgents){S.overrideEditor={...S.overrideEditor,confirmingAgents:true,confirming:false};drawOverrideDialog();el.querySelector('#override-clear-agents')?.focus();return}
+   const promise=clearAgentOverrides();
+   S.overrideEditor={id:null,view:'list'};
+   drawOverrideDialog();render();
+   announce(promise,'Every agent correction is removed. Only your own are left.');
   }
  });
  el.addEventListener('input',event=>{

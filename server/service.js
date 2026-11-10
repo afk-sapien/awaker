@@ -1,4 +1,4 @@
-import {aggregateWatch,activeSlots,optimize,playableIds} from '../dist/engine.js';
+import {aggregateWatch,activeSlots,optimize,playableIds,projected} from '../dist/engine.js';
 import {buildSeasonModel,realismReasons,compareTradeIdeas,tradeGains} from '../dist/trades.js';
 import {findTradeIdeas,waiverRows,futureWaiverRows,lockedLineup,usableValue} from '../dist/analysis.js';
 import {weekReview,moves} from '../dist/season.js';
@@ -7,7 +7,7 @@ import {waiverWeeks} from '../dist/waivers.js';
 import {defaults,validateSettings,bad} from './settings.js';
 import {readNews,sourceEnabled} from '../dist/news.js';
 import {createOverrides,normalise as normaliseOverride} from '../dist/overrides.js';
-import {buildSnapshot} from './snapshot.js';
+import {buildSnapshot,describeOverride} from './snapshot.js';
 import * as api from '../dist/api.js';
 const name=(data,id)=>data.players[id]?.full_name||id;
 // The engines explain a refused trade or league with a plain Error. A TypeError and its kin are
@@ -31,7 +31,7 @@ export function createService({store,provider,now=Date.now,username:pinned=''}){
  // the dashboard sends: there is no partial edit to merge and no order to preserve. Bumping the
  // revision is what makes every cached number recompute, since a correction changes the answer
  // without changing anything Sleeper said.
- const OVERRIDE_LIMIT=500;
+ const OVERRIDE_LIMIT=500,AGENT_LIMIT=50;
  let overrideRev=0,lensCache=new Map();
  const overridesList=()=>{const stored=store.get('overrides',[]);return Array.isArray(stored)?stored:[]};
  function overrides(season=null){
@@ -39,14 +39,112 @@ export function createService({store,provider,now=Date.now,username:pinned=''}){
   if(!lensCache.has(key)){lensCache=new Map([[key,createOverrides({overrides:overridesList(),season})]])}
   return lensCache.get(key);
  }
+ const sameRecord=(a,b)=>a.player===b.player&&(a.league??null)===(b.league??null);
+ function storeOverrides(next){
+  if(next.length>OVERRIDE_LIMIT)throw bad(`Keep overrides to ${OVERRIDE_LIMIT} or fewer.`);
+  store.set('overrides',next);overrideRev++;analysisCache.clear();
+  return next;
+ }
+ // The owner's whole list, and only the owner's. An agent's record is never in this payload: the
+ // browser sends the list it has been editing, and a tab left open since this morning must not
+ // delete a correction an agent wrote since. So the agents' records are kept unless the owner's list
+ // covers the same player, in which case the owner has the last word. Every record here is stamped
+ // owner whatever the payload claims, because a source is not something a client gets to assert.
  function saveOverrides(input){
   const list=input&&typeof input==='object'&&!Array.isArray(input)?input.overrides:input;
   if(!Array.isArray(list))throw bad('Overrides must be a list.');
   if(list.length>OVERRIDE_LIMIT)throw bad(`Keep overrides to ${OVERRIDE_LIMIT} or fewer.`);
-  const next=list.map(record=>normaliseOverride(record,{now:now()}));
+  const next=list.map(record=>normaliseOverride({...record,source:'owner'},{now:now()}));
   if(next.some(record=>!record))throw bad('Every override needs a Sleeper player id.');
-  store.set('overrides',next);overrideRev++;analysisCache.clear();
+  const agents=overridesList().filter(record=>record.source!=='owner'&&!next.some(own=>sameRecord(own,record)));
+  storeOverrides([...agents,...next]);
   return next;
+ }
+ // One correction, written or taken back by whoever is asking. This is the only write an agent has,
+ // and it never touches anything else: it reads the stored list, changes one record and puts the list
+ // back, so two writers cannot overwrite each other's work the way a whole-list replace would.
+ //
+ // The rules an agent is held to, all of them enforced here rather than described in a tool
+ // description an agent may not read:
+ // 1. A reason is required, and it is stored as the note, so the owner reads why in the same place
+ //    they read their own.
+ // 2. The source is stamped from who is asking. A payload cannot claim one.
+ // 3. An agent may add, change and remove only its own records. The owner may remove any.
+ // 4. An agent's record carries an expiry week, this one by default, so nothing it writes outlives
+ //    the week it was reasoning about. The owner's records still last until the owner removes them.
+ // 5. An agent gets a smaller cap of its own, so one agent cannot fill the 500 on its own.
+ // Nothing here reaches Sleeper. A correction is local knowledge about a projection and is never
+ // sent anywhere.
+ async function setOverride({leagueId=null,playerId,reason,points=null,status=null,bodyPart=null,rosterStatus=null,from=null,until=null,remove=false}={},{caller={}}={}){
+  const d=await load();
+  const source=caller.agent?`agent:${caller.agent}`:'owner',isAgent=source!=='owner';
+  const player=String(playerId);
+  if(!d.players[player])throw bad('No Sleeper player has that id. A correction follows a player id, never a name, so look the id up in a snapshot first.',404);
+  // A correction is written player-wide, exactly as the dashboard writes one, so every league view
+  // reads it through the one lens on the data. A league given here is not a scope: it only says which
+  // league's scoring to quote the number in, and it has to be one this account may read. Storing a
+  // league-scoped record instead would put it where nothing in this service looks, which is a worse
+  // answer than not offering the scope at all.
+  const scored=leagueId?leagues(d,leagueId)[0]:leagues(d)[0]||null;
+  const league=null;
+  const current=overridesList(),target={player,league};
+  const existing=current.find(record=>sameRecord(record,target))||null;
+  if(existing&&isAgent&&existing.source!==source){
+   throw bad(existing.source==='owner'?'That correction is the owner’s. An agent may only change or remove its own.':`That correction belongs to ${existing.source}. An agent may only change or remove its own.`,403);
+  }
+  const rest=current.filter(record=>record!==existing);
+  let record=null,action='absent';
+  if(remove){
+   if(existing){storeOverrides(rest);action='removed'}
+  }else{
+   if(isAgent&&!existing&&rest.filter(item=>item.source===source).length>=AGENT_LIMIT){
+    throw bad(`Keep your corrections to ${AGENT_LIMIT} or fewer. Remove one of your own first.`,409);
+   }
+   // The note is where the owner reads why, so a reason is not optional on anything written.
+   if(!(typeof reason==='string'&&reason.trim().length>=4))throw bad('Say why in reason. It is stored as the correction’s note, which is where the owner reads what you were thinking.');
+   record=normaliseOverride({player,league,season:Number(d.nfl?.season)||null,points,status,bodyPart,rosterStatus,
+    note:reason,reason,from,until:until??(isAgent?d.week:null),source,at:now()},{now:now()});
+   if(!record)throw bad('Every correction needs a Sleeper player id.');
+   if(!(record.points||record.status||record.bodyPart||record.rosterStatus)){
+    throw bad('A correction has to move something: a points multiplier or delta, a designation, a body part or a roster status. A reason on its own changes no number.');
+   }
+   storeOverrides([...rest,record]);
+   action=existing?'updated':'added';
+  }
+  // What the number is now, read back through the lens the write just changed, so the caller sees the
+  // effect of its own correction rather than having to take the write on trust. Scored in the league
+  // it named, or in the first one it may read, because a projection is only a number in a scoring
+  // system.
+  const stored=overridesList(),lens=attach(d).overrides;
+  const round=value=>Number.isFinite(value)?Math.round(value*100)/100:null;
+  const sleeperPoints=scored?projected(d.projections[d.week]?.[player]?.stats,scored.scoring_settings):null;
+  const described=item=>describeOverride(item,{week:d.week,agent:caller.agent||null,name:d.players[item.player]?.full_name??null});
+  return envelope(d,{
+   action,
+   player:{id:player,name:d.players[player]?.full_name||player,position:d.players[player]?.position??null,team:d.players[player]?.team??null},
+   correction:record?described(record):null,
+   previous:existing?described(existing):null,
+   projection:{points:round(lens.project(sleeperPoints,player,d.week)),sleeperPoints:round(sleeperPoints),correctedBy:lens.find(player,d.week)?.source??null,
+    scoredIn:scored?{leagueId:scored.league_id,name:scored.name}:null},
+   yours:{youAre:source,count:stored.filter(item=>item.source===source).length,limit:isAgent?AGENT_LIMIT:OVERRIDE_LIMIT,
+    records:stored.filter(item=>item.source===source).map(described)},
+   corrections:{total:stored.length,limit:OVERRIDE_LIMIT},
+   limitations:[
+    'Nothing here is written to Sleeper. A correction is local knowledge about a projection and never leaves this server.',
+    'The source was stamped from who is asking. A payload cannot claim one.',
+    'A correction is player-wide. leagueId chose the scoring this answer quotes the number in, and did not limit where the correction applies.',
+    isAgent?'Your corrections expire at the end of the week in until, so a correction you want to keep has to be written again.':'An owner correction has no expiry unless you set one.',
+    'Every projection in this app now reads through the correction: the start and sit call, the waiver rows, the defense plan and the trade model all moved with it.'
+   ]
+  });
+ }
+ // The owner's one control for taking back everything the agents wrote. It is the counterpart of the
+ // whole-list save: that one deliberately cannot delete an agent's record, so this exists instead,
+ // and it leaves the owner's own work alone.
+ function clearAgentOverrides(){
+  const own=overridesList().filter(record=>record.source==='owner');
+  storeOverrides(own);
+  return own;
  }
  // The lens rides on the snapshot so that every engine reading it adjusts without being told, and it
  // is attached on the way out rather than when the snapshot is built, because a correction saved
@@ -195,7 +293,7 @@ export function createService({store,provider,now=Date.now,username:pinned=''}){
  // of it from Sleeper. It never starts a refresh, so public traffic cannot reach Sleeper through it,
  // and it holds nothing but the public player list.
  const playerDirectory=()=>snapshot?.players&&Number.isFinite(snapshot.playersAt)?{at:snapshot.playersAt,players:snapshot.players}:null;
- return {settings,saveSettings,overrides:overridesList,saveOverrides,usernameLocked:()=>!!pinned,load,status,trades,evaluate,opportunities,recap,digest,news,leagueSnapshot,envelope,playerDirectory,client:async(force=false,have=null)=>{const loaded=await load({force}),{outlook,...data}=loaded;
+ return {settings,saveSettings,overrides:overridesList,saveOverrides,setOverride,clearAgentOverrides,usernameLocked:()=>!!pinned,load,status,trades,evaluate,opportunities,recap,digest,news,leagueSnapshot,envelope,playerDirectory,client:async(force=false,have=null)=>{const loaded=await load({force}),{outlook,...data}=loaded;
   // The browser loads its own outlook, and it keeps the player directory it already has.
   if(have&&String(have)===String(data.playersAt))delete data.players;
   return {data,settings:settings(),overrides:overridesList()}}};

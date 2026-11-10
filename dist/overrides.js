@@ -121,7 +121,11 @@ export function fingerprint(list){
 // nowhere else, rather than leaking into every other league through the shared lens.
 export function createOverrides({overrides=[],season=null,league=null,now=Date.now()}={}){
  const all=(Array.isArray(overrides)?overrides:[]).map(record=>normalise(record,{now})).filter(Boolean)
- const mine=all.filter(r=>(r.season==null||season==null||r.season===season)&&(r.league==null||r.league===league))
+ // A stored season is an integer and Sleeper hands its season out as a string, so the two are
+ // compared as years rather than as values: a strict comparison here hides every dated record from
+ // every lens, which is the sort of bug that shows up as a correction that saved and did nothing.
+ const sameSeason=(a,b)=>a==null||b==null||Number(a)===Number(b)
+ const mine=all.filter(r=>sameSeason(r.season,season)&&(r.league==null||r.league===league))
  const held=new Map()
  for(const record of mine)held.set(record.player,[...(held.get(record.player)||[]),record])
  // Two records on one player in one week should not happen from the UI, which edits in place, but a
