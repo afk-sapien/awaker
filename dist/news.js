@@ -25,16 +25,11 @@
 // links are allowed only to ESPN over https, times must be real times, and nothing is ever returned
 // as markup.
 
-// Sleeper is the base. ESPN is the one switch a deployment gets, and a switch can only turn a source
-// off: see siteConfig in site.js for why nothing here can be turned on by a file on the host.
-export const SOURCES = {
-  sleeper: {name: 'Sleeper', description: 'Sleeper player record', always: true},
-  espnNews: {name: 'ESPN', description: 'ESPN league news', always: false}
-}
-export const SOURCE_SWITCHES = Object.keys(SOURCES).filter(key => !SOURCES[key].always)
-// Off wins. A static host and a service can both hold an opinion, and either one saying off is off.
-export const sourceEnabled = (source, ...configs) =>
-  SOURCES[source]?.always === true || configs.every(config => !config || config[source] !== false)
+// Sleeper is the base and ESPN sits behind a switch. The switches themselves live in sources.js,
+// because game status is behind one too and whoever is deciding what this deployment reaches should
+// find one list rather than two. A switch can only turn a source off: see siteConfig in site.js for
+// why nothing can be turned on by a file on the host.
+import {NEWS_SOURCES, SOURCES, sourceEnabled} from './sources.js'
 
 const LIMITS = {headline: 200, part: 60, note: 240, name: 80}
 // The two providers spell one team differently. Washington is ESPN's WSH and Sleeper's WAS, and every
@@ -250,7 +245,9 @@ export function readNews({players = {}, feed = null, ids = null, now = Date.now(
   for (const entry of byPlayer.values()) entry.items = entry.items.filter(id => keptIds.has(id))
   return {
     generatedAt: now,
-    sources: Object.entries(SOURCES).map(([key, source]) => ({key, name: source.name, description: source.description,
+    // The news sources only. Game status is switched in the same place but is not news, and a read
+    // that reported it would be claiming to have looked somewhere it never looks.
+    sources: NEWS_SOURCES.map(key => ({key, name: SOURCES[key].name, description: SOURCES[key].description,
       enabled: sourceEnabled(key, sources), fetchedAt: key === 'espnNews' ? fetchedAt : null,
       available: key === 'espnNews' ? espnOn && !!feed : true})),
     items: kept,

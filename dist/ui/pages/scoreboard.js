@@ -1,7 +1,7 @@
 // Around the league: every matchup, and one game opened up.
 import {matchupDetail,median} from '../../league.js';
 import {S} from '../state.js';
-import {chance,empty,esc,fmt,injury,league,leagueOptions,ordinal,pageHead,playerChip,playerLink,projectionNote,record,signed,teamCell} from '../core.js';
+import {chance,empty,esc,fmt,gameStatusEnabled,injury,league,leagueOptions,ordinal,pageHead,playerChip,playerLink,projectionNote,record,signed,teamCell} from '../core.js';
 import {lens} from '../overrides.js';
 import {currentLeagueOutlook,leagueGate} from './league-outlook.js';
 
@@ -26,7 +26,9 @@ export function scoreboardPage(){
  // One meter everywhere: finished, on the field now, still to come.
  const meter=(c,label)=>`<span class="lineup-meter" role="img" aria-label="${esc(label)}: ${c.done} finished, ${c.live} playing, ${c.pre} to play">${[['done',c.done],['live',c.live],['pre',c.pre]].filter(([,n])=>n).map(([k,n])=>`<i class="meter-${k}" style="flex:${n}"></i>`).join('')}</span>`;
  const leader=[...teams].sort((a,b)=>b.live.points-a.live.points)[0],closest=[...o.live.games].sort((a,b)=>Math.abs(a.chance-.5)-Math.abs(b.chance-.5))[0];
- const tiles=(o.live.known?'':'<p class="data-alert" role="status">NFL game status is unavailable, so which starters have finished is a guess. Scores are still live.</p>')+`<div class="league-tiles">
+ // Switched off is a different sentence from a failed fetch, because one of them is a choice the
+ // owner made and the other is something to try again later. Either way the scores are untouched.
+ const tiles=(o.live.known?'':`<p class="data-alert" role="status">${gameStatusEnabled()?'NFL game status is unavailable, so which starters have finished is a guess.':'NFL game status is switched off for this site, so which starters have finished is a guess.'} Scores are still live.</p>`)+`<div class="league-tiles">
   <div class="league-tile"><div class="eyebrow">WEEK ${S.data.week} ${o.live.complete?'IS FINAL':all.live?'IS LIVE':o.live.started?'SO FAR':'HAS NOT STARTED'}</div><strong>${total(all)?Math.round(all.done/total(all)*100):0}%<small> of starters done</small></strong>${meter(all,'The league’s starters')}</div>
   <div class="league-tile"><div class="eyebrow">${o.live.started?'TOP SCORE':'TOP PROJECTION'}</div><strong>${o.live.started?fmt(leader.live.points,2):fmt(sorted[0].live.mean)}</strong><span class="muted small">${esc((o.live.started?leader:sorted[0]).team)}</span></div>
   ${closest?`<div class="league-tile"><div class="eyebrow">TIGHTEST MATCHUP</div><strong>${Math.round(Math.max(closest.chance,1-closest.chance)*100)}–${Math.round(Math.min(closest.chance,1-closest.chance)*100)}</strong><span class="muted small">${closest.teams.map(id=>esc(by.get(id)?.team)).join(' vs ')}</span></div>`:''}

@@ -5,8 +5,10 @@ import {weekReview,moves} from '../dist/season.js';
 import {teamName} from '../dist/league.js';
 import {waiverWeeks} from '../dist/waivers.js';
 import {defaults,validateSettings,bad} from './settings.js';
-import {readNews,sourceEnabled} from '../dist/news.js';
+import {readNews} from '../dist/news.js';
+import {sourceEnabled} from '../dist/sources.js';
 import {createOverrides,normalise as normaliseOverride} from '../dist/overrides.js';
+import {applySources} from './static.js';
 import {buildSnapshot,describeOverride} from './snapshot.js';
 import * as api from '../dist/api.js';
 const name=(data,id)=>data.players[id]?.full_name||id;
@@ -25,8 +27,11 @@ export function createService({store,provider,now=Date.now,username:pinned=''}){
  // at someone else's leagues and keep delivering notifications for them.
  // Settings saved by an earlier version lack newer alert fields, so defaults fill them in.
  const settings=()=>{const saved=store.get('settings',structuredClone(defaults)),stored={...saved,alerts:{...defaults.alerts,...saved.alerts}};return pinned?{...stored,username:pinned}:stored};
+ // The policy the browser is handed follows the switches, so a service told to leave ESPN alone stops
+ // advertising ESPN as somewhere the page may go. Set here and again on every save.
+ applySources(settings().sources);
  // saveSettings below rejects any attempt to report on a different account.
- function saveSettings(input){if(!input||typeof input!=='object'||Array.isArray(input))throw bad('Settings must be an object.');if(pinned&&'username'in input&&input.username!==pinned)throw bad('The Sleeper username is set by this server\'s configuration.');const previous=settings(),next=validateSettings(pinned?{...input,username:pinned}:input,previous);if(JSON.stringify(previous)===JSON.stringify(next))return next;store.set('settings',next);if(previous.username!==next.username){store.set('worker',{runs:{},reports:[],outbox:[],events:{},baselines:{},reset:0,day:'',count:0,lastScan:0,failures:0});}revision++;snapshot=null;analysisCache.clear();if(JSON.stringify([previous.username,previous.daily,previous.weekly,previous.timezone])!==JSON.stringify([next.username,next.daily,next.weekly,next.timezone]))store.set('scheduleReset',now());return next}
+ function saveSettings(input){if(!input||typeof input!=='object'||Array.isArray(input))throw bad('Settings must be an object.');if(pinned&&'username'in input&&input.username!==pinned)throw bad('The Sleeper username is set by this server\'s configuration.');const previous=settings(),next=validateSettings(pinned?{...input,username:pinned}:input,previous);if(JSON.stringify(previous)===JSON.stringify(next))return next;store.set('settings',next);applySources(next.sources);if(previous.username!==next.username){store.set('worker',{runs:{},reports:[],outbox:[],events:{},baselines:{},reset:0,day:'',count:0,lastScan:0,failures:0});}revision++;snapshot=null;analysisCache.clear();if(JSON.stringify([previous.username,previous.daily,previous.weekly,previous.timezone])!==JSON.stringify([next.username,next.daily,next.weekly,next.timezone]))store.set('scheduleReset',now());return next}
  // The owner's corrections live beside the settings and are replaced as a whole list, which is what
  // the dashboard sends: there is no partial edit to merge and no order to preserve. Bumping the
  // revision is what makes every cached number recompute, since a correction changes the answer

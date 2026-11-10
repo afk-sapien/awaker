@@ -6,7 +6,8 @@
 // one dist/news.js already checked.
 import * as api from '../api.js'
 import {createMemo, identity} from '../cache.js'
-import {SOURCES, readNews, sourceEnabled} from '../news.js'
+import {readNews} from '../news.js'
+import {SOURCES, sourceEnabled} from '../sources.js'
 import {S} from './state.js'
 import {esc, playerLink, pname} from './core.js'
 

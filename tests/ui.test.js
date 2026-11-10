@@ -186,9 +186,67 @@ test('a host can rename the app and add footer links, and nothing else about the
  assert.equal((await draw('watch')).before,plain,'and a host that configured nothing sees the page it had');
 })
 
+// One sizing decision for every view: the controls that were smaller than 24px are brought up to
+// 24px on a phone, and the footer credit joins the row of footer links instead of sitting inside a
+// sentence. Written against the stylesheet rather than a browser, so the rule cannot be dropped
+// while the pages still draw.
+test('the small controls are a 24px target at phone width, and the credit is a footer link',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const css=readFileSync(new URL('../dist/styles.css',import.meta.url),'utf8');
+ const touch='@media(max-width:760px),(pointer:coarse)';
+ const block=css.slice(css.indexOf(`${touch}{\n .inline-btn`));
+ assert.ok(block.startsWith(touch),'the touch-target block is still there to read');
+ const rules=block.slice(0,block.indexOf('\n}'));
+ assert.match(rules,/\.inline-btn,\.link-external\{[^}]*min-height:24px/,'the two inline controls, which were 16px of text');
+ assert.match(rules,/summary\{min-height:24px\}/,'a disclosure row');
+ assert.match(rules,/input\{min-width:24px;min-height:24px\}/,'and the checkboxes, which were 13px');
+ assert.match(rules,/input\[type=range\]\{min-height:24px\}/,'and the trade slider, which was a 16px track');
+ assert.match(css,new RegExp(`${touch.replace(/[()]/g,'\\$&')}\\{\\.adjusted\\{[^}]*min-height:24px;min-width:24px`),'the correction mark, which was 7 by 11 pixels');
+ assert.match(css,new RegExp(`${touch.replace(/[()]/g,'\\$&')}\\{\\.status-footer \\.site-link a\\{[^}]*min-height:34px`),'and the footer links, the credit among them');
+ const {render}=await import('../dist/ui/render.js');
+ start();S.view='watch';render();
+ assert.match(app.innerHTML,/<span class="site-link"><a href="https:\/\/docs.sleeper.com\/"[^>]*>Sleeper data &amp; trends<\/a><\/span>/,'the credit is a link in that row, so it takes that height');
+})
+
+// A host that switched game status off has no kickoff, quarter, clock or score, and still has who
+// plays whom from Sleeper. Every page that read ESPN has to say which of those it lost, and none of
+// them may keep the credit or the claim.
+test('with game status switched off the pages name the opponent and claim no clock',async()=>{
+ const {DEFAULT_SITE,siteConfig}=await import('../dist/site.js');
+ const {gameStatusEnabled}=await import('../dist/ui/core.js');
+ // Game status off is what the provider leaves behind: no games at all, and the pairings Sleeper
+ // named in the projections, which carry an opponent and nothing else.
+ const data=demo();
+ data.games={};
+ // A team Sleeper named no opponent for is simply absent, which is how a derived schedule says bye.
+ data.schedules=Object.fromEntries(Object.entries(data.schedules).map(([w,teams])=>[w,Object.fromEntries(Object.entries(teams).filter(([team])=>team!=='KC').map(([team,g])=>[team,{opponent:g.opponent,source:'sleeper'}]))]));
+ start(data);
+ try{
+  S.site=siteConfig({sources:{espnScoreboard:false}});
+  assert.equal(gameStatusEnabled(),false);
+  const watch=(await draw('watch')).before;
+  assert.ok(!watch.includes('NFL game status: ESPN'),'the footer stops crediting a source it is not reading');
+  assert.ok(!/ESPN/.test(watch),'and no page says ESPN at all');
+  assert.match(watch,/class="game-status ">SCHEDULED</,'a player with an opponent has a game, just no clock');
+  assert.doesNotMatch(watch,/NO GAME/,'nobody is told his game is off because the switch is');
+  assert.doesNotMatch(watch,/Schedule unavailable/);
+  assert.match(watch,/Kickoff time comes from NFL game status, which is off for this site/);
+  assert.match((await draw('settings')).before,/NFL game status is switched off for this site, so no kickoff time, quarter or clock is shown\. Who plays whom, and who is on bye, still comes from Sleeper\./);
+  assert.match((await draw('scoreboard')).after,/NFL game status is switched off for this site, so which starters have finished is a guess/);
+  const defenses=(await draw('defenses')).after;
+  assert.match(defenses,/<div class="defense-opponent">[A-Z]{2,3}<\/div>/,'the planner names the opponent without guessing which side is at home');
+  assert.doesNotMatch(defenses,/defense-opponent">(vs|@) /);
+  assert.match(defenses,/<div class="defense-opponent">No game<\/div>/,'and a bye is still a bye');
+ }finally{S.site=DEFAULT_SITE}
+ // Switched back on, the same data draws the page it drew before, so the switch is the only thing
+ // the pages read it through.
+ start();
+ assert.match((await draw('watch')).before,/NFL game status: ESPN/);
+})
+
 test('a correction says so on the number it moved, and the manage view can take it back',async()=>{
  const {lens,removeOverride,setOverride}=await import('../dist/ui/overrides.js');
- const {sleeperValue,value}=await import('../dist/ui/core.js');
+ const {fmt,sleeperValue,value}=await import('../dist/ui/core.js');
  const {comparison,overrideBlockHTML,overrideFormHTML,overrideListHTML,overridesPanelHTML,pickerMatches}=await import('../dist/ui/override-editor.js');
  start();
  const l=S.data.leagues.find(x=>x.enabled);S.leagueId=l.league_id;
@@ -205,6 +263,12 @@ test('a correction says so on the number it moved, and the manage view can take 
   assert.match(page,/correction of your own is in these numbers/);
   assert.match(page,/data-override-manage/);
   assert.match(page,/class="adjusted"/);
+  // The mark is a control, not a decoration: it opens the corrections it is talking about, it says
+  // what it is for a reader who cannot hover, and Sleeper's own number is printed next to it rather
+  // than hidden in a tooltip, because a phone never shows one.
+  assert.match(page,new RegExp(`<button type="button" class="adjusted" data-override-open="${id}"`));
+  assert.match(page,new RegExp(`aria-label="Your correction: ×0.5 · his snap count fell off a cliff. Sleeper projected ${fmt(sleeper)}. Open corrections."`),'the label is the whole sentence a tooltip would have shown');
+  assert.match(page,new RegExp(`<span class="adjusted-was">was ${fmt(sleeper)}</span>`));
   // The profile offers the edit, the form opens on the record that is already there, and the list
   // shows it with what it moved.
   assert.match(overrideBlockHTML(id,l),/Your correction: projection ×0.5/);

@@ -5,7 +5,7 @@
 //
 // So the pages carry comment markers, this is the only thing that reads them, and a marker that goes
 // missing is an error here rather than a surprise in the output.
-import {SOURCE_SWITCHES} from './news.js'
+import {SOURCE_SWITCHES} from './sources.js'
 
 export const MARKERS = {headStart: 'awaker:head-start', headEnd: 'awaker:head-end', bodyEnd: 'awaker:body-end'}
 
@@ -68,7 +68,8 @@ export function injectHtml(html, {headStart = '', head = '', body = '', title, n
 // for this deployment; nothing else in it is read, and no value of it can switch a source on, name a
 // new one, or point one somewhere else. So the file still cannot add an origin or a request: the
 // most a host can do with it is take one away, which is exactly what a host without ESPN's
-// permission needs. See SOURCES in news.js for the sources this covers.
+// permission needs. See SOURCES in sources.js for the sources this covers, and originsFor in
+// origins.js for the origin a host may then drop from its content security policy.
 //
 // The file is read field by field and anything wrong is replaced by the default, so a typo in one
 // link cannot take the page down. A link is either a path on this origin or an https URL: no

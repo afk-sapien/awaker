@@ -1,12 +1,12 @@
 // Awaker starts here: ask whether a service is running, read preferences, then draw. Everything else
 // lives in ui/: state.js holds what the page remembers, render.js draws it, events.js reacts to it, and
 // each page has its own module in ui/pages/.
-import {demo} from './demo.js';
+import {demo,demoWithoutGameStatus} from './demo.js';
 import {aggregateWatch} from './engine.js';
 import {getTheme,applyTheme} from './themes.js';
 import {DEFAULT_SITE,loadSiteFile,rename} from './site.js';
 import {S} from './ui/state.js';
-import {$,isLeagueView,isTradeView,nav,pname} from './ui/core.js';
+import {$,gameStatusEnabled,isLeagueView,isTradeView,nav,pname} from './ui/core.js';
 import {readPreferences,applyPreferences} from './ui/preferences.js';
 import {STORAGE_KEY,readOverrides,syncOverrides} from './ui/overrides.js';
 import {ensureTradeOutlook} from './ui/outlook.js';
@@ -26,6 +26,9 @@ S.staticMode=globalThis.awaker?.staticMode===true;
 const siteFile=loadSiteFile();
 if(!S.staticMode)try{const response=await fetch('/api/v1/settings',{signal:AbortSignal.timeout(15000)});if(response.status===401){location.replace('/integrations.html');await new Promise(()=>{})}if(response.ok){const result=await response.json();S.serviceSettings=result.settings;S.unread=unread(result.worker);S.serviceMode=true}}catch{}
 S.site=await siteFile;
+// The demo is built before the site file is read, because the first draw cannot wait for it, so the
+// game status switch is applied to it here instead.
+if(!gameStatusEnabled())S.data=demoWithoutGameStatus(S.data);
 // The title and the theme dialog's eyebrow are written in the page rather than drawn, so they are
 // the two places a configured name has to be applied by hand. Everything the dashboard draws reads
 // the name through named() in ui/core.js.
