@@ -107,6 +107,42 @@ test('HTTP isolates agent and owner access, rejects hostile origins, and support
 
  }finally{await new Promise(r=>server.close(r));store.close()}
 });
+// The corrections are the owner's own knowledge, so they are deliberately not an MCP contract: an
+// agent can read every number they moved and cannot write one.
+test('only the owner may read or replace the corrections, and a saved one moves the numbers an agent reads',async()=>{
+ const store=openStore(':memory:');let at=Date.now();const data=fixture(at),service=createService({store,provider:async()=>data,now:()=>at});
+ service.saveSettings({username:'example'});
+ const worker=createWorker({store,service});const port=18475,base=`http://127.0.0.1:${port}`;
+ const server=createHttpServer({service,worker,adminToken:owner,agentToken:agent,publicUrl:base,dist:resolve('dist')});
+ await new Promise(r=>server.listen(port,'127.0.0.1',r));
+ const league=data.leagues.find(l=>l.enabled),id=league.mine.starters[0];
+ const call=(method,body,token=owner,headers={})=>fetch(base+'/api/v1/overrides',{method,headers:{Authorization:`Bearer ${token}`,...(body?{'Content-Type':'application/json',Origin:base}:{}),...headers},body:body&&JSON.stringify(body)});
+ try{
+  assert.equal((await call('GET',null,agent)).status,403,'an agent cannot read the owner’s corrections');
+  assert.equal((await call('PUT',{overrides:[]},agent)).status,403,'and cannot write one');
+  assert.equal((await fetch(base+'/api/v1/overrides')).status,401);
+  assert.deepEqual(await (await call('GET')).json(),{overrides:[]});
+  // A browser write has to be same-origin, exactly as the settings are.
+  assert.equal((await fetch(base+'/api/v1/overrides',{method:'PUT',headers:{Authorization:`Bearer ${owner}`,'Content-Type':'application/json',Origin:'https://evil.example'},body:'{"overrides":[]}'})).status,403);
+  const before=await service.opportunities({leagueId:league.league_id});
+  const saved=await call('PUT',{overrides:[{player:id,points:{multiplier:.5},note:'his snap count fell off a cliff',source:'owner',status:'Nonsense'}]});
+  assert.equal(saved.status,200);
+  const [record]=(await saved.json()).overrides;
+  assert.equal(record.player,String(id));assert.deepEqual(record.points,{multiplier:.5});
+  assert.equal(record.status,null,'a designation Sleeper does not use is dropped on the way in');
+  assert.ok(record.at>0,'and the write is stamped, so the fingerprint moves');
+  assert.deepEqual((await (await call('GET')).json()).overrides,[record]);
+  const after=await service.opportunities({leagueId:league.league_id});
+  const lineup=l=>l.opportunities.find(o=>o.leagueId===league.league_id).lineup;
+  assert.ok(lineup(after).total<lineup(before).total,'the correction moved the lineup the agent is told about');
+  // Removal is the same whole-list replace, and every number goes back.
+  assert.deepEqual((await (await call('PUT',{overrides:[]})).json()),{overrides:[]});
+  assert.equal(lineup(await service.opportunities({leagueId:league.league_id})).total,lineup(before).total);
+  assert.equal((await call('PUT',{overrides:[{note:'no player'}]})).status,400);
+  assert.equal((await call('PUT',{overrides:'all of them'})).status,400);
+  assert.equal((await call('PUT',{overrides:Array.from({length:501},()=>({player:id}))})).status,400);
+ }finally{await new Promise(r=>server.close(r));store.close()}
+});
 test('daily digest persists occurrence across worker restart and coalesces missed dates',async()=>{
  const h=harness();await h.worker.tick();assert.equal(h.calls,0);h.at+=60000;await h.worker.tick();assert.equal(h.calls,1);
  const restarted=createWorker({store:h.store,service:h.service,publish:h.publish,now:()=>h.at});await restarted.tick();assert.equal(h.calls,1);

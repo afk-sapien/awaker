@@ -4,6 +4,7 @@ import {createMemo,identity,rosterKey} from '../../cache.js';
 import {leagueShape,leagueOutlook} from '../../league.js';
 import {S} from '../state.js';
 import {analysisHeader,chance,empty,esc,fmt,isLeagueView,isTradeView,league,oddsBar,ordinal,record,signed,teamCell} from '../core.js';
+import {lens,overrideStamp} from '../overrides.js';
 import {depthTable,positionBars,strengthScatter,teamRadar} from './charts.js';
 import {render} from '../render.js';
 
@@ -29,8 +30,8 @@ export function projectionStamp(rows){if(!projectionStamps.has(rows)){let latest
 export function currentLeagueOutlook(){
  const l=league(),state=S.leagueSeasonState;if(!l||state?.key!==leagueSeasonKey(l)||!state.past)return null;
  const stamps=Object.entries(S.data.projections).map(([week,rows])=>[week,projectionStamp(rows)]),rosters=rosterKey(l);
- const key=JSON.stringify([state.key,S.data.nfl?.week,identity(state.past),identity(state.future),rosters,stamps,l.matchups.map(m=>[m.roster_id,m.matchup_id,m.points,m.custom_points,m.starters]),Object.entries(S.data.games).map(([team,g])=>[team,g.state,g.period,g.clock]),l.matchups.flatMap(m=>m.starters||[]).map(id=>S.data.players[id]?.injury_status||'')]);
- return leagueOutlooks.get(key,()=>leagueOutlook({league:l,players:S.data.players,past:state.past,future:state.future,currentWeek:S.data.week,isNflWeek:S.data.week===(S.data.nfl?.week??S.data.week),projections:S.data.projections,games:S.data.games,rosterMemo:(weeks,compute)=>rosterOutlooks.get(JSON.stringify([rosters,stamps,weeks]),compute)}));
+ const key=JSON.stringify([state.key,S.data.nfl?.week,identity(state.past),identity(state.future),rosters,stamps,l.matchups.map(m=>[m.roster_id,m.matchup_id,m.points,m.custom_points,m.starters]),Object.entries(S.data.games).map(([team,g])=>[team,g.state,g.period,g.clock]),l.matchups.flatMap(m=>m.starters||[]).map(id=>S.data.players[id]?.injury_status||''),overrideStamp()]);
+ return leagueOutlooks.get(key,()=>leagueOutlook({league:l,players:S.data.players,past:state.past,future:state.future,currentWeek:S.data.week,isNflWeek:S.data.week===(S.data.nfl?.week??S.data.week),projections:S.data.projections,games:S.data.games,overrides:lens(),rosterMemo:(weeks,compute)=>rosterOutlooks.get(JSON.stringify([rosters,stamps,weeks,overrideStamp()]),compute)}));
 }
 export function leagueGate(head){
  const state=S.leagueSeasonState?.key===leagueSeasonKey()?S.leagueSeasonState:null;

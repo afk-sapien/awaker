@@ -1,4 +1,5 @@
 import {activeSlots,availableIds,eligible,projected,tradeCandidateIds} from './engine.js'
+import {lensFor} from './overrides.js'
 
 const average=values=>values.length?values.reduce((sum,n)=>sum+n,0)/values.length:null
 const played=stats=>stats&&stats.gp!==0&&(stats.gp>0||['pts_ppr','pts_std','pts_half_ppr'].some(key=>Number.isFinite(stats[key])))
@@ -53,7 +54,7 @@ export function scoutFreeAgents(data,league,history,{position='WR',excluded=[],s
   .filter(id=>data.players[id].position===position&&slots.some(slot=>eligible(data.players[id],slot)))
   .map(id=>{
    const rows=Object.fromEntries(Object.entries(history).map(([week,players])=>[week,players[id]]).filter(([,row])=>row))
-   const projection=projected(data.projections[data.week]?.[id]?.stats,league.scoring_settings)
+   const projection=lensFor(data).project(projected(data.projections[data.week]?.[id]?.stats,league.scoring_settings),id,data.week)
    return {id,projection,...playerSignals({rows,scoring:league.scoring_settings,beforeWeek:data.week,projection,position})}
   }).filter(row=>row.games>0)
   .sort((a,b)=>(b[key]??-Infinity)-(a[key]??-Infinity)||(b.recentAverage??-Infinity)-(a.recentAverage??-Infinity)||a.id.localeCompare(b.id))

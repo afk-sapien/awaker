@@ -58,6 +58,12 @@ export const S={
  // The ESPN news feed as fetched, once, for the whole page: {state,feed,at}. The reading of it is
  // done on demand by dist/news.js, which the service and an agent call too.
  news:null,
+ // The owner's corrections to Sleeper, as stored. overridesRev is bumped on every write so the lens
+ // in dist/ui/overrides.js rebuilds, and overrideEditor holds the player being edited, if any.
+ overrides:[],
+ overridesRev:0,
+ overrideEditor:null,
+ overrideQuery:'',
  scoreEvents:[],
  scoreScope:'',
  scoreTimer:undefined,

@@ -4,6 +4,7 @@ import {tradeOdds} from '../league.js';
 import {S} from './state.js';
 import {isTradeView,league} from './core.js';
 import {currentOutlook,seasonKey} from './outlook.js';
+import {overrideStamp} from './overrides.js';
 import {currentLeagueOutlook,leagueSeasonKey} from './pages/league-outlook.js';
 import {render} from './render.js';
 
@@ -11,7 +12,10 @@ import {render} from './render.js';
 // the page is being drawn: a card asks, shows a placeholder, and the page is drawn again when the
 // answers are in. Answers are kept until rosters or projections change, not on every score update.
 export const whatIfMemo=createMemo(400),whatIfQueue=new Map(),whatIfBaselines=createMemo(6),tradeHorizons=new WeakMap();
-export function whatIf(key,compute){
+// Every what-if is stamped with the overrides, here rather than in each caller's key, because a
+// simulation is only an answer about the numbers that were in force when it ran.
+export function whatIf(stem,compute){
+ const key=`${overrideStamp()}|${stem}`;
  const hit=whatIfMemo.peek(key);if(hit!==undefined)return hit||null;
  // Questions about another league are dropped: the queue only ever holds the league on screen.
  const at=league()?.league_id;if(at!==S.whatIfLeague){whatIfQueue.clear();S.whatIfLeague=at}
@@ -31,7 +35,7 @@ export function tradeOddsFor(r){
  const l=league(),outlook=currentOutlook(),o=oddsOutlook();if(!o||!outlook||!r.partnerId)return null;
  if(!tradeHorizons.has(outlook))tradeHorizons.set(outlook,{key:`${seasonKey()}:${identity(outlook)}`,projections:Object.fromEntries(outlook.weeks.map(w=>[w,outlook.data[w].projections])),weeks:outlook.weeks});
  const horizon=tradeHorizons.get(outlook),rosters=rosterKey(l);
- const found=whatIf(JSON.stringify(['trade',S.leagueSeasonState.key,rosters,horizon.key,r.partnerId,r.give,r.get,r.dropA,r.dropB]),()=>tradeOdds(o,r,{horizon,memo:(key,compute)=>whatIfBaselines.get(JSON.stringify([rosters,key]),compute)}));
+ const found=whatIf(JSON.stringify(['trade',S.leagueSeasonState.key,rosters,horizon.key,r.partnerId,r.give,r.get,r.dropA,r.dropB]),()=>tradeOdds(o,r,{horizon,memo:(key,compute)=>whatIfBaselines.get(JSON.stringify([rosters,overrideStamp(),key]),compute)}));
  return found&&{mine:oddsShown(o,l.mine.roster_id,found.mine),partner:oddsShown(o,r.partnerId,found.partner)};
 }
 export function tradeOddsRow(r){

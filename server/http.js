@@ -152,6 +152,16 @@ export function createHttpServer({service, worker, ntfy, adminToken, agentToken,
           json(res, 200, {settings: service.saveSettings(await body(req))})
           return
         }
+        // The owner's corrections are read and replaced as a whole list, exactly as the settings are.
+        // They are not an MCP contract: an agent writing to someone's roster is its own decision.
+        if (path === '/api/v1/overrides' && req.method === 'GET') {
+          json(res, 200, {overrides: service.overrides()})
+          return
+        }
+        if (path === '/api/v1/overrides' && req.method === 'PUT') {
+          json(res, 200, {overrides: service.saveOverrides(await body(req))})
+          return
+        }
         if (path === '/api/v1/client' && req.method === 'GET') {
           json(res, 200, await compute(res, () => service.client(false, new URL(req.url, origin).searchParams.get('players'))))
           return

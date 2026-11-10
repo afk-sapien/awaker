@@ -7,6 +7,7 @@ import {tradeGains,realismReasons,tradeScore,compareTradeIdeas} from '../../trad
 import {S} from '../state.js';
 import {$,empty,esc,fmt,league,leagueOptions,ordinal,pageHead,playerChip,playerLink,pname,signed,toast} from '../core.js';
 import {oddsOutlook,tradeOddsFor,tradeOddsRow} from '../odds.js';
+import {overrideStamp} from '../overrides.js';
 import {seasonKey,seasonModel,tradeResults,tradeWeeks} from '../outlook.js';
 import {currentLeagueOutlook} from './league-outlook.js';
 import {protectedPlayers} from './waiver-wire.js';
@@ -20,7 +21,7 @@ export function shopAlternatives(l,r){
  const outlook=currentOutlook()
  if(!outlook)return ''
  const prefs={...S.prefs,waiverDropId:r.playerId,waiverExcluded:S.waiverExcluded,protectStarters:S.protectStarters,samePositionDrops:S.samePositionDrops,waiverProtected:{[`${S.data.user.user_id}:${l.league_id}`]:protectedPlayers(l)}}
- const key=JSON.stringify([identity(outlook),identity(S.data.players),identity(S.data.trends),rosterKey(l),r.playerId,prefs])
+ const key=JSON.stringify([identity(outlook),identity(S.data.players),identity(S.data.trends),rosterKey(l),r.playerId,prefs,overrideStamp()])
  const rows=exitComparisons.get(key,()=>futureWaiverRows(S.data,l,outlook,prefs))
  const pickup=rows.find(row=>row.status==='upgrade')
  const trade=[...r.offers].sort((a,b)=>b.gainA-a.gainA)[0]

@@ -185,3 +185,48 @@ test('a host can rename the app and add footer links, and nothing else about the
  }finally{S.site=DEFAULT_SITE}
  assert.equal((await draw('watch')).before,plain,'and a host that configured nothing sees the page it had');
 })
+
+test('a correction says so on the number it moved, and the manage view can take it back',async()=>{
+ const {lens,removeOverride,setOverride}=await import('../dist/ui/overrides.js');
+ const {sleeperValue,value}=await import('../dist/ui/core.js');
+ const {comparison,overrideBlockHTML,overrideFormHTML,overrideListHTML,overridesPanelHTML,pickerMatches}=await import('../dist/ui/override-editor.js');
+ start();
+ const l=S.data.leagues.find(x=>x.enabled);S.leagueId=l.league_id;
+ const id=l.mine.starters.find(i=>Number(sleeperValue(i,l))>0),sleeper=sleeperValue(id,l);
+ try{
+  await setOverride({player:id,points:{multiplier:.5},note:'his snap count fell off a cliff',source:'owner'});
+  assert.equal(value(id,l),Math.round(sleeper*50)/100,'the one adapter moved the number the page reads');
+  assert.equal(sleeperValue(id,l),sleeper,'and Sleeper’s own number is still there to show');
+  assert.equal(comparison(id,l).changed,true);
+  assert.match(comparison(id,l).text,/^Sleeper /);
+  // Every page says a correction is in these numbers, and the start and sit page marks the number
+  // itself, since that is where the owner reads one player against another.
+  const page=(await draw('lineup')).after;
+  assert.match(page,/correction of your own is in these numbers/);
+  assert.match(page,/data-override-manage/);
+  assert.match(page,/class="adjusted"/);
+  // The profile offers the edit, the form opens on the record that is already there, and the list
+  // shows it with what it moved.
+  assert.match(overrideBlockHTML(id,l),/Your correction: projection ×0.5/);
+  assert.match(overrideBlockHTML(id,l),new RegExp(`data-override-open="${id}"`));
+  assert.match(overrideFormHTML(id),/EDIT YOUR CORRECTION/);
+  assert.match(overrideFormHTML(id),/value="0.5"/);
+  assert.match(overrideListHTML(),/1 correction on file/);
+  assert.match(overrideListHTML(),/his snap count fell off a cliff/);
+  assert.match(overridesPanelHTML(),/1 on file · 1 in force/);
+  // The picker offers the owner's own players with nothing typed, and caps a search of the whole
+  // directory rather than drawing a list nobody can read.
+  const roster=pickerMatches('');
+  assert.equal(roster.scope,'roster');assert.ok(roster.ids.length<=12);
+  assert.ok(pickerMatches('',500).ids.includes(id),'every player the owner holds is reachable');
+  const found=pickerMatches('a');
+  assert.equal(found.scope,'search');assert.ok(found.ids.length<=12);assert.ok(found.total>=found.ids.length);
+  assert.deepEqual(pickerMatches('zzzzqqq').ids,[]);
+  // Removing it puts every number back, and the page stops claiming anything was adjusted.
+  await removeOverride(id);
+  assert.equal(value(id,l),sleeper);assert.equal(lens().list.length,0);
+  const plain=(await draw('lineup')).after;
+  assert.doesNotMatch(plain,/correction of your own/);
+  assert.doesNotMatch(plain,/class="adjusted"/);
+ }finally{await removeOverride(id)}
+})

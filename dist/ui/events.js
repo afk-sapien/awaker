@@ -16,10 +16,14 @@ import {connect,refresh,savePrefs} from './session.js';
 import {selectTheme,themePicker} from './theme.js';
 
 import {bindPlayerDetails,openPlayer} from './player-details.js'
+import {bindOverrideEditor} from './override-editor.js'
 import {loadScouting} from './scouting.js'
 
 export function bindEvents(){
  bindPlayerDetails()
+ // The override editor listens for its own openers at the document, so every page and dialog that
+ // offers one needs nothing here beyond this call.
+ bindOverrideEditor()
  document.addEventListener('change',event=>{
   if(event.target.id==='waiver-drop-player'){
    S.waiverDropSelection={key:protectionKey(league()),id:event.target.value}

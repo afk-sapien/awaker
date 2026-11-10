@@ -1,4 +1,5 @@
 import {activeSlots,eligible,playableIds,availableIds,projected,assign,UNAVAILABLE} from './engine.js';
+import {NO_OVERRIDES} from './overrides.js';
 
 // Rectangular assignment (Hungarian algorithm): maximize a legal lineup without
 // enumerating every slot subset for every trade and every remaining week.
@@ -15,7 +16,9 @@ export function seasonLineup(ids,slots,players,value){
 const OUT=UNAVAILABLE;
 // A week counts as published once Sleeper projects a real slate for it; before that a missing row says nothing.
 const published=new WeakMap(),isPublished=p=>{if(!published.has(p))published.set(p,Object.keys(p).length>=100);return published.get(p)};
-export function futurePoints(id,week,players,scoring){
+// overrides and number go together: an override is written against a week, so the lens cannot be
+// applied without knowing which week this outlook slice is. Callers that pass neither read Sleeper.
+export function futurePoints(id,week,players,scoring,overrides=NO_OVERRIDES,number=null){
  if(!week?.projections||!week?.games)return null;
  const player=players[id],row=week.projections[id],team=row?.team||player?.team;
  if(!team)return null;
@@ -24,13 +27,18 @@ export function futurePoints(id,week,players,scoring){
  // Sleeper often drops the projection of a player ruled out, so for him a missing row in a published week is
  // the zero he will score. Anyone else missing a week, or anyone in a week not yet projected, stays unknown.
  const points=projected(row?.stats,scoring);
- return points===null&&OUT.includes(player?.injury_status)&&isPublished(week.projections)?0:points;
+ const base=points===null&&OUT.includes(player?.injury_status)&&isPublished(week.projections)?0:points;
+ return overrides.project(base,id,number);
 }
 
-export function buildSeasonModel({league,players,outlook}){
+export function buildSeasonModel({league,players:directory,outlook,overrides=NO_OVERRIDES}){
  const slots=activeSlots(league),weeks=outlook.weeks,values={},totals={},replacement={},valueAboveReplacement={};
+ // A designation holds for the window, as it always has here, so the patched directory is read at the
+ // first week of it. Each week's projection is adjusted against its own week, so an override that
+ // expires mid-window stops moving the later weeks.
+ const players=overrides.players(directory,weeks?.[0]??null);
  const allIds=Object.keys(players),free=availableIds(league,players);
- for(const week of weeks){const d=outlook.data[week];values[week]=Object.fromEntries(allIds.map(id=>[id,futurePoints(id,d,players,league.scoring_settings)]));
+ for(const week of weeks){const d=outlook.data[week];values[week]=Object.fromEntries(allIds.map(id=>[id,futurePoints(id,d,players,league.scoring_settings,overrides,week)]));
   const byPosition={};
   for(const id of free){const p=players[id],v=values[week][id];if(!Number.isFinite(v)||UNAVAILABLE.includes(p.injury_status))continue;
    for(const pos of p.fantasy_positions||[p.position])byPosition[pos]=Math.max(byPosition[pos]??0,v);

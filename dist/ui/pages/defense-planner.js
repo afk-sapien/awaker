@@ -3,12 +3,13 @@ import {defenseWeeks,defenseOutlook,defenseAvailability} from '../../defenses.js
 import {activeSlots} from '../../engine.js';
 import {S} from '../state.js';
 import {analysisHeader,empty,esc,fmt,league,playerLink,signed} from '../core.js';
+import {lens} from '../overrides.js';
 import {partnerName} from './trade-finder.js';
 
 export function defenses(){
  const l=league();if(!activeSlots(l).includes('DEF'))return analysisHeader('Defense planner','Five weeks of matchups, compared with the weekly median.')+empty('This league does not start team defenses','Select a league with a DEF slot.');
  const availability=defenseAvailability(l,S.data.players),weeks=defenseWeeks(S.data.week);
- const outlook=defenseOutlook({players:S.data.players,projections:S.data.projections,schedules:S.data.schedules,weeks,scoring:l.scoring_settings});
+ const outlook=defenseOutlook({players:S.data.players,projections:S.data.projections,schedules:S.data.schedules,weeks,scoring:l.scoring_settings,overrides:lens()});
  const rank=Object.keys(availability).map(id=>({id,vals:weeks.map(w=>outlook[w].rows[id]?.points??null)})).sort((a,b)=>b.vals.reduce((s,v)=>s+(v??0),0)-a.vals.reduce((s,v)=>s+(v??0),0));
  const usable=rank.filter(r=>availability[r.id].canUse);
  // The question is who to play each week, so every week gets an answer: the best of mine, and a pickup when one clearly beats it.

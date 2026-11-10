@@ -6,6 +6,7 @@ import {createScoreTracker} from '../engine.js';
 import {buildSeasonModel} from '../trades.js';
 import {S} from './state.js';
 import {$,isTradeView,league} from './core.js';
+import {lens,overrideStamp} from './overrides.js';
 import {ensureLeagueSeason} from './pages/league-outlook.js';
 import {render} from './render.js';
 
@@ -15,8 +16,8 @@ export function seasonKey(){return `${S.data.demo?'demo':S.data.user.user_id}:${
 export function currentOutlook(){return S.seasonState?.key===seasonKey()&&!S.seasonState.loading&&!S.seasonState.error?S.seasonState.outlook:null}
 export function seasonModel(l=league()){
  const outlook=currentOutlook();if(!outlook||!outlook.weeks.length)return null;
- const key=JSON.stringify([seasonKey(),rosterKey(l),identity(S.data.players),identity(outlook)]);
- return seasonModels.get(key,()=>buildSeasonModel({league:l,players:S.data.players,outlook}));
+ const key=JSON.stringify([seasonKey(),rosterKey(l),identity(S.data.players),identity(outlook),overrideStamp()]);
+ return seasonModels.get(key,()=>buildSeasonModel({league:l,players:S.data.players,outlook,overrides:lens()}));
 }
 export async function ensureTradeOutlook(force=false){
  ensureLeagueSeason();

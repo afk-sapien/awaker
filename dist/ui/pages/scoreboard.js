@@ -2,10 +2,11 @@
 import {matchupDetail,median} from '../../league.js';
 import {S} from '../state.js';
 import {chance,empty,esc,fmt,injury,league,leagueOptions,ordinal,pageHead,playerChip,playerLink,projectionNote,record,signed,teamCell} from '../core.js';
+import {lens} from '../overrides.js';
 import {currentLeagueOutlook,leagueGate} from './league-outlook.js';
 
 export function lineupsView(o,g,by){
- const detail=matchupDetail({league:league(),players:S.data.players,projections:S.data.projections[S.data.week],games:S.data.games,rosterIds:g.teams,current:S.data.week===(S.data.nfl?.week??S.data.week)});if(!detail)return '';
+ const detail=matchupDetail({league:league(),players:S.data.players,projections:S.data.projections[S.data.week],games:S.data.games,rosterIds:g.teams,current:S.data.week===(S.data.nfl?.week??S.data.week),week:S.data.week,overrides:lens()});if(!detail)return '';
  const [a,b]=detail.sides,teams=g.teams.map(id=>by.get(id));
  const when=p=>{const game=p.game,where=game?.opponent?`${game.home?'vs':'@'} ${game.opponent}`:'';return p.state==='live'?`<span class="lu-clock">${esc(game.detail||'Live')}</span> ${esc(where)}`:p.state==='done'?`Final ${esc(where)}`:p.state==='bye'?'Bye':p.state==='pre'?esc([game.detail,where].filter(Boolean).join(' · ')):''};
  const player=(p,flip)=>p.id?`<div class="lu-player ${flip?'flip':''} lu-${p.state}">${playerChip(p.id,`<div class="muted small">${esc(S.data.players[p.id].position||'')} · ${esc(S.data.players[p.id].team||'FA')}${injury(S.data.players[p.id])}</div><div class="lu-when small">${when(p)}</div>`)}</div>`:`<div class="lu-player ${flip?'flip':''} lu-empty"><span class="muted">Empty</span></div>`;

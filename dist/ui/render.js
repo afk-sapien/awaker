@@ -2,6 +2,9 @@
 import {S} from './state.js';
 import {badge} from './unread.js';
 import {$,empty,esc,icon,named,nav} from './core.js';
+// The lens the engines read overrides through is attached to S.data, which is replaced wholesale by
+// each refresh, so every draw makes sure it is the current one before any page computes a number.
+import {syncOverrides} from './overrides.js';
 import {defenses} from './pages/defense-planner.js';
 import {leagueOutlookPage} from './pages/league-outlook.js';
 import {scoreboardPage} from './pages/scoreboard.js';
@@ -17,7 +20,7 @@ export function uiKey(el){if(!el||!el.closest?.('#app'))return null;if(el.tagNam
 export function uiFind(k){if(!k)return null;const all=document.querySelectorAll(k.sel);return all[k.i]||all[0]||null}
 export function page(){try{return ({watch:watchroom,waivers:waivers,lineup:lineup,trades:trades,'trade-builder':tradeBuilder,defenses:defenses,season:season,league:leagueOutlookPage,scoreboard:scoreboardPage,settings:settings})[S.view]()}catch(e){console.error(e);return empty('This page could not be drawn','Something in the latest data could not be shown. Try another page, or refresh.')}}
 // The demo drawn while real leagues load says nothing about a saved filter, so it is only checked against real ones.
-export function render(){if(!S.data.demo&&S.watchLeague!=='all'&&!S.data.leagues.some(l=>l.league_id===S.watchLeague&&l.enabled))S.watchLeague='all';
+export function render(){syncOverrides();if(!S.data.demo&&S.watchLeague!=='all'&&!S.data.leagues.some(l=>l.league_id===S.watchLeague&&l.enabled))S.watchLeague='all';
  const active=document.activeElement,focusAt=uiKey(active),sel=active?.selectionStart,openDetails=[...document.querySelectorAll('#app details[open]')].map(uiKey).filter(Boolean),openTrades=new Set([...document.querySelectorAll('[data-trade-detail][open]')].map(el=>el.dataset.tradeDetail));
  document.body.classList.toggle('focus',S.focus&&S.view==='watch');document.body.classList.toggle('watch-view',S.view==='watch');
  // The wordmark is lower case by design, so a configured name is written the same way the sidebar
