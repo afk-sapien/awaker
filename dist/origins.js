@@ -10,8 +10,23 @@
 // img and connect name the CSP directives the page needs. service is reached by the Node service on
 // the owner's behalf and never by the page, so it is listed for completeness and stays out of the
 // policy the browser enforces.
+import {sourceEnabled} from './sources.js'
+
 export const requiredOrigins = {
   img: ['https://sleepercdn.com'],
   connect: ['https://api.sleeper.app', 'https://site.api.espn.com'],
   service: ['https://ntfy.sh']
 }
+
+// Which sources an origin is reached for. ESPN is reached for two things, league news and NFL game
+// status, and both are switches, so a deployment that turns both off reaches ESPN for nothing and
+// should not be handing the browser permission to go there. Sleeper has no entry because it has no
+// switch: the app without it is not the app.
+const ORIGIN_SOURCES = {'https://site.api.espn.com': ['espnNews', 'espnScoreboard']}
+
+// The origins a deployment still needs, given what it has switched off. Pass the host file's
+// sources, the service's settings, or both, exactly as sourceEnabled takes them. A host builds its
+// own policy from this and so does the service, which is the point: one answer, not two that drift.
+export const originsFor = (...configs) => Object.fromEntries(Object.entries(requiredOrigins)
+  .map(([directive, origins]) => [directive, origins.filter(origin =>
+    !ORIGIN_SOURCES[origin] || ORIGIN_SOURCES[origin].some(source => sourceEnabled(source, ...configs)))]))

@@ -132,7 +132,30 @@ export async function leagueDetails(l,userId,week,options={}){
  return {...l,rosters,users,matchups,mine,enabled:l.status!=='complete',syncedAt:Date.now()}
 }
 const teamAlias=t=>({WSH:'WAS',WSN:'WAS',LA:'LAR',JAC:'JAX'}[t]||t);
-export function scoreboard(season,week,options={}){return cache.get(`games:${season}:${week}`,async()=>{const d=await json(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=${season}&seasontype=2&week=${week}&limit=100`);const games={};for(const e of d.events||[]){const c=e.competitions?.[0];if(!c)continue;for(const team of c.competitors||[]){const other=c.competitors.find(x=>x.id!==team.id);games[teamAlias(team.team.abbreviation)]={id:e.id,state:e.status.type.state,detail:e.status.type.shortDetail,start:e.date,opponent:teamAlias(other?.team?.abbreviation),home:team.homeAway==='home',score:team.score,oppScore:other?.score,channel:c.broadcasts?.flatMap(b=>b.names||[]).join(' / ')||null,period:e.status.period??null,clock:e.status.displayClock??null};}}return games;},{ttl:30000,...options});}
+
+// NFL game status comes from ESPN and from nowhere else, and a deployment is allowed to say no to
+// ESPN, so the switch is enforced here rather than at each of the five call sites. One of them
+// forgetting would mean a request to an origin the host has told the browser to refuse, which is a
+// console error on someone else's site rather than a bug anyone here would see.
+//
+// Off, scoreboard answers with no games, which every reader already takes to mean game status is
+// unknown: that path exists because ESPN can also just be down.
+let gameStatus = true
+export const allowGameStatus = on => { gameStatus = on !== false }
+export const gameStatusAllowed = () => gameStatus
+
+// Who plays whom in one week, read off Sleeper's own projections: every row names the player's team
+// and that week's opponent, so the pairings are there without asking anyone else. A team with no row
+// naming an opponent is on bye, which is what a reader of this map needs it to say.
+//
+// What Sleeper does not say is which side is at home, when the game starts, or anything at all once
+// it has started: no quarter, no clock, no score. So this is a schedule and never game status, and it
+// says where it came from, so a reader can tell a missing kickoff from a missing game.
+export const weekSchedule = rows => Object.fromEntries(Object.values(rows || {})
+ .filter(row => row?.team && row?.opponent)
+ .map(row => [teamAlias(row.team), {opponent: teamAlias(row.opponent), source: 'sleeper'}]))
+
+export function scoreboard(season,week,options={}){if(!gameStatus)return Promise.resolve({});return cache.get(`games:${season}:${week}`,async()=>{const d=await json(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=${season}&seasontype=2&week=${week}&limit=100`);const games={};for(const e of d.events||[]){const c=e.competitions?.[0];if(!c)continue;for(const team of c.competitors||[]){const other=c.competitors.find(x=>x.id!==team.id);games[teamAlias(team.team.abbreviation)]={id:e.id,state:e.status.type.state,detail:e.status.type.shortDetail,start:e.date,opponent:teamAlias(other?.team?.abbreviation),home:team.homeAway==='home',score:team.score,oppScore:other?.score,channel:c.broadcasts?.flatMap(b=>b.names||[]).join(' / ')||null,period:e.status.period??null,clock:e.status.displayClock??null};}}return games;},{ttl:30000,...options});}
 export function projections(season,week,options={}){return cache.get(`projections:${season}:${week}`,async()=>{
  const d=await json(`https://api.sleeper.app/projections/nfl/${season}/${week}?season_type=regular`);
  if(!Array.isArray(d))throw Error('Projection feed unavailable.');
@@ -204,8 +227,12 @@ export async function tradeOutlook(season,weeks,onProgress=()=>{},force=false){
   try{data[week]=await cache.get(`outlook:${season}:${week}`,async()=>{
    if(!force){const legacy=await storage(`trade-outlook:${season}:${week}`);if(legacy&&Date.now()-legacy.at<HOUR)return legacy.data}
    const [rows,games]=await Promise.all([projections(season,week,{force}),scoreboard(season,week,{ttl:HOUR,force})]);
-   if(!Object.keys(games).length||!Object.keys(rows).length)throw Error('Season data unavailable');
-   return {projections:rows,games};
+   // Who plays whom is all this needs the schedule for: a bye in a future week is a zero, and
+   // nothing here asks about a clock. So with game status switched off, Sleeper's own pairings do the
+   // job, and a week is only unavailable when there is nothing to go on at all.
+   const schedule=Object.keys(games).length?games:weekSchedule(rows);
+   if(!Object.keys(schedule).length||!Object.keys(rows).length)throw Error('Season data unavailable');
+   return {projections:rows,games:schedule};
   },{ttl:HOUR,force});}catch{errors.push(week)}
   onProgress(++done,weeks.length);
  }}

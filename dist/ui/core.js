@@ -2,8 +2,9 @@
 import {projected,ruledOut} from '../engine.js';
 import {describePoints} from '../overrides.js';
 import {DEFAULT_SITE,rename} from '../site.js';
+import {sourceEnabled} from '../sources.js';
 import {S} from './state.js';
-import {lens} from './overrides.js';
+import {isOwn,lens} from './overrides.js';
 
 export const icon=(name)=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${({watch:'<rect x="3" y="4" width="18" height="14" rx="2"/><path d="m8 22 4-4 4 4M8 10h8M12 6v8"/>',waivers:'<path d="m3 17 6-6 4 3 8-10M15 4h6v6"/>',lineup:'<path d="M9 5h12M9 12h12M9 19h12M3 5h1M3 12h1M3 19h1"/>',trades:'<path d="M3 7h18m-5-5 5 5-5 5M21 17H3m5-5-5 5 5 5"/>','trade-builder':'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 12h8m-4-4v8"/>',defenses:'<path d="m12 2 8 4v6c0 5-8 10-8 10S4 17 4 12V6z"/>',season:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',scoreboard:'<rect x="3" y="3" width="18" height="7" rx="1.5"/><rect x="3" y="14" width="18" height="7" rx="1.5"/><path d="M7 6.5h6M7 17.5h4"/>',league:'<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3"/>',notifications:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10 21a2 2 0 0 0 4 0"/>',settings:'<path d="M3 6h18M3 12h18M3 18h18"/><circle cx="8" cy="6" r="2" fill="currentColor"/><circle cx="16" cy="12" r="2" fill="currentColor"/><circle cx="10" cy="18" r="2" fill="currentColor"/>'})[name]}</svg>`;
 export const nav=[['watch','Awaker watchroom'],['scoreboard','Around the league'],['waivers','Waiver wire'],['lineup','Start / sit'],['trades','Auto trades'],['trade-builder','Trade builder'],['defenses','Defense planner'],['season','Season review'],['league','League outlook'],['notifications','Notifications'],['settings','My leagues']];
@@ -19,6 +20,10 @@ export const teamColors={CIN:'#d96527',BUF:'#2761a4',ATL:'#a3434c',MIN:'#7460a3'
 // Stored preferences are only trusted in shape: anything the wrong type is dropped so a bad save cannot stop the page from starting.
 export const plain=v=>!!v&&typeof v==='object'&&!Array.isArray(v);
 export const isTradeView=()=>S.view==='trades'||S.view==='trade-builder';
+// NFL game status: kickoff, quarter, clock and score, which only ESPN provides. Both switches are
+// read together and off wins, the same way news reads them. The demo's game states are invented and
+// never fetched, so the switch has nothing to say about it.
+export const gameStatusEnabled=()=>sourceEnabled('espnScoreboard',S.site?.sources,S.serviceSettings?.sources);
 // The toast is a live region that is always in the page (empty when idle), so screen readers hear each new message.
 export function toast(t){$('#toast').textContent=t;clearTimeout(toast.t);toast.t=setTimeout(()=>$('#toast').textContent='',4500)}
 export const league=()=>S.data.leagues.find(l=>l.league_id===S.leagueId&&l.enabled)||S.data.leagues.find(l=>l.enabled);
@@ -43,14 +48,22 @@ export function value(id,l=league(),w=S.data.week){
 // What Sleeper says about this week's projection, before the owner's correction, for showing beside
 // an adjusted number.
 export function sleeperValue(id,l=league(),w=S.data.week){return projected(S.data.projections[w]?.[id]?.stats,l?.scoring_settings)}
-// A marker on every number an override moved, with Sleeper's own figure in the title, so no adjusted
-// figure on the page can be mistaken for Sleeper's.
+// A marker on every number a correction moved, so no adjusted figure on the page can be mistaken for
+// Sleeper's. It is a button, not a decoration: a title attribute is a hover, and a phone never hovers,
+// so on a touch screen the original was written where only a mouse could read it. Tapping it opens
+// the corrections editor, which shows both numbers and can undo the one that moved this, and the
+// original is printed beside the pencil at the widths where there is no pointer to hover with.
+//
+// Who wrote it comes off the record rather than being assumed: since an agent can correct a
+// projection too, "your override" was sometimes the wrong thing to tell the owner.
 export function adjustedMark(id,original=null,w=S.data.week){
  const record=lens().find(id,w);
  if(!record)return '';
  const was=Number.isFinite(original)?`Sleeper projected ${fmt(original)}. `:'';
  const how=[record.points?describePoints(record.points):'',record.status||'',record.note||''].filter(Boolean).join(' · ');
- return ` <span class="adjusted" title="${esc(`${was}Your override: ${how||'applied'}`)}" aria-label="${esc(`Adjusted by you. ${was}${how}`)}">✎</span>`;
+ const who=isOwn(record)?'Your correction':`Correction by ${String(record.source).replace(/^agent:/,'')}`;
+ const label=`${who}: ${how||'applied'}. ${was}`.trim();
+ return ` <button type="button" class="adjusted" data-override-open="${esc(id)}" title="${esc(`${label} Open corrections.`)}" aria-label="${esc(`${label} Open corrections.`)}"><span aria-hidden="true">✎</span>${Number.isFinite(original)?`<span class="adjusted-was">was ${fmt(original)}</span>`:''}</button>`;
 }
 export const scoring=l=>l.scoring_settings?.rec===1?'PPR':l.scoring_settings?.rec===.5?'HALF PPR':l.scoring_settings?.rec===0||!l.scoring_settings?.rec?'STANDARD':'CUSTOM';
 export function leagueOptions(selected=S.leagueId,all=false){return (all?'<option value="all">All leagues</option>':'')+S.data.leagues.filter(l=>l.enabled).map(l=>`<option value="${esc(l.league_id)}" ${selected===l.league_id?'selected':''}>${esc(l.name)}</option>`).join('')}

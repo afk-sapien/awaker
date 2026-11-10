@@ -1,5 +1,6 @@
 import {defenseWeeks} from '../dist/defenses.js';
 import {STAT_FALLBACKS} from '../dist/engine.js';
+import {sourceEnabled} from '../dist/sources.js';
 import * as api from '../dist/api.js';
 // The dashboard reads a handful of fields for a few thousand relevant players. Sleeper's directory is
 // about 15 MB of everyone who ever played, and it used to ride along on every 45 second refresh.
@@ -46,6 +47,10 @@ export function slimPlayers(players,leagues=[]){
 export function createProvider(store){
  api.setPersistence((key,value)=>value===undefined?store.get(`cache:${key}`):store.set(`cache:${key}`,value));
  const provider=async(settings,{outlook=false,force=false}={})=>{
+  // Read once per refresh, because the owner can switch it between two of them, and told to api so
+  // that no caller anywhere reaches ESPN for game status while it is off.
+  const gameStatus=sourceEnabled('espnScoreboard',settings.sources);
+  api.allowGameStatus(gameStatus);
   const found=await api.discover(settings.username),week=Math.max(1,Math.min(18,Number(found.nfl.week)||1)),season=found.nfl.season;
   // Leagues that are switched off or not drafted yet stay listed, so they can be switched back on,
   // but they are never analysed and cannot hold up the leagues that are in season.
@@ -67,10 +72,14 @@ export function createProvider(store){
   })
   const players=slimPlayers(directory,details);
   const data={user:found.user,nfl:found.nfl,week,players,leagues:details,projections:{},games:{},schedules:{},trends:[],updatedAt:now,playersAt:store.at('cache:directory'),demo:false,errors,notes:[],sources};
-  const jobsExtra=defenseWeeks(week).flatMap(w=>[{name:`schedule/${w}`,key:`games:${season}:${w}`,ttl:w===week?900000:3600000,week:w,type:'schedule',run:api.scoreboard(season,w,{force,ttl:w===week?30000:3600000})},{name:`projections/${w}`,key:`projections:${season}:${w}`,ttl:3600000,week:w,type:'projection',run:api.projections(season,w,{force})}]);
+  const jobsExtra=defenseWeeks(week).flatMap(w=>[...(gameStatus?[{name:`schedule/${w}`,key:`games:${season}:${w}`,ttl:w===week?900000:3600000,week:w,type:'schedule',run:api.scoreboard(season,w,{force,ttl:w===week?30000:3600000})}]:[]),{name:`projections/${w}`,key:`projections:${season}:${w}`,ttl:3600000,week:w,type:'projection',run:api.projections(season,w,{force})}]);
   jobsExtra.push({name:'trends',key:'https://api.sleeper.app/v1/players/nfl/trending/add?lookback_hours=24&limit=100',ttl:900000,type:'trends',run:api.trends({force})});
   const results=await Promise.allSettled(jobsExtra.map(j=>j.run));
   results.forEach((r,i)=>{const j=jobsExtra[i];if(r.status==='rejected'){errors.push(`${j.name} unavailable`);return}source(j.name,j.key,j.ttl);if(j.type==='schedule'){data.schedules[j.week]=r.value;if(j.week===week)data.games=r.value}if(j.type==='projection'){data.projections[j.week]=r.value;const times=Object.values(r.value).map(p=>Number(p.updated_at)).filter(Number.isFinite);if(times.length)sources.at(-1).sourceUpdatedAt=Math.max(...times)}if(j.type==='trends')data.trends=r.value});
+  // With game status off there is no kickoff, quarter or score to be had, but who plays whom is in
+  // Sleeper's projections, so the weeks ahead still know their matchups and their byes. games stays
+  // empty on purpose: anything reading it is asking whether a game has started, and nothing here knows.
+  if(!gameStatus)for(const w of defenseWeeks(week))if(data.projections[w])data.schedules[w]=api.weekSchedule(data.projections[w]);
   const seenKeys=new Set(Object.values(data.projections[week]||{}).flatMap(p=>Object.keys(p.stats||{})));
   // A category the projections bucket differently is still projected, so it is not a missing one.
   const projectedKeys=new Set([...seenKeys,...Object.entries(STAT_FALLBACKS).filter(([,alts])=>alts.some(a=>seenKeys.has(a))).map(([key])=>key)]);

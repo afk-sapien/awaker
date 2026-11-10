@@ -1,4 +1,4 @@
-import {SOURCE_SWITCHES} from '../dist/news.js';
+import {SOURCE_SWITCHES} from '../dist/sources.js';
 // On by default for a self-hosted app, because the owner is the one deciding, and off is one PUT
 // away. A static host has no settings to PUT, so it says the same thing in dist/site.json instead.
 export const defaultSources=Object.fromEntries(SOURCE_SWITCHES.map(key=>[key,true]));
@@ -31,7 +31,7 @@ export function validateSettings(input,previous=defaults){
  if('preferences'in input)s.preferences=preferences(input.preferences);
  s.sources={...defaultSources,...s.sources};
  if('sources'in input){
-  if(!object(input.sources)||Object.keys(input.sources).some(k=>!SOURCE_SWITCHES.includes(k))||Object.values(input.sources).some(v=>typeof v!=='boolean'))throw bad('Unknown news source setting.');
+  if(!object(input.sources)||Object.keys(input.sources).some(k=>!SOURCE_SWITCHES.includes(k))||Object.values(input.sources).some(v=>typeof v!=='boolean'))throw bad('Unknown data source setting.');
   s.sources={...s.sources,...input.sources};
  }
  for(const key of ['daily','weekly'])if(key in input){if(!object(input[key])||Object.keys(input[key]).some(k=>!['enabled','time',...(key==='weekly'?['day']:[])].includes(k)))throw bad('Invalid schedule.');s[key]={...s[key],...input[key]}}

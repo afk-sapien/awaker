@@ -1,7 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
-import {SOURCES, SOURCE_SWITCHES, articleLink, condition, conditionTone, espnArticles, normaliseName, playerIndex, readNews, resolveAthlete, sourceEnabled} from '../dist/news.js'
+import {articleLink, condition, conditionTone, espnArticles, normaliseName, playerIndex, readNews, resolveAthlete} from '../dist/news.js'
+import {SOURCES, SOURCE_SWITCHES, sourceEnabled} from '../dist/sources.js'
 import {playerNewsHTML, rosterNewsHTML, ago} from '../dist/ui/news.js'
 import {S} from '../dist/ui/state.js'
 import {contracts} from '../server/contracts.js'
@@ -148,7 +149,7 @@ test('a league-wide read reports every player a headline resolves to',() => {
 })
 
 test('off wins between a static host and a service, and the base source cannot be switched off',() => {
- assert.deepEqual(SOURCE_SWITCHES, ['espnNews'], 'Sleeper is the base and has no switch')
+ assert.deepEqual(SOURCE_SWITCHES, ['espnNews', 'espnScoreboard'], 'Sleeper is the base and has no switch')
  assert.equal(sourceEnabled('sleeper', {sleeper: false}), true)
  assert.equal(sourceEnabled('espnNews'), true, 'on by default for a self-hosted app')
  assert.equal(sourceEnabled('espnNews', {}, {espnNews: true}), true)
@@ -163,11 +164,11 @@ test('the service exposes the read as one contract, and the switch is a setting'
  assert.deepEqual([news.path, news.method, news.call], ['/news', 'POST', 'news'])
  assert.match(news.description, /Headlines only, never article text/, 'the caller is told what it will not get')
  assert.match(news.description, /untrusted data/, 'and that a provider wrote the strings it is reading')
- assert.deepEqual(defaults.sources, {espnNews: true}, 'on by default for the owner of a self-hosted app')
- assert.deepEqual(validateSettings({sources: {espnNews: false}}).sources, {espnNews: false})
- assert.deepEqual(validateSettings({}).sources, {espnNews: true})
+ assert.deepEqual(defaults.sources, {espnNews: true, espnScoreboard: true}, 'on by default for the owner of a self-hosted app')
+ assert.deepEqual(validateSettings({sources: {espnNews: false}}).sources, {espnNews: false, espnScoreboard: true})
+ assert.deepEqual(validateSettings({}).sources, {espnNews: true, espnScoreboard: true})
  for (const sources of [{sleeper: false}, {espnNews: 'no'}, {unknown: true}, [], 'off', 7]) {
-  assert.throws(() => validateSettings({sources}), /Unknown news source setting/, JSON.stringify(sources))
+  assert.throws(() => validateSettings({sources}), /Unknown data source setting/, JSON.stringify(sources))
  }
 })
 

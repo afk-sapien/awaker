@@ -4,25 +4,35 @@ import {readFile, realpath} from 'node:fs/promises'
 import {resolve, extname, sep} from 'node:path'
 import {bad} from './settings.js'
 // The page's own declaration of what it reaches, so the policy below cannot fall behind the code.
-import {requiredOrigins} from '../dist/origins.js'
+import {originsFor, requiredOrigins} from '../dist/origins.js'
+
+const policy = origins => [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "font-src 'self'",
+  `img-src 'self' ${origins.img.join(' ')}`,
+  `connect-src 'self' ${origins.connect.join(' ')}`,
+  "object-src 'none'",
+  "base-uri 'none'",
+  "frame-ancestors 'none'",
+  "form-action 'self'"
+].join('; ')
 
 export const securityHeaders = {
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'same-origin',
   'X-Frame-Options': 'DENY',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
-  'Content-Security-Policy': [
-    "default-src 'self'",
-    "script-src 'self'",
-    "style-src 'self' 'unsafe-inline'",
-    "font-src 'self'",
-    `img-src 'self' ${requiredOrigins.img.join(' ')}`,
-    `connect-src 'self' ${requiredOrigins.connect.join(' ')}`,
-    "object-src 'none'",
-    "base-uri 'none'",
-    "frame-ancestors 'none'",
-    "form-action 'self'"
-  ].join('; ')
+  'Content-Security-Policy': policy(requiredOrigins)
+}
+
+// A deployment with every source for an origin switched off reaches that origin for nothing, so the
+// browser stops being handed permission to go there: a request that slipped through a switch is then
+// a refused request rather than a quiet one. Called at startup and again whenever the settings are
+// saved; every response spreads this object as it is written, so the next one carries the new policy.
+export const applySources = sources => {
+  securityHeaders['Content-Security-Policy'] = policy(originsFor(sources))
 }
 
 export function json(res, status, value) {

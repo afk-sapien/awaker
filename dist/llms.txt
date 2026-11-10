@@ -96,6 +96,12 @@ Sleeper's player record is the base source and is always on. An ESPN league news
 and sits behind a switch each deployment sets for itself. Nothing but the headline, the source, the
 time and a link is taken from ESPN. No article body is stored, returned or shown.
 
+NFL game status, meaning kickoff time, quarter, clock and score, is the other thing ESPN is asked for
+and it has a switch of its own. With it off nothing reaches ESPN at all, and who plays whom and who is
+on bye are read from the team and opponent that Sleeper puts on every projection. That schedule says
+nothing about whether a game has started and nothing about which side is at home, so with the switch
+off no answer claims a game is live, final or yet to start.
+
 A headline is joined to a player by ESPN's athlete id where Sleeper carries one, and otherwise by a
 normalised full name. Every item records which key found it. A name-joined headline is not identity.
 It is a guess that held for every rosterable player when it was measured, because no two of them

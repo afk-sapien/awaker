@@ -192,11 +192,12 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
 /* Injury designations, colored by how likely he is to play. The word is always there too, so color is never the only signal. */
 .injury{display:inline-block;font-weight:700;font-size:.92em;line-height:1.35;padding:0 5px;border-radius:4px;white-space:nowrap}.injury-out{color:#a61b12;background:#fde3df}.injury-doubtful{color:#8f3f06;background:#fde6d2}.injury-questionable{color:#6b4e00;background:#fcefb4}.injury-other{color:#44525a;background:#eaeef0}
 /* A footer link from site.json is a 12px line of text, which is about 16px of target: too small for
-   a thumb. On a device being driven by touch it becomes a row tall enough to hit, which on a phone
-   is the whole width of the column. A mouse pointer sees the footer it always saw. The data credits
-   next to it are links inside a sentence, where a taller box would break the line, so they are left
-   as they are. */
-@media(pointer:coarse){.status-footer .site-link a{display:inline-flex;align-items:center;min-height:34px}@media(max-width:760px){.status-footer .site-link{display:block}.status-footer .site-link a{width:100%}}}
+   a thumb. On a narrow screen or a device driven by touch it becomes a row tall enough to hit, which
+   on a phone is the whole width of the column. A wide screen with a mouse sees the footer it always
+   saw. The Sleeper credit
+   is one of these links and takes the same row, which is why it is no longer part of the sentence it
+   used to share with the game status line. That line is text and has nothing to hit. */
+@media(max-width:760px),(pointer:coarse){.status-footer .site-link a{display:inline-flex;align-items:center;min-height:34px}@media(max-width:760px){.status-footer .site-link{display:block}.status-footer .site-link a{width:100%}}}
 .nav-count{margin-left:auto;min-width:20px;padding:1px 6px;border-radius:10px;background:var(--orange);color:#fff;font-size:11px;font-weight:700;line-height:18px;text-align:center}
 /* Player news. One list, used by the watchroom strip and by a player's profile, so a headline reads
    the same in both. The strip scrolls at a fixed height rather than pushing the footnote off a phone
@@ -217,10 +218,30 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
 /* On a wide screen a designation is five words and the name belongs beside it, not above it: stacked,
    twenty rows of three lines each is a column of mostly empty space. On a phone the stack is right. */
 @media(min-width:700px){.news-strip .news-item:has(.news-who){display:grid;grid-template-columns:minmax(110px,160px) 1fr;column-gap:14px;align-items:baseline}.news-strip .news-item .news-who{margin:0}.news-strip .news-item>:not(.news-who){grid-column:2}}
-/* The owner's own corrections. The mark on an adjusted number is small on purpose, because it sits
-   inside a figure rather than beside it, and it carries Sleeper's own number in its title. Nothing
-   here is color alone: the mark is a glyph and the inert row is also labelled in words. */
-.adjusted{font-size:.85em;color:#6a5bab;cursor:help}
+/* The owner's own corrections. The mark on an adjusted number is small, because it sits inside a
+   figure rather than beside it, but it is a button: it opens the corrections for that player, and it
+   is where the old number is read. Nothing here is color alone: the mark is a glyph and the inert row
+   is also labelled in words.
+   A title is a hover, and a phone has no hover, so Sleeper's own number is a tooltip for a mouse and
+   printed beside the mark on a narrow or touch screen. Where the pointer is a thumb the mark is a
+   24px target rather than the 7 by 11 pixels of the glyph itself. */
+.adjusted{display:inline-flex;align-items:center;gap:4px;vertical-align:baseline;background:transparent;padding:0 3px;border-radius:5px;font:inherit;font-size:.85em;color:#6a5bab;text-align:left}
+.adjusted:hover{background:#efecf8}
+.adjusted-was{display:none;font-variant-numeric:tabular-nums;white-space:nowrap}
+@media(max-width:760px),(pointer:coarse){.adjusted-was{display:inline}}
+@media(max-width:760px),(pointer:coarse){.adjusted{min-height:24px;min-width:24px;justify-content:center}}
+/* Touch targets, decided once for every view. On a narrow screen or a coarse pointer, each control
+   that is smaller than 24px across is brought up to 24px, and a wide screen with a mouse sees
+   exactly what it saw before. Phone width is in the query as well as the pointer, because a phone
+   that reports a fine pointer is still held in a hand. A summary keeps whatever display it has,
+   because its marker hangs off that, and the footer links go further than 24px because they stand in
+   a row of their own instead of inside a sentence. */
+@media(max-width:760px),(pointer:coarse){
+ .inline-btn,.link-external{min-height:24px;display:inline-flex;align-items:center}
+ summary{min-height:24px}
+ .checkline input,.league-settings input,.position-choice input{min-width:24px;min-height:24px}
+ input[type=range]{min-height:24px}
+}
 .injury-clear{color:#2c5c46;background:#e3f2e8}
 .override-note{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin:-16px 0 20px}
 .override-block{border-top:1px solid var(--line);margin-top:14px;padding-top:14px}
