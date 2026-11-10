@@ -57,7 +57,7 @@ test('MCP negotiates, validates tools, and preview calls cannot send notificatio
  assert.equal(await handle({jsonrpc:'2.0',method:'notifications/initialized'}),null);
  // Named rather than counted: a tool that reaches an agent unnoticed is the failure worth catching.
  const list=await handle({jsonrpc:'2.0',id:2,method:'tools/list'});assert.ok(list.result.tools.every(t=>t.annotations.readOnlyHint));
- assert.deepEqual(list.result.tools.map(t=>t.name),['get_status','find_trades','evaluate_trade','get_opportunities','preview_digest','get_recap']);
+ assert.deepEqual(list.result.tools.map(t=>t.name),['get_status','find_trades','evaluate_trade','get_opportunities','preview_digest','get_news','get_recap']);
  const bad=await handle({jsonrpc:'2.0',id:3,method:'tools/call',params:{name:'evaluate_trade',arguments:{}}});assert.equal(bad.error.code,-32602);
  const report=await handle({jsonrpc:'2.0',id:4,method:'tools/call',params:{name:'preview_digest',arguments:{period:'weekly'}}});assert.equal(report.result.structuredContent.period,'weekly');assert.deepEqual(calls,['digest']);
 });

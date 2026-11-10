@@ -88,16 +88,26 @@ test('a title or a name is printed, not read as a pattern',() => {
  assert.match(injectHtml(page(), {body: '<p>$&</p>'}), /<p>\$&<\/p>/)
 })
 
-test('the site config carries a name and links, and nothing else survives it',() => {
+test('the site config carries a name, links and a switch that can only say no',() => {
  assert.deepEqual(siteConfig(null), DEFAULT_SITE, 'no file means today’s defaults')
  for (const nothing of [undefined, 'a string', [], 42, {name: ''}, {name: '   '}, {name: 'x'.repeat(41)}, {name: 7}]) {
   assert.deepEqual(siteConfig(nothing), DEFAULT_SITE, JSON.stringify(nothing) + ' is not a config')
  }
- assert.deepEqual(siteConfig({name: '  Sunday HQ  '}), {name: 'Sunday HQ', links: []})
+ assert.deepEqual(siteConfig({name: '  Sunday HQ  '}), {name: 'Sunday HQ', links: [], sources: {}})
  assert.deepEqual(siteConfig({
   name: 'Sunday HQ',
   links: [{label: ' About ', href: '/about'}, {label: 'Blog', href: 'https://example.com/blog'}, {label: 'Home', href: '/'}]
- }), {name: 'Sunday HQ', links: [{label: 'About', href: '/about'}, {label: 'Blog', href: 'https://example.com/blog'}, {label: 'Home', href: '/'}]})
+ }), {name: 'Sunday HQ', links: [{label: 'About', href: '/about'}, {label: 'Blog', href: 'https://example.com/blog'}, {label: 'Home', href: '/'}], sources: {}})
+
+ // The one thing a host can say about a source is no. A host without ESPN's permission needs that
+ // and nothing more, so an entry that is not an exact false for a source that exists is dropped:
+ // the file can never switch a source on, name a new one, or point one somewhere else.
+ assert.deepEqual(siteConfig({sources: {espnNews: false}}).sources, {espnNews: false})
+ for (const sources of [{espnNews: true}, {espnNews: 'false'}, {espnNews: 0}, {espnNews: null}, {espnnews: false},
+  {sleeper: false}, {injuries: false, url: 'https://example.com/feed'}, [], 'no', 42, null]) {
+  assert.deepEqual(siteConfig({sources}).sources, {}, JSON.stringify(sources) + ' does not switch anything')
+ }
+ assert.deepEqual(siteConfig({sources: {espnNews: false, sleeper: false, other: false}}).sources, {espnNews: false})
 
  // Everything a link could be that is not a page on this site or an https address.
  for (const href of ['javascript:alert(1)', 'data:text/html,x', '//example.com', 'http://example.com', '\\\\example.com', 'about', '', 42, null]) {
@@ -108,7 +118,7 @@ test('the site config carries a name and links, and nothing else survives it',()
 
  // The scope limit, kept by the shape of what comes out: anything else in the file is dropped.
  const extra = siteConfig({name: 'Sunday HQ', script: 'https://example.com/a.js', analytics: {id: 'x'}, siteId: 'abc', links: [{label: 'A', href: '/a', onclick: 'x'}]})
- assert.deepEqual(Object.keys(extra), ['name', 'links'])
+ assert.deepEqual(Object.keys(extra), ['name', 'links', 'sources'])
  assert.deepEqual(Object.keys(extra.links[0]), ['label', 'href'])
 })
 
@@ -129,7 +139,11 @@ test('the site file is optional, same origin, and never breaks the page',async (
   assert.equal(asked[0].credentials, 'omit')
 
   answer = JSON.stringify({name: 'Sunday HQ', links: [{label: 'About', href: '/about'}]})
-  assert.deepEqual(await loadSiteFile(), {name: 'Sunday HQ', links: [{label: 'About', href: '/about'}]})
+  assert.deepEqual(await loadSiteFile(), {name: 'Sunday HQ', links: [{label: 'About', href: '/about'}], sources: {}})
+
+  answer = JSON.stringify({name: 'Sunday HQ', sources: {espnNews: false}})
+  assert.deepEqual(await loadSiteFile(), {name: 'Sunday HQ', links: [], sources: {espnNews: false}},
+   'a host with no grant from ESPN turns the source off in the file it already has')
 
   // A static host that answers an unknown path with a page of HTML is the case the old settings
   // probe only survived because its catch was empty.

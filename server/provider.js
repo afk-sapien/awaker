@@ -3,7 +3,17 @@ import {STAT_FALLBACKS} from '../dist/engine.js';
 import * as api from '../dist/api.js';
 // The dashboard reads a handful of fields for a few thousand relevant players. Sleeper's directory is
 // about 15 MB of everyone who ever played, and it used to ride along on every 45 second refresh.
-const FIELDS=['full_name','first_name','last_name','position','fantasy_positions','team','number','injury_status','active'];
+// The condition fields ride along because the news feed reads them, and because they were already
+// being fetched and then dropped on the way to the browser: the slim directory carried injury_status
+// alone, so a body part or a note Sleeper had sent reached nobody. espn_id is here for the same
+// reason: it is the exact key from an ESPN article to a player, and it cannot be recovered later.
+// Measured on the live directory, the seven added fields cost about 170 KB raw across 3300 players,
+// most of it news_updated, against a file that was already near 500 KB.
+const FIELDS=['full_name','first_name','last_name','position','fantasy_positions','team','number','injury_status','active',
+ 'espn_id','news_updated','injury_body_part','injury_notes','injury_start_date','practice_participation','practice_description'];
+// status is Active for 2876 of 3317 and names a retirement for most of the rest, so it is kept only
+// where it says something about a player who could be picked up: on a team, and not Active.
+const rosterStatus=p=>p.team&&p.status&&p.status!=='Active'?p.status:null;
 const FANTASY=new Set(['QB','RB','WR','TE','K','DEF']);
 const slimCache=new WeakMap();
 export function leagueFailure(league,error){
@@ -21,13 +31,13 @@ export function slimPlayers(players,leagues=[]){
   const base={};
   for(const [id,p]of Object.entries(players)){
    if(!p||!(FANTASY.has(p.position)||(p.fantasy_positions||[]).some(x=>FANTASY.has(x)))||(p.active===false&&!p.team))continue;
-   base[id]=Object.fromEntries(FIELDS.filter(k=>p[k]!==undefined&&p[k]!==null).map(k=>[k,p[k]]));
+   base[id]=Object.fromEntries([...FIELDS.filter(k=>p[k]!==undefined&&p[k]!==null).map(k=>[k,p[k]]),...(rosterStatus(p)?[['status',p.status]]:[])]);
   }
   slimCache.set(players,base);
  }
  // Anyone on a roster is kept even if Sleeper calls him inactive, so names never go missing.
  const out={...slimCache.get(players)};
- for(const l of leagues)for(const r of l.rosters||[])for(const id of [...(r.players||[]),...(r.reserve||[]),...(r.taxi||[])])if(!out[id]&&players[id])out[id]=Object.fromEntries(FIELDS.filter(k=>players[id][k]!=null).map(k=>[k,players[id][k]]));
+ for(const l of leagues)for(const r of l.rosters||[])for(const id of [...(r.players||[]),...(r.reserve||[]),...(r.taxi||[])])if(!out[id]&&players[id])out[id]=Object.fromEntries([...FIELDS.filter(k=>players[id][k]!=null).map(k=>[k,players[id][k]]),...(rosterStatus(players[id])?[['status',players[id].status]]:[])]);
  return out;
 }
 export function createProvider(store){

@@ -155,6 +155,17 @@ export async function stats(season,week,options={}){
 // One week of a league's matchups. Finished weeks hold the scores; weeks ahead hold only who plays whom.
 export function leagueWeek(leagueId,week,options={}){return sleeper(`/league/${leagueId}/matchups/${week}`,{ttl:6*HOUR,...options});}
 export function trends(options={}){return sleeper('/players/nfl/trending/add?lookback_hours=24&limit=100',{ttl:15*MINUTE,...options});}
+// ESPN's league news. limit is a hard 50: asking for 200 still returns 50, and those 50 covered
+// about 16 hours and 260 KB when measured, so it is a rolling window rather than an archive. ESPN
+// sends max-age=1 on it and the window moves slowly, so it is held for ten minutes: 260 KB is real
+// on a phone and must not ride along on every view change. The origin is already declared, so this
+// adds nothing to the content security policy.
+export const NEWS_URL='https://site.api.espn.com/apis/site/v2/sports/football/nfl/news?limit=50';
+export function news(options={}){return cache.get('news',async()=>{
+ const feed=await json(NEWS_URL);
+ if(!feed||typeof feed!=='object'||!Array.isArray(feed.articles))throw Error('News feed unavailable.');
+ return feed;
+},{ttl:10*MINUTE,...options});}
 // Every add, drop, waiver claim and trade a league processed in one week. The current week is still
 // being written to; finished weeks are settled, which is all the recap ever asks for.
 export function transactions(leagueId,week,options={}){return sleeper(`/league/${leagueId}/transactions/${week}`,{ttl:6*HOUR,...options});}

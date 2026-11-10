@@ -114,6 +114,9 @@ test('a delayed profile response cannot overwrite another season or a newly open
  try{
   S.data=demo()
   S.data.demo=false
+  // The news feed would put a request of its own into the queue this test counts by index, and the
+  // race under test is the profile's own, so the headline source is switched off for it.
+  S.site={...S.site,sources:{espnNews:false}}
   S.data.nfl.season='2090'
   S.leagueId=S.data.leagues[0].league_id
   S.view='lineup'
@@ -142,5 +145,6 @@ test('a delayed profile response cannot overwrite another season or a newly open
   listeners.close?.()
   globalThis.fetch=oldFetch
   globalThis.document=oldDocument
+  S.site={...S.site,sources:{}}
  }
 })
