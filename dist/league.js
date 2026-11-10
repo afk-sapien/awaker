@@ -188,7 +188,9 @@ export function matchupDetail({league,players:directory,projections={},games={},
  const line=(m,id)=>{
   if(!id||id==='0'||!players[id])return {id:null,points:0,projection:null,heading:0,state:'empty',game:null};
   const points=Number(m.players_points?.[id])||0,game=games[players[id].team]||null,projection=current&&ruledOut(players[id])&&(!game||game.state==='pre')?0:overrides.project(projected(projections[id]?.stats,league.scoring_settings),id,week);
-  const state=!known?'unknown':!game?'bye':game.state==='post'?'done':game.state==='pre'?'pre':'live',left=state==='pre'||state==='unknown'?1:state==='live'?gameRemaining(game):0;
+  // Without game status no starter can be called live or finished. One with points has played some
+  // part of his game, so half of it is taken as still to come, the same guess the team totals make.
+  const state=!known?(points>0?'scored':'unknown'):!game?'bye':game.state==='post'?'done':game.state==='pre'?'pre':'live',left=state==='pre'||state==='unknown'?1:state==='scored'?.5:state==='live'?gameRemaining(game):0;
   return {id,points:round(points),projection:Number.isFinite(projection)?round(projection):null,heading:round(points+Math.max(0,projection||0)*left),state,game};
  };
  const sides=rosterIds.map(rosterId=>{
