@@ -244,6 +244,75 @@ test('with game status switched off the pages name the opponent and claim no clo
  assert.match((await draw('watch')).before,/NFL game status: ESPN/);
 })
 
+// Points on the board are not a game state. A starter with points has played some part of a game that
+// nothing here can see, so the week is what it has so far and the starters are counted by whether
+// they have scored. The word live belongs to the source that was switched off.
+test('with game status off the scoreboard counts points instead of calling the week live',async()=>{
+ const {DEFAULT_SITE,siteConfig}=await import('../dist/site.js');
+ const data=demo();
+ data.games={};
+ data.schedules=Object.fromEntries(Object.entries(data.schedules).map(([w,teams])=>[w,Object.fromEntries(Object.entries(teams).map(([team,g])=>[team,{opponent:g.opponent,source:'sleeper'}]))]));
+ start(data);
+ try{
+  S.site=siteConfig({sources:{espnScoreboard:false}});
+  const board=(await draw('scoreboard')).after;
+  assert.doesNotMatch(board,/\bLIVE\b/,'no tile, pill or label may call a week live on a guess');
+  assert.doesNotMatch(board,/Playing now|playing<|playing\b/,'nor say anyone is playing now');
+  assert.match(board,/WEEK 2 SO FAR/,'the week has points in it, and that is all it says');
+  assert.match(board,/<small> of \d+ starters with points<\/small>/,'the count it can actually make');
+  assert.match(board,/with points, \d+ without"/,'the meter says the same thing to a screen reader');
+  assert.match(board,/No points yet/,'and the legend stops naming states it does not have');
+  // The same rule one lineup at a time: a starter with points shows them, with no clock and nothing
+  // called live, and one without them still shows his projection.
+  const key=board.match(/data-open-game="([^"]+)"/)?.[1];
+  assert.ok(key,'a matchup can be opened');
+  S.openGame=key;
+  const lineups=(await draw('scoreboard')).after;
+  assert.match(lineups,/<small>points so far · [\d.]+ proj\.<\/small>/,'his points are what is known about him');
+  assert.doesNotMatch(lineups,/lu-clock/,'no clock, because there is none to read');
+  assert.doesNotMatch(lineups,/lu-live/,'and no starter is drawn as live');
+ }finally{S.site=DEFAULT_SITE;S.openGame=null}
+ // Switched on, the same demo says live again, so the switch is the only thing that word rests on.
+ start();
+ const on=(await draw('scoreboard')).after;
+ assert.match(on,/IS LIVE/);
+ assert.match(on,/class="pill live">LIVE · \d+ playing/);
+ assert.match(on,/Playing now/);
+})
+
+// A bye and a missing schedule are different facts and used to print the same words. A week whose
+// pairings arrived knows every game in it, so a team in none of them is on bye. Only a week that
+// received no pairings at all cannot tell.
+test('a bye reads as a bye, and only a week with no schedule is unavailable',async()=>{
+ const {DEFAULT_SITE,siteConfig}=await import('../dist/site.js');
+ const team='BUF';
+ const data=demo();
+ data.games={};
+ data.schedules=Object.fromEntries(Object.entries(data.schedules).map(([w,teams])=>[w,Object.fromEntries(Object.entries(teams).filter(([t])=>t!==team).map(([t,g])=>[t,{opponent:g.opponent,source:'sleeper'}]))]));
+ start(data);S.filter='all';
+ try{
+  S.site=siteConfig({sources:{espnScoreboard:false}});
+  const bye=(await draw('watch')).before;
+  assert.match(bye,/class="game-status ">BYE</,'the week is known and his team is in none of it');
+  assert.match(bye,/On bye this week/);
+  assert.doesNotMatch(bye,/Schedule unavailable/,'nothing here is unavailable, so nothing says it is');
+  assert.doesNotMatch(bye,/NO GAME/);
+  // The week's projections never arrived, so its pairings never did either.
+  delete S.data.schedules[S.data.week];
+  const nothing=(await draw('watch')).before;
+  assert.match(nothing,/class="game-status ">NO GAME</,'now it genuinely does not know');
+  assert.match(nothing,/Schedule unavailable/);
+  assert.doesNotMatch(nothing,/>BYE</,'and it does not call that a bye');
+ }finally{S.site=DEFAULT_SITE}
+ // With game status on, ESPN's scoreboard covers the week the same way, so a team it does not list
+ // is on bye rather than a hole.
+ const live=demo();delete live.games[team];
+ start(live);S.filter='all';
+ const on=(await draw('watch')).before;
+ assert.match(on,/class="game-status ">BYE</,'a bye is a bye with the switch on too');
+ assert.doesNotMatch(on,/Schedule unavailable/);
+})
+
 test('a correction says so on the number it moved, and the manage view can take it back',async()=>{
  const {lens,removeOverride,setOverride}=await import('../dist/ui/overrides.js');
  const {fmt,sleeperValue,value}=await import('../dist/ui/core.js');
