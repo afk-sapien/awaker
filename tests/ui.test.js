@@ -313,6 +313,56 @@ test('a bye reads as a bye, and only a week with no schedule is unavailable',asy
  assert.doesNotMatch(on,/Schedule unavailable/);
 })
 
+// Playing now, Up next and Final sort players by the state of their game, so with no source for that
+// state they can never match and the header's count of live games is always nought. Both were the
+// watchroom claiming a game state it had no way to know, the same fault as the scoreboard's LIVE week.
+test('with game status off the watchroom offers only the filters it can fill',async()=>{
+ const {DEFAULT_SITE,siteConfig}=await import('../dist/site.js');
+ const {watchFilter,watchTally,watchedPlayers}=await import('../dist/ui/pages/watchroom.js');
+ const team='BUF',data=demo(),cardCount=html=>(html.match(/class="player-card/g)||[]).length;
+ data.games={};
+ data.schedules=Object.fromEntries(Object.entries(data.schedules).map(([w,teams])=>[w,Object.fromEntries(Object.entries(teams).filter(([t])=>t!==team).map(([t,g])=>[t,{opponent:g.opponent,source:'sleeper'}]))]));
+ start(data);
+ try{
+  S.site=siteConfig({sources:{espnScoreboard:false}});
+  S.filter='live';
+  const off=(await draw('watch')).before;
+  assert.equal(watchFilter(),'all','a filter saved with the switch on resolves to one that can match');
+  assert.doesNotMatch(off,/playing now/i,'no count of live games, because none of them is known');
+  assert.doesNotMatch(off,/No live games/);
+  for(const gone of ['auto','live','upcoming','done'])assert.doesNotMatch(off,new RegExp(`data-filter="${gone}"`),gone);
+  assert.match(off,/\d+ with points so far · Every team/);
+  assert.match(off,/data-filter="all"[^>]*>All players</);
+  assert.match(off,/data-filter="scored"[^>]*>With points \(\d+\)</);
+  assert.match(off,/data-filter="quiet"[^>]*>No points yet \(\d+\)</);
+  assert.match(off,/data-filter="bye"[^>]*>On bye \(\d+\)</);
+  assert.match(off,/data-filter="pinned"/);
+  assert.match(off,/byes come from Sleeper/);
+  assert.doesNotMatch(off,/NFL game is in progress/);
+  // Each count is the number of cards its own filter shows, so a button cannot disagree with the grid.
+  const tally=watchTally(watchedPlayers());
+  assert.ok(tally.scored>0&&tally.quiet>0&&tally.bye>0,JSON.stringify(tally));
+  assert.equal(tally.scored+tally.quiet+tally.bye,cardCount(off),'every player lands in exactly one of them');
+  S.filter='scored';
+  assert.equal(cardCount((await draw('watch')).before),tally.scored);
+  S.filter='quiet';
+  assert.equal(cardCount((await draw('watch')).before),tally.quiet);
+  S.filter='bye';
+  const byes=(await draw('watch')).before;
+  assert.equal(cardCount(byes),tally.bye);
+  assert.equal((byes.match(/class="game-status ">BYE</g)||[]).length,tally.bye,'and the bye filter shows byes');
+ }finally{S.site=DEFAULT_SITE}
+ // With the switch on nothing moves: the game state filters are back and so is the count of live games.
+ start(demo());S.filter='scored';
+ const live=(await draw('watch')).before;
+ assert.equal(watchFilter(),'auto','and a filter saved with the switch off resolves back');
+ assert.match(live,/\d+ playing now · Every team/);
+ assert.match(live,/data-filter="live"[^>]*>Playing now \(\d+\)</);
+ for(const back of ['auto','upcoming','done'])assert.match(live,new RegExp(`data-filter="${back}"`),back);
+ for(const gone of ['scored','quiet','bye'])assert.doesNotMatch(live,new RegExp(`data-filter="${gone}"`),gone);
+ assert.match(live,/NFL game is in progress/);
+})
+
 test('a correction says so on the number it moved, and the manage view can take it back',async()=>{
  const {lens,removeOverride,setOverride}=await import('../dist/ui/overrides.js');
  const {fmt,sleeperValue,value}=await import('../dist/ui/core.js');

@@ -24,7 +24,9 @@ export function applyPreferences(prefs){
  S.waiverExcluded={add:Array.isArray(prefs.waiverExcluded?.add)?prefs.waiverExcluded.add:Array.isArray(prefs.waiverIncluded)?waiverPositions.filter(p=>!prefs.waiverIncluded.includes(p)):['K'],drop:Array.isArray(prefs.waiverExcluded?.drop)?prefs.waiverExcluded.drop:[]};
  S.waiverUpgradesOnly=prefs.waiverUpgradesOnly===true;S.waiverHorizon=['current','next','season'].includes(prefs.waiverHorizon)?prefs.waiverHorizon:'next';S.waiverEndWeek=prefs.waiverEndWeek===18?18:17;
  S.protectStarters=prefs.protectStarters!==false;S.samePositionDrops=prefs.samePositionDrops!==false;
- S.filter=['auto','all','live','upcoming','done','pinned'].includes(prefs.watchFilter)?prefs.watchFilter:'auto';
+ // The watchroom offers a different set of filters with game status off, and watchFilter resolves one
+ // saved in either mode, so both sets are kept here rather than dropped on load.
+ S.filter=['auto','all','live','upcoming','done','pinned','scored','quiet','bye'].includes(prefs.watchFilter)?prefs.watchFilter:'auto';
  // Bench players show unless switched off. The older "bench" preference defaulted to hidden and is no longer read.
  S.bench=prefs.showBench!==false;
  S.watchLeague=prefs.watchLeague||'all';
