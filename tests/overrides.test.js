@@ -85,6 +85,10 @@ test('a league named on a record is invisible elsewhere, and a season mismatch d
  assert.equal(lensOf([dated]).any,true);
  assert.equal(lensOf([dated],{season:2026}).any,true);
  assert.equal(lensOf([dated],{season:2025}).any,false);
+ // Sleeper hands the season out as a string and a stored record holds it as an integer, so the year
+ // is what is compared. A strict comparison here would hide every dated record from every lens.
+ assert.equal(lensOf([dated],{season:'2026'}).any,true);
+ assert.equal(lensOf([dated],{season:'2025'}).any,false);
  // Two records on one player cannot come from the editor, which edits in place, but a second agent
  // or a hand-edited store can produce them. The narrower scope wins, then the newer write.
  const pair=[record({league:'L1',note:'narrow',at:1}),record({note:'wide',at:9})];

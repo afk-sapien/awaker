@@ -237,6 +237,10 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
 .override-row-actions{display:flex;gap:7px;flex-shrink:0}
 .override-row-actions .secondary{padding:7px 11px;font-size:13px}
 .override-inert{opacity:.62}
+/* An agent's correction is marked down the side, so the owner can see at a glance which rows are
+   somebody else's reasoning without reading the source on every line. */
+.override-agent{border-left:3px solid var(--purple);padding-left:11px}
+#override-dialog>.eyebrow{display:block;margin:22px 0 2px}
 .override-form fieldset{border:1px solid var(--line);border-radius:9px;padding:14px 16px 4px;margin:0 0 14px}
 .override-form legend{font-size:12px;letter-spacing:1.4px;font-weight:700;color:var(--muted);padding:0 6px}
 .override-form label{display:block;font-size:14px;font-weight:600;margin-bottom:12px}

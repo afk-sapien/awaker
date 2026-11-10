@@ -57,8 +57,14 @@ test('MCP negotiates, validates tools, and preview calls cannot send notificatio
  const init=await handle({jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-11-25',clientInfo:{name:'test',version:'1'},capabilities:{}}});assert.equal(init.result.protocolVersion,'2025-11-25');
  assert.equal(await handle({jsonrpc:'2.0',method:'notifications/initialized'}),null);
  // Named rather than counted: a tool that reaches an agent unnoticed is the failure worth catching.
- const list=await handle({jsonrpc:'2.0',id:2,method:'tools/list'});assert.ok(list.result.tools.every(t=>t.annotations.readOnlyHint));
- assert.deepEqual(list.result.tools.map(t=>t.name),['get_status','find_trades','evaluate_trade','get_opportunities','preview_digest','get_news','get_snapshot','get_recap']);
+ const list=await handle({jsonrpc:'2.0',id:2,method:'tools/list'});
+ assert.deepEqual(list.result.tools.map(t=>t.name),['get_status','find_trades','evaluate_trade','get_opportunities','preview_digest','get_news','get_snapshot','set_override','get_recap']);
+ // Exactly one tool is announced as a write. A read-only hint on a tool that changes a projection
+ // would let a client batch it with the reads, which is the failure worth catching.
+ assert.deepEqual(list.result.tools.filter(t=>!t.annotations.readOnlyHint).map(t=>t.name),['set_override']);
+ assert.deepEqual(list.result.tools.filter(t=>t.annotations.destructiveHint).map(t=>t.name),['set_override']);
+ assert.ok(list.result.tools.every(t=>t.annotations.openWorldHint),'every tool reaches a provider or a store outside itself');
+ assert.match(init.result.instructions,/Nothing is ever written to Sleeper/);
  const bad=await handle({jsonrpc:'2.0',id:3,method:'tools/call',params:{name:'evaluate_trade',arguments:{}}});assert.equal(bad.error.code,-32602);
  const report=await handle({jsonrpc:'2.0',id:4,method:'tools/call',params:{name:'preview_digest',arguments:{period:'weekly'}}});assert.equal(report.result.structuredContent.period,'weekly');assert.deepEqual(calls,['digest']);
  // The name the client gave at initialize travels with every call it makes, because a correction has
@@ -164,6 +170,7 @@ test('the snapshot answers one league whole, says whose opinion moved each numbe
  // The agent names itself at the MCP handshake and the bridge forwards that name, so the header is
  // how the server knows whose opinion a record is.
  const read=(name='scout')=>fetch(base+'/api/v1/snapshot',{method:'POST',headers:{Authorization:`Bearer ${agent}`,'Content-Type':'application/json',...(name?{'X-Awaker-Agent':name}:{})},body:JSON.stringify({leagueId:league.league_id})}).then(r=>r.json())
+ const write=(body,name='scout')=>fetch(base+'/api/v1/overrides/set',{method:'POST',headers:{Authorization:`Bearer ${agent}`,'Content-Type':'application/json',...(name?{'X-Awaker-Agent':name}:{})},body:JSON.stringify(body)}).then(async r=>[r.status,await r.json()])
  try{
   const contract=contracts.find(c=>c.name==='get_snapshot')
   assert.deepEqual([contract.path,contract.method,contract.call],['/snapshot','POST','leagueSnapshot'])
@@ -189,8 +196,17 @@ test('the snapshot answers one league whole, says whose opinion moved each numbe
   assert.equal(before.players[moved].projection.correctedBy,null)
   assert.deepEqual(before.players[silent].projection,{points:null,sleeperPoints:null,correctedBy:null},'Sleeper having nothing is a null nobody asserted')
 
-  assert.equal(service.saveOverrides([{player:moved,points:{multiplier:.5},reason:'his snap count fell off a cliff',source:'agent:scout'},
-   {player:ruled,status:'Out',reason:'ruled out on the practice report',source:'owner'}]).length,2)
+  // The agent writes its own correction through the tool it is given, not through the owner's
+  // whole-list save, because that is the only write it has and the only one that stamps its name.
+  const [status,written]=await write({leagueId:league.league_id,playerId:moved,points:{multiplier:.5},reason:'his snap count fell off a cliff'})
+  assert.equal(status,200)
+  assert.deepEqual([written.action,written.correction.source,written.yours.youAre,written.yours.count,written.yours.limit],['added','agent:scout','agent:scout',1,50])
+  assert.equal(written.correction.until,week,'an agent correction expires at the end of the week it was reasoning about')
+  assert.equal(written.projection.points,Math.round(written.projection.sleeperPoints*50)/100,'the write answers with the number it just moved')
+  assert.deepEqual([service.overrides().find(r=>r.player===moved).league,written.projection.scoredIn.leagueId],[null,league.league_id],
+   'a league id chooses the scoring the answer quotes, and never scopes the record out of the lens every league view reads')
+  assert.equal(service.saveOverrides([{player:ruled,status:'Out',reason:'ruled out on the practice report'}]).length,1)
+  assert.equal(service.overrides().length,2,'the owner’s whole-list save keeps the agent’s record')
   const after=await read()
   assert.notEqual(after.overridesFingerprint,before.overridesFingerprint,'so a cached number can be told to be out of date')
   assert.equal(after.overridesFingerprint,after.overrides.fingerprint)
@@ -207,6 +223,91 @@ test('the snapshot answers one league whole, says whose opinion moved each numbe
   assert.equal(after.overrides.records.find(o=>o.player===ruled).mine,false,'and never that the owner’s is its own')
   assert.equal((await read('other-scout')).overrides.mine,0,'a different name owns none of them')
   assert.equal((await read(null)).overrides.youAre,'agent:unnamed','an agent token with no name is still an agent')
+
+  // And takes its own back, which needs no reason, after which the number is Sleeper's own again.
+  const [goneStatus,gone]=await write({leagueId:league.league_id,playerId:moved,remove:true})
+  assert.equal(goneStatus,200)
+  assert.deepEqual([gone.action,gone.correction,gone.yours.count],['removed',null,0])
+  const back=await read()
+  assert.equal(back.players[moved].projection.points,before.players[moved].projection.sleeperPoints,'the whole round trip leaves Sleeper’s number where it started')
+  assert.equal(back.players[moved].projection.correctedBy,null)
+  assert.notEqual(back.overridesFingerprint,after.overridesFingerprint,'and the fingerprint moves on the way back too')
+ }finally{await new Promise(r=>server.close(r));store.close()}
+})
+
+// The one write in the surface, held to its rules. An agent that can quietly take the owner's name,
+// outlive the week it was reasoning about, or fill the store is worse than no agent at all, so each
+// of those is a refusal with a reason the agent can act on rather than a silent success.
+test('set_override holds an agent to its own corrections, with a reason and an expiry',async()=>{
+ const store=openStore(':memory:'),at=Date.parse('2026-09-18T07:59:00Z'),data=fixture(at)
+ // The demo league knows 33 players and the per-agent cap is 50, so the directory is padded out: a
+ // cap no test can reach is a cap nobody has tested.
+ for(let i=0;i<60;i++)data.players[`9000${i}`]={full_name:`Spare ${i}`,position:'WR',team:'FA'}
+ const service=createService({store,provider:async()=>data,now:()=>at})
+ service.saveSettings({username:'example',sources:{espnNews:false}})
+ const worker=createWorker({store,service}),port=18478,base=`http://127.0.0.1:${port}`
+ const server=createHttpServer({service,worker,adminToken:owner,agentToken:agent,publicUrl:base,dist:resolve('dist')})
+ await new Promise(r=>server.listen(port,'127.0.0.1',r))
+ const week=data.week,spare=i=>`9000${i}`
+ const post=(body,{name='scout',token=agent}={})=>fetch(base+'/api/v1/overrides/set',{method:'POST',
+  headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json',...(name?{'X-Awaker-Agent':name}:{})},
+  body:JSON.stringify(body)}).then(async r=>[r.status,await r.json()])
+ try{
+  const contract=contracts.find(c=>c.name==='set_override')
+  assert.deepEqual([contract.path,contract.method,contract.write,contract.call],['/overrides/set','POST',true,'setOverride'])
+  assert.match(contract.description,/Nothing here is written to Sleeper/,'the caller is told that before it writes, not after')
+  assert.equal(contracts.filter(c=>c.write).length,1,'one tool writes')
+
+  const [noReason,why]=await post({playerId:spare(0),points:{delta:-3}})
+  assert.equal(noReason,400);assert.match(why.error,/Say why in reason/)
+  const [moves,nothing]=await post({playerId:spare(0),reason:'a hunch and nothing more'})
+  assert.equal(moves,400);assert.match(nothing.error,/has to move something/)
+  const [unknown,absentPlayer]=await post({playerId:'nobody',reason:'he is hurt',status:'Out'})
+  assert.equal(unknown,404);assert.match(absentPlayer.error,/never a name/)
+  // The source is the server's to stamp, so a payload has nowhere to put one.
+  const [claimed,refused]=await post({playerId:spare(0),reason:'stamping my own name',points:{delta:-3},source:'owner'})
+  assert.equal(claimed,400);assert.match(refused.error,/Unknown input field/)
+
+  const [ok,first]=await post({playerId:spare(0),reason:'his snap count fell off a cliff',points:{delta:-3}})
+  assert.equal(ok,200)
+  assert.deepEqual([first.action,first.correction.source,first.correction.note,first.correction.reason,first.correction.until],
+   ['added','agent:scout','his snap count fell off a cliff','his snap count fell off a cliff',week])
+  assert.ok(first.limitations.some(line=>/written to Sleeper/.test(line)),'and says so in the answer as well')
+  // Its own record is its to change, and changing it is not blocked by its own cap.
+  const [again,changed]=await post({playerId:spare(0),reason:'worse than I thought',points:{delta:-5},until:week+1})
+  assert.equal(again,200)
+  assert.deepEqual([changed.action,changed.previous.note,changed.correction.until],['updated','his snap count fell off a cliff',week+1])
+
+  // Another agent's record is not.
+  const [rival,theirs]=await post({playerId:spare(0),reason:'I disagree with scout',points:{delta:1}},{name:'rival'})
+  assert.equal(rival,403);assert.match(theirs.error,/belongs to agent:scout/)
+  // Nor is the owner's, ever.
+  assert.equal(service.saveOverrides([{player:spare(1),status:'Out',reason:'ruled out on the practice report'}]).length,1)
+  assert.equal(service.overrides().length,2,'and the owner’s whole-list save kept the agent’s record')
+  const [ownersRow,ownersError]=await post({playerId:spare(1),reason:'he looked fine in warmups',points:{delta:2}})
+  assert.equal(ownersRow,403);assert.match(ownersError.error,/the owner/)
+
+  // The owner may remove any of them, and needs no reason to.
+  const [ownerRemoves,ownerRemoved]=await post({playerId:spare(0),remove:true},{name:null,token:owner})
+  assert.equal(ownerRemoves,200)
+  assert.deepEqual([ownerRemoved.action,ownerRemoved.yours.youAre,ownerRemoved.yours.limit],['removed','owner',500])
+  assert.deepEqual(service.overrides().map(r=>r.player),[spare(1)])
+
+  // The per-agent cap, which is well under the 500 the store keeps in all.
+  for(let i=2;i<52;i++)assert.equal((await post({playerId:spare(i),reason:`number ${i} is hurt`,status:'Out'}))[0],200,`correction ${i}`)
+  const [capped,capError]=await post({playerId:spare(55),reason:'one too many',status:'Out'})
+  assert.equal(capped,409);assert.match(capError.error,/Keep your corrections to 50 or fewer/)
+  assert.equal((await post({playerId:spare(2),reason:'changed my mind about him',status:'Questionable'}))[0],200,'a change to one it already has is not a new one')
+  assert.equal((await post({playerId:spare(55),reason:'room for me now',status:'Out'},{name:'rival'}))[0],200,'and the cap is per agent, not shared')
+  assert.throws(()=>service.saveOverrides(Array.from({length:501},()=>({player:spare(0)}))),/500 or fewer/)
+
+  // One control takes back everything the agents wrote and leaves the owner's alone. It is the
+  // owner's alone, because an agent that could wipe the slate could hide what it had done.
+  assert.equal((await fetch(base+'/api/v1/overrides/agents',{method:'DELETE',headers:{Authorization:`Bearer ${agent}`}})).status,403)
+  const left=await fetch(base+'/api/v1/overrides/agents',{method:'DELETE',headers:{Authorization:`Bearer ${owner}`}}).then(r=>r.json())
+  assert.deepEqual(left.overrides.map(r=>r.player),[spare(1)],'the owner’s record is the only one left')
+  const [absent,none]=await post({playerId:spare(2),remove:true})
+  assert.deepEqual([absent,none.action,none.yours.count],[200,'absent',0],'taking back what is already gone is not an error')
  }finally{await new Promise(r=>server.close(r));store.close()}
 })
 test('daily digest persists occurrence across worker restart and coalesces missed dates',async()=>{
