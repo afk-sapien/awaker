@@ -8,8 +8,12 @@ import {contracts,validate} from './contracts.js';
 const versions=['2025-11-25','2025-06-18','2025-03-26'];
 // package.json ships beside server/ in the checkout, the image and the Python wheel.
 export const serverVersion=JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8')).version;
+// The client names itself at initialize and the bridge passes that name on, because a correction an
+// agent writes has to say which agent wrote it. It is a label the client chose, not a credential:
+// the token is what grants access, and the name only decides whose record this is.
+export const clientName=info=>{const name=typeof info?.name==='string'?info.name.trim().slice(0,40):'';return /^[\w .-]{1,40}$/.test(name)?name:null};
 export function createMcpHandler({call}){
- let initialized=false,ready=false;
+ let initialized=false,ready=false,client=null;
  return async message=>{
   const reply=result=>({jsonrpc:'2.0',id:message.id,result});
   const error=(code,text)=>({jsonrpc:'2.0',id:message?.id??null,error:{code,message:text}});
@@ -19,6 +23,7 @@ export function createMcpHandler({call}){
   if(message.method==='initialize'){
    if(!message.params?.protocolVersion||!message.params?.clientInfo||!message.params?.capabilities)return error(-32602,'Invalid initialize parameters');
    initialized = true
+   client = clientName(message.params.clientInfo)
    return reply({
     protocolVersion: versions.includes(message.params.protocolVersion) ? message.params.protocolVersion : versions[0],
     capabilities: {tools: {listChanged: false}},
@@ -32,7 +37,7 @@ export function createMcpHandler({call}){
   if(message.method==='tools/call'){
    const contract=contracts.find(c=>c.name===message.params?.name);if(!contract)return error(-32602,'Unknown tool');
    let input;try{input=validate(message.params.arguments??{},contract.inputSchema)}catch(e){return error(-32602,e.message)}
-   try{const result=await call(contract,input);return reply({content:[{type:'text',text:JSON.stringify(result)}],structuredContent:result})}catch(e){return reply({isError:true,content:[{type:'text',text:e.message}]})}
+   try{const result=await call(contract,input,client);return reply({content:[{type:'text',text:JSON.stringify(result)}],structuredContent:result})}catch(e){return reply({isError:true,content:[{type:'text',text:e.message}]})}
   }
   return error(-32601,'Method not found');
  };
@@ -41,9 +46,9 @@ export async function runMcp(){
  const base=new URL(setting(process.env,'API_URL')||'http://127.0.0.1:4173'),token=setting(process.env,'AGENT_TOKEN');
  if(base.username||base.password||base.pathname!=='/'||base.search||base.hash)throw Error('Use an API origin without credentials or a path.')
  if(base.protocol!=='https:'&&!(base.protocol==='http:'&&['localhost','127.0.0.1','[::1]'].includes(base.hostname)))throw Error('Use HTTPS or a loopback API URL.');
- const handler=createMcpHandler({call:async(c,input)=>{
+ const handler=createMcpHandler({call:async(c,input,client)=>{
   const url=new URL(`/api/v1${c.path}`,base);if(c.method==='GET')for(const [k,v]of Object.entries(input))url.searchParams.set(k,v);
-  const response=await fetch(url,{method:c.method,redirect:'error',headers:{...(token?{Authorization:`Bearer ${token}`}:{}),'Content-Type':'application/json'},body:c.method==='GET'?undefined:JSON.stringify(input),signal:AbortSignal.timeout(180000)});
+  const response=await fetch(url,{method:c.method,redirect:'error',headers:{...(token?{Authorization:`Bearer ${token}`}:{}),...(client?{'X-Awaker-Agent':client}:{}),'Content-Type':'application/json'},body:c.method==='GET'?undefined:JSON.stringify(input),signal:AbortSignal.timeout(180000)});
   const result = await readJsonResponse(response, 8 * 1024 * 1024)
   if (!response.ok) throw Error(result.error || `API error ${response.status}`)
   return result
