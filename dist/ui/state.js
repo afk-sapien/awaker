@@ -55,6 +55,9 @@ export const S={
  shopResult:null,
  shopRun:0,
  shopSearching:null,
+ // The ESPN news feed as fetched, once, for the whole page: {state,feed,at}. The reading of it is
+ // done on demand by dist/news.js, which the service and an agent call too.
+ news:null,
  scoreEvents:[],
  scoreScope:'',
  scoreTimer:undefined,

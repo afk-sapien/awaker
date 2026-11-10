@@ -5,6 +5,8 @@
 //
 // So the pages carry comment markers, this is the only thing that reads them, and a marker that goes
 // missing is an error here rather than a surprise in the output.
+import {SOURCE_SWITCHES} from './news.js'
+
 export const MARKERS = {headStart: 'awaker:head-start', headEnd: 'awaker:head-end', bodyEnd: 'awaker:body-end'}
 
 const comment = marker => `<!--${marker}-->`
@@ -57,15 +59,21 @@ export function injectHtml(html, {headStart = '', head = '', body = '', title, n
   return insert(out, MARKERS.headStart, headStart, 'after')
 }
 
-// dist/site.json, if whoever is hosting this writes one. A name and a list of links, and
-// deliberately nothing else: no script to load, no origin to add, no identifier, nothing that turns
-// a page nobody is being measured on into one they are. Adding any of that would have to get past
-// tests/origins.test.js, which is the point.
+// dist/site.json, if whoever is hosting this writes one. A name, a list of links, and a switch that
+// can only say no, and deliberately nothing else: no script to load, no origin to add, no
+// identifier, nothing that turns a page nobody is being measured on into one they are. Adding any of
+// that would have to get past tests/origins.test.js, which is the point.
+//
+// sources is the switch, and it is read in one direction only. A source listed there as false is off
+// for this deployment; nothing else in it is read, and no value of it can switch a source on, name a
+// new one, or point one somewhere else. So the file still cannot add an origin or a request: the
+// most a host can do with it is take one away, which is exactly what a host without ESPN's
+// permission needs. See SOURCES in news.js for the sources this covers.
 //
 // The file is read field by field and anything wrong is replaced by the default, so a typo in one
 // link cannot take the page down. A link is either a path on this origin or an https URL: no
 // javascript:, no data:, and no protocol-relative //host, which would silently be another site.
-export const DEFAULT_SITE = {name: 'Awaker', links: []}
+export const DEFAULT_SITE = {name: 'Awaker', links: [], sources: {}}
 export const SITE_FILE = 'site.json'
 const short = (value, limit) => typeof value === 'string' && value.trim() && value.trim().length <= limit ? value.trim() : null
 const safeHref = value => {
@@ -80,7 +88,12 @@ export function siteConfig(value) {
     const href = row && typeof row === 'object' ? safeHref(row.href) : null
     if (label && href) links.push({label, href})
   }
-  return {name: short(input.name, 40) || DEFAULT_SITE.name, links}
+  // Only an exact false counts, and only for a source that already exists, so a missing, misspelt or
+  // truthy entry leaves the deployment's own default alone.
+  const sources = Object.fromEntries(SOURCE_SWITCHES
+    .filter(key => input.sources && typeof input.sources === 'object' && input.sources[key] === false)
+    .map(key => [key, false]))
+  return {name: short(input.name, 40) || DEFAULT_SITE.name, links, sources}
 }
 
 // Optional, same origin, and small. Every way it can fail ends in today's defaults, including the

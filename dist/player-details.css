@@ -26,4 +26,9 @@
 .depth-cell .depth-target{font-size:10px;padding:2px;margin-bottom:6px;min-height:0}
 @media(max-width:600px){#player-dialog{padding:18px;width:calc(100vw - 16px);max-height:94dvh}.player-profile-heading{gap:12px}.player-profile-heading h2{font-size:27px}.player-totals{grid-template-columns:repeat(2,minmax(0,1fr));padding:16px}.player-controls{gap:10px}.player-external{align-items:flex-start;flex-direction:column}}
 .player-dialog-top{position:sticky;top:-28px;z-index:2;background:#fff;padding:12px 0}
+/* The condition and the headlines sit above the game log, because a reader opening a profile on
+   Sunday morning is asking whether the man plays before asking how he did in week 4. */
+.player-news{margin:16px 0 4px;padding:14px 16px;border:1px solid var(--line);border-radius:10px;background:#fbfcfc}
+.player-news h3{margin:0 0 6px;font-size:13px;letter-spacing:.3px;text-transform:uppercase;color:var(--muted)}
+.player-news .news-list{max-height:280px;overflow:auto;overscroll-behavior:contain}
 @media(max-width:600px){.player-dialog-top{top:-18px}}

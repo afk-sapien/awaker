@@ -198,3 +198,22 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
    as they are. */
 @media(pointer:coarse){.status-footer .site-link a{display:inline-flex;align-items:center;min-height:34px}@media(max-width:760px){.status-footer .site-link{display:block}.status-footer .site-link a{width:100%}}}
 .nav-count{margin-left:auto;min-width:20px;padding:1px 6px;border-radius:10px;background:var(--orange);color:#fff;font-size:11px;font-weight:700;line-height:18px;text-align:center}
+/* Player news. One list, used by the watchroom strip and by a player's profile, so a headline reads
+   the same in both. The strip scrolls at a fixed height rather than pushing the footnote off a phone
+   screen, and its summary is a thumb-sized row where the pointer is a thumb. */
+.news-list{list-style:none;margin:0;padding:0}
+.news-item{padding:8px 0;border-top:1px solid var(--line)}
+.news-item:first-child{border-top:0}
+.news-who{display:block;font-size:12px;font-weight:600;color:var(--ink);margin-bottom:2px}
+.news-head{margin:0;font-size:13px;line-height:1.45;color:var(--ink)}
+.news-head a{color:inherit;text-decoration:underline;text-decoration-color:color-mix(in srgb,currentColor 28%,transparent);text-underline-offset:3px}
+.news-head a:hover{color:var(--green);text-decoration-color:currentColor}
+.news-meta{margin:3px 0 0;font-size:11px;color:var(--muted)}
+.news-note{margin:4px 0 0;font-size:12px;color:var(--muted)}
+.news-strip{margin-top:14px;font-size:12px;color:var(--muted)}
+.news-strip summary{cursor:pointer;padding:6px 0}
+.news-strip>div{max-height:340px;overflow:auto;overscroll-behavior:contain}
+@media(pointer:coarse){.news-strip summary{min-height:34px;display:flex;align-items:center}}
+/* On a wide screen a designation is five words and the name belongs beside it, not above it: stacked,
+   twenty rows of three lines each is a column of mostly empty space. On a phone the stack is right. */
+@media(min-width:700px){.news-strip .news-item:has(.news-who){display:grid;grid-template-columns:minmax(110px,160px) 1fr;column-gap:14px;align-items:baseline}.news-strip .news-item .news-who{margin:0}.news-strip .news-item>:not(.news-who){grid-column:2}}

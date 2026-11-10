@@ -5,6 +5,8 @@ import {weekReview,moves} from '../dist/season.js';
 import {teamName} from '../dist/league.js';
 import {waiverWeeks} from '../dist/waivers.js';
 import {defaults,validateSettings,bad} from './settings.js';
+import {readNews,sourceEnabled} from '../dist/news.js';
+import * as api from '../dist/api.js';
 const name=(data,id)=>data.players[id]?.full_name||id;
 // The engines explain a refused trade or league with a plain Error. A TypeError and its kin are
 // bugs, so callers get a general message and the detail goes to the server log.
@@ -109,11 +111,29 @@ export function createService({store,provider,now=Date.now,username:pinned=''}){
   const complete=state.complete&&opps.complete&&trade.complete,sources=[...new Map([...state.sources,...opps.sources,...trade.sources].map(s=>[s.name,s])).values()];
   return {...state,generatedAt:now(),sources,complete,health:complete?'healthy':'degraded',warnings,period,actions,changes:changed.length,text};
  }
+ // Player news for the rosters in play. The read itself lives in dist/news.js, so this and the
+ // browser and the overrides that come later all see one shape. The ESPN fetch is only made when the
+ // source is on, and a failure is a warning rather than an error: Sleeper's conditions are the base
+ // and they still answer with ESPN unreachable or switched off.
+ async function news({leagueId,playerIds,limit=60}={}){
+  const d=await load(),ls=leagues(d,leagueId),warnings=[];
+  const ids=playerIds?.length?playerIds:aggregateWatch(ls,d.players,d.games).map(p=>p.id).slice(0,300);
+  let feed=null,fetchedAt=null;
+  if(sourceEnabled('espnNews',settings().sources)){
+   try{feed=await api.news();fetchedAt=store.at('cache:news')}catch(e){warnings.push(`ESPN league news: ${reason(e)}`)}
+  }
+  const read=readNews({players:d.players,feed,ids,limit,sources:settings().sources,fetchedAt,now:now()});
+  // newsSources, because envelope already carries sources for how fresh the data is.
+  return envelope(d,{news:read.items,players:read.players,newsSources:read.sources,counts:read.counts,window:read.window,
+   limitations:['Headlines and a link only. No article text is stored, shown or returned.',
+    'An ESPN article is joined to a player by ESPN’s athlete id where Sleeper carries one and by name otherwise, and every item reports which.',
+    'A condition comes from the player record in the last refresh, so it can trail the headlines. mayHaveMoved marks a player whose news is newer than his record.']},warnings);
+ }
  // The slimmed player directory from the last refresh, for a browser that would otherwise fetch 15 MB
  // of it from Sleeper. It never starts a refresh, so public traffic cannot reach Sleeper through it,
  // and it holds nothing but the public player list.
  const playerDirectory=()=>snapshot?.players&&Number.isFinite(snapshot.playersAt)?{at:snapshot.playersAt,players:snapshot.players}:null;
- return {settings,saveSettings,usernameLocked:()=>!!pinned,load,status,trades,evaluate,opportunities,recap,digest,envelope,playerDirectory,client:async(force=false,have=null)=>{const loaded=await load({force}),{outlook,...data}=loaded;
+ return {settings,saveSettings,usernameLocked:()=>!!pinned,load,status,trades,evaluate,opportunities,recap,digest,news,envelope,playerDirectory,client:async(force=false,have=null)=>{const loaded=await load({force}),{outlook,...data}=loaded;
   // The browser loads its own outlook, and it keeps the player directory it already has.
   if(have&&String(have)===String(data.playersAt))delete data.players;
   return {data,settings:settings()}}};

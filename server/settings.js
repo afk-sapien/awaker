@@ -1,4 +1,8 @@
-export const defaults={username:'',disabled:[],preferences:{},timezone:'America/Los_Angeles',daily:{enabled:false,time:'08:00'},weekly:{enabled:false,time:'08:00',day:2},alerts:{bench:false,benchMinGain:3,tradeHorizon:'season',waiverHorizon:'current',trades:false,waivers:false,minGain:3,waiverMinGain:3,improvement:2,cooldownHours:6,dailyCap:3,scanHours:6,quietStart:'22:00',quietEnd:'08:00'}};
+import {SOURCE_SWITCHES} from '../dist/news.js';
+// On by default for a self-hosted app, because the owner is the one deciding, and off is one PUT
+// away. A static host has no settings to PUT, so it says the same thing in dist/site.json instead.
+export const defaultSources=Object.fromEntries(SOURCE_SWITCHES.map(key=>[key,true]));
+export const defaults={username:'',disabled:[],preferences:{},sources:{...defaultSources},timezone:'America/Los_Angeles',daily:{enabled:false,time:'08:00'},weekly:{enabled:false,time:'08:00',day:2},alerts:{bench:false,benchMinGain:3,tradeHorizon:'season',waiverHorizon:'current',trades:false,waivers:false,minGain:3,waiverMinGain:3,improvement:2,cooldownHours:6,dailyCap:3,scanHours:6,quietStart:'22:00',quietEnd:'08:00'}};
 export const scanIntervals=[1,3,6,12,24];
 export function bad(message,status=400){return Object.assign(new Error(message),{status})}
 const object=v=>v&&typeof v==='object'&&!Array.isArray(v);
@@ -25,6 +29,11 @@ export function validateSettings(input,previous=defaults){
  if(typeof s.timezone!=='string'||s.timezone.length>100)throw bad('Invalid timezone.')
  try{new Intl.DateTimeFormat('en',{timeZone:s.timezone}).format()}catch{throw bad('Invalid timezone.')}
  if('preferences'in input)s.preferences=preferences(input.preferences);
+ s.sources={...defaultSources,...s.sources};
+ if('sources'in input){
+  if(!object(input.sources)||Object.keys(input.sources).some(k=>!SOURCE_SWITCHES.includes(k))||Object.values(input.sources).some(v=>typeof v!=='boolean'))throw bad('Unknown news source setting.');
+  s.sources={...s.sources,...input.sources};
+ }
  for(const key of ['daily','weekly'])if(key in input){if(!object(input[key])||Object.keys(input[key]).some(k=>!['enabled','time',...(key==='weekly'?['day']:[])].includes(k)))throw bad('Invalid schedule.');s[key]={...s[key],...input[key]}}
  for(const key of ['daily','weekly'])if(typeof s[key].enabled!=='boolean'||!time(s[key].time))throw bad('Invalid schedule time.');
  if(!Number.isInteger(s.weekly.day)||s.weekly.day<0||s.weekly.day>6)throw bad('Invalid weekday.');

@@ -2,6 +2,7 @@ import {playerHistory} from '../api.js'
 import {projected} from '../engine.js'
 import {S} from './state.js'
 import {$,esc,fmt,injury,league,pname,playerPortrait} from './core.js'
+import {ensureNews,playerNewsHTML} from './news.js'
 import {profileSignals} from './scouting.js'
 
 const STANDARD={rec_yd:.1,rec_td:6,rush_yd:.1,rush_td:6,pass_yd:.04,pass_td:4,pass_int:-2,fum_lost:-2,sack:1,int:2,fum_rec:2,def_td:6,pts_allow_14_20:1}
@@ -97,6 +98,7 @@ export function playerDetailsHTML(state){
  <div class="player-profile-heading">${playerPortrait(id,player)}<div><h2 id="player-title">${esc(name)}</h2><p class="muted">${esc(player.team||'FA')} · ${esc(player.position||'Player')}${injury(player)}</p></div></div>
  <div class="player-controls"><label>Season<select class="select" id="player-season">${seasons.map(y=>`<option value="${y}" ${y===season?'selected':''}>${y}</option>`).join('')}</select></label><label>Scoring<select class="select" id="player-scoring">${enabled.map(l=>`<option value="league:${esc(l.league_id)}" ${mode==='league'&&l.league_id===leagueId?'selected':''}>${esc(l.name)}</option>`).join('')}${[['ppr','PPR'],['half','Half PPR'],['standard','Standard']].map(([key,label])=>`<option value="${key}" ${mode===key?'selected':''}>${label}</option>`).join('')}</select></label></div>
  <p class="muted small">${source} · ${season}${S.data.demo?' · Not actual player results':''}</p>
+ ${playerNewsHTML(id)}
  <section aria-busy="${loading}">${content}</section><div class="player-external"><a class="secondary" href="${search}" target="_blank" rel="noopener noreferrer">Find ${esc(name)} stats & news ↗</a><a href="https://sleeper.com/nfl/players" target="_blank" rel="noopener noreferrer">Sleeper player directory ↗</a></div>`
 }
 
@@ -115,6 +117,9 @@ async function load(force=false){
  state.error=false
  state.rows=null
  draw()
+ // The news feed is fetched once for the whole page, so the second profile opened already has it.
+ // It is not awaited with the stats: a slow feed must not hold up the game log.
+ ensureNews().then(()=>{if(current===state)draw()})
  try{
   const rows=S.data.demo?sampleHistory(state.id,state.season):await playerHistory(state.id,state.season,{force})
   if(current!==state)return
