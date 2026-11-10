@@ -20,7 +20,12 @@ export const RULED_OUT=['Out','IR','PUP','Sus','Suspended'];
 export const ruledOut=player=>RULED_OUT.includes(player?.injury_status);
 // Never started, picked up or traded for: ruled out, or doubtful enough not to count on. Every list of statuses is this one.
 export const UNAVAILABLE=[...RULED_OUT,'Doubtful'];
-export function projected(stats,scoring){if(!stats)return null;let found=false,sum=0;for(const [key,mult]of Object.entries(scoring||{})){let value=stat(stats,key);if(!Number.isFinite(value))for(const alt of STAT_FALLBACKS[key]||[]){const base=stat(stats,alt);if(Number.isFinite(base)){value=Math.max(0,(STAT_OVERLAPS[alt]||[]).reduce((v,k)=>Number.isFinite(scoring[k])&&Number.isFinite(stats[k])?v-stats[k]:v,base));break}}if(Number.isFinite(value)&&Number.isFinite(mult)){sum+=value*mult;found=true;}}return found?Math.round(sum*100)/100:null;}
+// Sleeper hands back a league's entire scoring table, every category it does not use included, as a
+// zero. A category worth no points cannot be the evidence that a player has a projection at all: a
+// return man whose projection row holds nothing but kick-return yards would otherwise read as a
+// confident 0.00 instead of no projection, and a lineup built around him would call itself complete.
+// Only a category the league actually scores decides that, and zero stays a real answer when it is.
+export function projected(stats,scoring){if(!stats)return null;let found=false,sum=0;for(const [key,mult]of Object.entries(scoring||{})){if(!Number.isFinite(mult)||mult===0)continue;let value=stat(stats,key);if(!Number.isFinite(value))for(const alt of STAT_FALLBACKS[key]||[]){const base=stat(stats,alt);if(Number.isFinite(base)){value=Math.max(0,(STAT_OVERLAPS[alt]||[]).reduce((v,k)=>Number.isFinite(scoring[k])&&Number.isFinite(stats[k])?v-stats[k]:v,base));break}}if(Number.isFinite(value)){sum+=value*mult;found=true;}}return found?Math.round(sum*100)/100:null;}
 // Rectangular assignment (Hungarian algorithm): cost is rows x cols with rows <= cols, lowest total
 // wins, and the result is the column each row takes.
 export function assign(cost){

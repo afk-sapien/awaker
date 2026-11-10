@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {waiverWeeks,buildWaiverOutlook} from '../dist/waivers.js';
+import {readFileSync} from 'node:fs';
 
 function fixture(){
  const players=Object.fromEntries(['a','b','burst','steady'].map(id=>[id,{position:'RB',team:id==='burst'?'NYJ':'BUF'}]));
@@ -86,4 +87,16 @@ test('this week’s shortlist is built from what players can still score, not fr
  const data={week:2,user:{user_id:'u'},players,projections:{2:projections},games:{SUN:{state:'post'},MON:{state:'pre'}},trends:[]};
  const rows=waiverRows(data,league,{waiverExcluded:{add:[],drop:[]},protectStarters:false});
  const late=rows.find(r=>r.id==='late');assert.ok(late,'the player who can still help is looked at');assert.deepEqual([late.status,late.gain,late.drop],['upgrade',5,null]);assert.equal(rows[0].id,'late');
+});
+
+test('the waiver toolbar cannot push the page sideways on a phone',()=>{
+ // On a 390px wide phone the "Player to replace" select's longest option is wider than the panel it
+ // sits in, and a flex item defaults to its own min-content width, so the label reached 9px past the
+ // viewport and the whole waiver page scrolled sideways. Measured in a 390x844 browser against a real
+ // league: every other view fitted, this one did not.
+ const css=readFileSync(new URL('../dist/styles.css',import.meta.url),'utf8');
+ const rule=css.match(/\.waiver-toolbar label,\.recap-bar label\{[^}]*\}/)?.[0];
+ assert.ok(rule,'the toolbar label rule is still the one to constrain');
+ assert.match(rule,/min-width:0/,'so the label can shrink to its panel');
+ assert.match(css,/\.waiver-toolbar label \.select[^{]*\{[^}]*min-width:0/,'and so can the select inside it');
 });

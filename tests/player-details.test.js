@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {playerHistory} from '../dist/api.js'
+import {projected} from '../dist/engine.js'
 import {historyModel,historyChart,playerDetailsHTML,playerSeasons} from '../dist/ui/player-details.js'
 import {playerChip,playerLink} from '../dist/ui/core.js'
 import {S} from '../dist/ui/state.js'
@@ -71,6 +72,30 @@ test('profiles escape provider text and show clear loading, empty, and failure s
  assert.doesNotMatch(playerChip(id),/<img src=x/)
  assert.equal(playerLink('0'),'Empty slot')
  assert.match(playerLink('unknown'),/data-player="unknown"/)
+})
+
+test('the profile compares recent scoring with a projection on the same basis',()=>{
+ // In the PPR, half and standard columns recent scoring is Sleeper's own pts_ppr, pts_half_ppr and
+ // pts_std. Scoring the projection line ourselves instead compared two different bases and moved 51
+ // of about 395 week 10 rows by up to 1.31 points, which can flip the note about recent scoring
+ // running above the projection. The league column has no such total to read, so it stays computed.
+ S.data=demo()
+ S.data.demo=false
+ S.data.nfl.season='2026'
+ S.data.week=10
+ const id='4984'
+ S.data.players[id].position='QB'
+ S.data.projections={10:{[id]:{stats:{rec:5,rec_yd:50,pts_ppr:20,pts_half_ppr:17.5,pts_std:15}}}}
+ const rows=Object.fromEntries([7,8,9].map(week=>[week,{week,stats:{gp:1,rec:5,rec_yd:50,pts_ppr:20,pts_half_ppr:17.5,pts_std:15}}]))
+ const state={id,season:2026,mode:'ppr',leagueId:S.data.leagues[0].league_id,rows,loading:false,error:false}
+ const ppr=playerDetailsHTML(state)
+ assert.match(ppr,/projection: 0.0/,'20.0 a game against a 20.0 projection is no gap at all')
+ assert.doesNotMatch(ppr,/projection: \+10.0/,'and not the 10.0 the standard table scores that line at')
+ assert.match(playerDetailsHTML({...state,mode:'standard'}),/projection: 0.0/)
+ // A league column still scores both sides from the league's own settings.
+ const scoring=S.data.leagues[0].scoring_settings
+ assert.match(playerDetailsHTML({...state,mode:'league'}),/Recent scoring minus/)
+ assert.ok(Number.isFinite(projected(S.data.projections[10][id].stats,scoring)))
 })
 
 test('a delayed profile response cannot overwrite another season or a newly opened player',async()=>{

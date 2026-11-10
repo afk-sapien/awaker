@@ -131,6 +131,20 @@ test('everything except kickers still includes other positions and excludes mult
  assert.deepEqual(tradeCandidateIds(Object.keys(players),players,['K']),['qb','rb','te','def','lb']);
  assert.equal(waiverDropReason('multi',{players,value:()=>10,excludedDropPositions:['K']}),'Drop position excluded');
 });
+test('a category the league scores at zero cannot stand in for a projection',()=>{
+ // Sleeper returns a league's whole scoring table, the categories it does not use included, as zeros.
+ // These two lines are real week 10 projection rows for return men: a kick or punt return number and
+ // nothing else a league scores. Treating the zero category as proof of a projection turned them into
+ // a confident 0.00 points, and a lineup holding one still called itself complete.
+ const scoring={rec:1,rec_yd:.1,def_kr_yd:0,pr_yd:0}
+ assert.equal(projected({def_kr_yd:10.42,gp:1},scoring),null)
+ assert.equal(projected({pr:.06,pr_yd:.71,gp:1},scoring),null)
+ assert.equal(projected({rec:4,rec_yd:50,def_kr_yd:10},scoring),9,'a scored category still projects, and the zero one adds nothing')
+ assert.equal(projected({rec:0,rec_yd:0},scoring),0,'a real zero in a category the league scores is still a zero')
+ const r=optimize(['ret'],['WR'],{ret:{position:'WR',fantasy_positions:['WR']}},()=>projected({def_kr_yd:10,gp:1},scoring))
+ assert.equal(r.complete,false,'and no lineup is complete on a player with no projection')
+ assert.equal(r.ids[0],null)
+})
 test('a coarse 50-plus projection bucket still scores where a league splits 50-59 from 60-plus',()=>{
  // Sleeper projects one fgm_50p; nearly every league scores fgm_50_59 and fgm_60p separately, and
  // without the fallback the whole category scored nothing and every kicker projected ~1.4 light.

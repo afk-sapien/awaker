@@ -77,9 +77,18 @@ export function playerDetailsHTML(state){
  const search=`https://www.google.com/search?q=${encodeURIComponent(name+' NFL fantasy stats news')}`
  const source=S.data.demo?'Illustrative sample stats':'Sleeper regular season stats'
  const number=n=>Number.isFinite(n)?fmt(n):'N/A'
+ // In the PPR, half and standard columns recent scoring is read straight from Sleeper's own pts_ppr,
+ // pts_half_ppr and pts_std, so the projection it gets measured against has to come from the same
+ // column. Scoring the projection line ourselves instead put the two sides on different bases and
+ // moved 51 of about 395 week 10 rows by up to 1.31 points, enough to flip the note about recent
+ // scoring running above the projection. A league column has no such column to read, so it is scored.
+ const pointKey=({ppr:'pts_ppr',half:'pts_half_ppr',standard:'pts_std'})[mode]
+ const profileScoring=mode==='league'?l?.scoring_settings:{...STANDARD,rec:mode==='ppr'?1:mode==='half'?.5:0}
+ const thisWeek=S.data.projections[S.data.week]?.[id]?.stats
+ const weekProjection=season===Number(S.data.nfl.season)?(pointKey&&Number.isFinite(thisWeek?.[pointKey])?thisWeek[pointKey]:projected(thisWeek,profileScoring)):null
  const content=loading?'<p class="empty" role="status">Loading weekly stats…</p>':error?'<div class="empty" role="status"><h3>Stats are unavailable right now</h3><p>Try again, or use the links below for more stats and news.</p><button type="button" class="secondary" id="player-retry">Try again</button></div>':!model.weeks.some(w=>w.played)?'<div class="empty" role="status"><h3>No stats for this season</h3><p>Sleeper has no recorded games for this player yet. Try another season or the links below.</p></div>':`
   <dl class="player-totals">${[['Fantasy points',number(model.total)],['Points / game',number(model.average)],['Best week',number(model.best)],['Games with scores',String(model.scored.length)]].map(([label,value])=>`<div><dt>${label}</dt><dd>${value}</dd></div>`).join('')}</dl>
-  ${profileSignals(rows,mode==='league'?l?.scoring_settings:{...STANDARD,rec:mode==='ppr'?1:mode==='half'?.5:0},season===Number(S.data.nfl.season)?S.data.week:19,season===Number(S.data.nfl.season)?projected(S.data.projections[S.data.week]?.[id]?.stats,mode==='league'?l?.scoring_settings:{...STANDARD,rec:mode==='ppr'?1:mode==='half'?.5:0}):null,player.position,({ppr:'pts_ppr',half:'pts_half_ppr',standard:'pts_std'})[mode])}
+  ${profileSignals(rows,profileScoring,season===Number(S.data.nfl.season)?S.data.week:19,weekProjection,player.position,pointKey)}
   <h3>Weekly fantasy points</h3>${historyChart(model)}
   <p class="muted small">${esc(label)}${mode==='league'?'. Calculated using this league’s current scoring settings. Historical settings and commissioner overrides are not included.':'. Sleeper’s scoring totals.'} Games in progress may be incomplete. Missing scores are excluded from averages.</p>
   <div class="table-wrap player-game-log" tabindex="0" role="region" aria-label="Weekly player stats"><table><caption>${season} regular season game log</caption><thead><tr><th scope="col">Week</th><th scope="col">Opponent</th><th scope="col">Points</th>${fields.map(([,label])=>`<th scope="col">${label}</th>`).join('')}</tr></thead><tbody>${model.weeks.map(w=>`<tr><th scope="row">${w.week}</th><td>${w.opponent?`${w.away===true?'@ ':w.away===false?'vs ':''}${esc(w.opponent)}`:'N/A'}</td><td class="num"><strong>${w.played?number(w.points):'<span class="muted small">No stats</span>'}</strong></td>${fields.map(([key])=>`<td class="num">${w.played?(Number.isFinite(w.stats[key])?fmt(w.stats[key],Number.isInteger(w.stats[key])?0:1):'N/A'):'N/A'}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
