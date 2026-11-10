@@ -6,6 +6,7 @@ import {$,isLeagueView,isTradeView,named,toast} from './core.js';
 import {ensureTradeOutlook} from './outlook.js';
 import {ensureLeagueSeason} from './pages/league-outlook.js';
 import {ensureSeasonPage} from './pages/season-review.js';
+import {syncOverrides} from './overrides.js';
 import {ensureWaiverOutlook} from './pages/waiver-wire.js';
 import {observeScores} from './pages/watchroom.js';
 import {render} from './render.js';
@@ -18,7 +19,11 @@ export async function connect(username){if(S.serviceMode){location.href='/integr
 export async function refresh(full=false,force=false){
  if(S.serviceMode){if(S.busy)return;S.busy=true;try{const held=!S.data.demo&&S.data.playersAt?S.data:null,response=await fetch((force?'/api/v1/refresh':'/api/v1/client')+(held?`?players=${encodeURIComponent(held.playersAt)}`:''),{method:force?'POST':'GET',signal:AbortSignal.timeout(90000)});if(response.status===401){location.replace('/integrations.html');return}if(!response.ok)throw Error(named('Could not refresh from the Awaker service. It will try again shortly.'));const result=await response.json();
   // An unchanged directory is not sent again. Keeping the same object also keeps trade and waiver results, which are cached against it.
-  if(!result.data.players&&held)result.data.players=held.players;S.data=result.data;S.serviceSettings=result.settings;if(!S.data.leagues.some(l=>l.league_id===S.leagueId))S.leagueId=S.data.leagues[0]?.league_id;observeScores()}catch(e){toast(e.message)}finally{S.busy=false;render();if(isTradeView()&&S.data.leagues.some(l=>l.enabled))ensureTradeOutlook();if(S.view==='waivers'&&S.data.leagues.some(l=>l.enabled))ensureWaiverOutlook();if(S.view==='season')ensureSeasonPage();if(isLeagueView())ensureLeagueSeason()}return}
+  if(!result.data.players&&held)result.data.players=held.players;S.data=result.data;S.serviceSettings=result.settings;
+  // The service's copy of the owner's corrections is the authority once there is a service, so a
+  // second browser sees what the first one wrote and the digest and the dashboard agree.
+  if(Array.isArray(result.overrides)){S.overrides=result.overrides;S.overridesRev++}
+  syncOverrides();if(!S.data.leagues.some(l=>l.league_id===S.leagueId))S.leagueId=S.data.leagues[0]?.league_id;observeScores()}catch(e){toast(e.message)}finally{S.busy=false;render();if(isTradeView()&&S.data.leagues.some(l=>l.enabled))ensureTradeOutlook();if(S.view==='waivers'&&S.data.leagues.some(l=>l.enabled))ensureWaiverOutlook();if(S.view==='season')ensureSeasonPage();if(isLeagueView())ensureLeagueSeason()}return}
 
  if(S.busy||S.data.demo){if(S.data.demo)toast('Demo scores are illustrative. Connect Sleeper for live updates.');return}
  S.busy=true;let again=false;try{render();const current=S.data,userId=S.data.user.user_id,week=S.data.week,season=S.data.nfl.season,weeks=defenseWeeks(week);

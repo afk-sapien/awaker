@@ -6,6 +6,7 @@ import {teamName} from '../dist/league.js';
 import {waiverWeeks} from '../dist/waivers.js';
 import {defaults,validateSettings,bad} from './settings.js';
 import {readNews,sourceEnabled} from '../dist/news.js';
+import {createOverrides,normalise as normaliseOverride} from '../dist/overrides.js';
 import * as api from '../dist/api.js';
 const name=(data,id)=>data.players[id]?.full_name||id;
 // The engines explain a refused trade or league with a plain Error. A TypeError and its kin are
@@ -25,13 +26,44 @@ export function createService({store,provider,now=Date.now,username:pinned=''}){
  const settings=()=>{const saved=store.get('settings',structuredClone(defaults)),stored={...saved,alerts:{...defaults.alerts,...saved.alerts}};return pinned?{...stored,username:pinned}:stored};
  // saveSettings below rejects any attempt to report on a different account.
  function saveSettings(input){if(!input||typeof input!=='object'||Array.isArray(input))throw bad('Settings must be an object.');if(pinned&&'username'in input&&input.username!==pinned)throw bad('The Sleeper username is set by this server\'s configuration.');const previous=settings(),next=validateSettings(pinned?{...input,username:pinned}:input,previous);if(JSON.stringify(previous)===JSON.stringify(next))return next;store.set('settings',next);if(previous.username!==next.username){store.set('worker',{runs:{},reports:[],outbox:[],events:{},baselines:{},reset:0,day:'',count:0,lastScan:0,failures:0});}revision++;snapshot=null;analysisCache.clear();if(JSON.stringify([previous.username,previous.daily,previous.weekly,previous.timezone])!==JSON.stringify([next.username,next.daily,next.weekly,next.timezone]))store.set('scheduleReset',now());return next}
+ // The owner's corrections live beside the settings and are replaced as a whole list, which is what
+ // the dashboard sends: there is no partial edit to merge and no order to preserve. Bumping the
+ // revision is what makes every cached number recompute, since a correction changes the answer
+ // without changing anything Sleeper said.
+ const OVERRIDE_LIMIT=500;
+ let overrideRev=0,lensCache=new Map();
+ const overridesList=()=>{const stored=store.get('overrides',[]);return Array.isArray(stored)?stored:[]};
+ function overrides(season=null){
+  const key=`${overrideRev}:${season}`;
+  if(!lensCache.has(key)){lensCache=new Map([[key,createOverrides({overrides:overridesList(),season})]])}
+  return lensCache.get(key);
+ }
+ function saveOverrides(input){
+  const list=input&&typeof input==='object'&&!Array.isArray(input)?input.overrides:input;
+  if(!Array.isArray(list))throw bad('Overrides must be a list.');
+  if(list.length>OVERRIDE_LIMIT)throw bad(`Keep overrides to ${OVERRIDE_LIMIT} or fewer.`);
+  const next=list.map(record=>normaliseOverride(record,{now:now()}));
+  if(next.some(record=>!record))throw bad('Every override needs a Sleeper player id.');
+  store.set('overrides',next);overrideRev++;analysisCache.clear();
+  return next;
+ }
+ // The lens rides on the snapshot so that every engine reading it adjusts without being told, and it
+ // is attached on the way out rather than when the snapshot is built, because a correction saved
+ // between two refreshes has to take effect at once. Non-enumerable, so nothing serialises it to the
+ // browser or compares it as data.
+ function attach(data){
+  if(!data)return data;
+  const lens=overrides(data.nfl?.season??null);
+  if(data.overrides!==lens)Object.defineProperty(data,'overrides',{value:lens,configurable:true,enumerable:false});
+  return data;
+ }
  async function load({outlook=false,force=false}={}){
   const config=settings();if(!config.username)throw bad('Configure a Sleeper username in Integrations.',503);
-  if(!force&&snapshot&&now()-snapshot.updatedAt<60000&&(!outlook||snapshot.outlook))return snapshot;
+  if(!force&&snapshot&&now()-snapshot.updatedAt<60000&&(!outlook||snapshot.outlook))return attach(snapshot);
   if(pending){await pending;return load({outlook,force:false})}
   const rev=revision;
   pending=(async()=>{const data=await provider(config,{outlook,force});if(rev!==revision)throw bad('Settings changed during refresh. Retry.',409);snapshot=data;analysisCache.clear();store.set('lastSyncError',null);return data})().catch(e=>{store.set('lastSyncError',{at:now(),message:'Provider refresh failed; check account and connection.'});throw e});
-  try{return await pending}finally{pending=null}
+  try{return attach(await pending)}finally{pending=null}
  }
  function leagues(data,id){const permitted=data.leagues.filter(l=>l.enabled&&!settings().disabled.includes(l.league_id));if(id&&!permitted.some(l=>l.league_id===id))throw bad('League is unavailable or excluded.',404);return id?permitted.filter(l=>l.league_id===id):permitted}
  function envelope(data,result,warnings=[]){
@@ -41,11 +73,11 @@ export function createService({store,provider,now=Date.now,username:pinned=''}){
   const issues=[...data.errors,...sources.filter(s=>s.stale).map(s=>`${s.name} is stale`),...warnings];
   return {schemaVersion:1,generatedAt:now(),season:data.nfl.season,week:data.week,demo:data.demo,sources,complete:issues.length===0,dataComplete:dataIssues.length===0,health:issues.length?'degraded':'healthy',warnings:[...new Set(issues)],...result};
  }
- function model(data,l){if(!data.outlook?.weeks.length)throw bad('No remaining trade weeks.',422);if(data.outlook.errors.length)throw bad('Future projections or schedules are incomplete.',503);return buildSeasonModel({league:l,players:data.players,outlook:data.outlook})}
+ function model(data,l){if(!data.outlook?.weeks.length)throw bad('No remaining trade weeks.',422);if(data.outlook.errors.length)throw bad('Future projections or schedules are incomplete.',503);return buildSeasonModel({league:l,players:data.players,outlook:data.outlook,overrides:data.overrides})}
  async function status({leagueId}={}){const d=await load(),ls=leagues(d,leagueId);return envelope(d,{leagues:ls.map(l=>({id:l.league_id,name:l.name,rosterId:l.mine.roster_id,matchup:l.matchups.find(m=>m.roster_id===l.mine.roster_id)||null})),players:aggregateWatch(ls,d.players,d.games).map(p=>({id:p.id,name:name(d,p.id),team:p.player.team,injuryStatus:p.player.injury_status||null,game:p.game,leagues:p.appearances}))})}
  async function trades({leagueId,limit=10,positions}={},options={}){
   const d=await load({outlook:true,...options}),ls=leagues(d,leagueId),pref=settings().preferences,ideas=[],warnings=[];
-  const cachedKey=JSON.stringify([d.updatedAt,leagueId,limit,positions,pref]);if(analysisCache.has(cachedKey)){const cached=analysisCache.get(cachedKey);return envelope(d,{ideas:cached.ideas,filters:cached.filters,limitations:cached.limitations},cached.warnings)}
+  const cachedKey=JSON.stringify([d.updatedAt,d.overrides?.fingerprint,leagueId,limit,positions,pref]);if(analysisCache.has(cachedKey)){const cached=analysisCache.get(cachedKey);return envelope(d,{ideas:cached.ideas,filters:cached.filters,limitations:cached.limitations},cached.warnings)}
   for(const l of ls){try{const result=await findTradeIdeas(d,l,model(d,l),pref,{limit:positions?10000:limit});if(result.truncated)warnings.push(`${l.name}: search capped at 10000 pairs`);ideas.push(...result.ideas.filter(r=>!positions||r.get.some(id=>(d.players[id]?.fantasy_positions||[d.players[id]?.position]).some(p=>positions.includes(p)))).map(r=>({...r,type:'trade',leagueId:l.league_id,league:l.name,gain:tradeGains(r).a/r.weeks,send:r.give.map(id=>name(d,id)),receive:r.get.map(id=>name(d,id)),drop:(r.dropA||[]).map(id=>name(d,id))})))}catch(e){warnings.push(`${l.name}: ${reason(e)}`)}}
   ideas.sort((a,b)=>compareTradeIdeas(a,b,pref.tradeOwnBias??.15));
   const result=envelope(d,{ideas:ideas.slice(0,limit),filters:pref,limitations:['Expected-point estimates; no acceptance probabilities, draft picks, or dynasty valuation.']},warnings);
@@ -133,8 +165,8 @@ export function createService({store,provider,now=Date.now,username:pinned=''}){
  // of it from Sleeper. It never starts a refresh, so public traffic cannot reach Sleeper through it,
  // and it holds nothing but the public player list.
  const playerDirectory=()=>snapshot?.players&&Number.isFinite(snapshot.playersAt)?{at:snapshot.playersAt,players:snapshot.players}:null;
- return {settings,saveSettings,usernameLocked:()=>!!pinned,load,status,trades,evaluate,opportunities,recap,digest,news,envelope,playerDirectory,client:async(force=false,have=null)=>{const loaded=await load({force}),{outlook,...data}=loaded;
+ return {settings,saveSettings,overrides:overridesList,saveOverrides,usernameLocked:()=>!!pinned,load,status,trades,evaluate,opportunities,recap,digest,news,envelope,playerDirectory,client:async(force=false,have=null)=>{const loaded=await load({force}),{outlook,...data}=loaded;
   // The browser loads its own outlook, and it keeps the player directory it already has.
   if(have&&String(have)===String(data.playersAt))delete data.players;
-  return {data,settings:settings()}}};
+  return {data,settings:settings(),overrides:overridesList()}}};
 }

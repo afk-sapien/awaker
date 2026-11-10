@@ -101,8 +101,11 @@ function sourceNote(read) {
 export function playerNewsHTML(id) {
   const read = newsFor([id], 20), entry = read.players[String(id)]
   const items = read.items.filter(item => item.players.includes(String(id)))
+  // Where the feed says the designation may have moved, the owner is the only one who can settle it,
+  // so the offer to write a correction sits on that note. The button is a data attribute rather than
+  // an import, so this module stays clear of the editor.
   const moved = entry?.mayHaveMoved
-    ? `<p class="news-note attention">A headline below is newer than Sleeper’s record for ${esc(pname(id))}, so the designation above may have moved.</p>`
+    ? `<p class="news-note attention">A headline below is newer than Sleeper’s record for ${esc(pname(id))}, so the designation above may have moved. <button type="button" class="inline-btn" data-override-open="${esc(id)}">Correct it yourself</button></p>`
     : ''
   return `<section class="player-news"><h3>News and condition</h3>
    ${items.length ? `<ul class="news-list">${items.map(item => itemHTML(item)).join('')}</ul>` : '<p class="muted small">No designation on file and no recent headline naming this player.</p>'}

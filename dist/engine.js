@@ -15,6 +15,22 @@ export const STAT_OVERLAPS={fgm_50p:['fgm_60p']};
 const SHORT_MAKES=['fgm_0_19','fgm_20_29','fgm_30_39','fgm_40_49'];
 export const STAT_DERIVED={fgm_50p:s=>Number.isFinite(s.fgm)?Math.max(0,Math.round((s.fgm-SHORT_MAKES.reduce((t,k)=>t+(Number(s[k])||0),0))*100)/100):undefined,fgmiss:s=>Number.isFinite(s.fga)?Math.max(0,Math.round((s.fga-(Number(s.fgm)||0))*100)/100):undefined};
 const stat=(stats,key)=>Number.isFinite(stats[key])?stats[key]:STAT_DERIVED[key]?.(stats);
+// A projected stat line that cannot be true. A first down has to be gained on a play that happened, so a
+// quarterback cannot convert more first downs than he completes passes, and a receiver cannot convert more
+// than he catches. Sleeper's projected weeks hold both: measured against the 2026 week 11 feed, 22 of 9416
+// rows project more passing first downs than completions and 173 project more receiving first downs than
+// catches, against none of either in a finished week. Rushing is clean, which is what makes the other two
+// look like a projection pipeline fault rather than a rounding convention.
+//
+// Nothing here corrects a row. A league that scores first downs is being handed a number that is wrong by
+// an unknown amount, and guessing the right one would be inventing data. It is reported so the owner can
+// decide, and an override is how the decision gets recorded. A category the league does not score cannot
+// make a row suspect, for the same reason it cannot prove a projection.
+export const SUSPECT_STATS=[['pass_fd','pass_cmp','more passing first downs than completions'],['rec_fd','rec','more receiving first downs than catches'],['rush_fd','rush_att','more rushing first downs than carries']];
+export function suspectStats(stats,scoring=null){
+ if(!stats)return [];
+ return SUSPECT_STATS.filter(([key,limit])=>Number.isFinite(stats[key])&&Number.isFinite(stats[limit])&&stats[key]>stats[limit]&&(!scoring||(Number.isFinite(scoring[key])&&scoring[key]!==0))).map(([key,limit,reason])=>({key,limit,reason,value:stats[key],ceiling:stats[limit]}));
+}
 // Ruled out for the week: whatever he was projected, he will not play. Doubtful and Questionable players still might.
 export const RULED_OUT=['Out','IR','PUP','Sus','Suspended'];
 export const ruledOut=player=>RULED_OUT.includes(player?.injury_status);

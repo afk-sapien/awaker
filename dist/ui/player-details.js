@@ -3,6 +3,8 @@ import {projected} from '../engine.js'
 import {S} from './state.js'
 import {$,esc,fmt,injury,league,pname,playerPortrait} from './core.js'
 import {ensureNews,playerNewsHTML} from './news.js'
+import {overrideBlockHTML} from './override-editor.js'
+import {lens} from './overrides.js'
 import {profileSignals} from './scouting.js'
 
 const STANDARD={rec_yd:.1,rec_td:6,rush_yd:.1,rush_td:6,pass_yd:.04,pass_td:4,pass_int:-2,fum_lost:-2,sack:1,int:2,fum_rec:2,def_td:6,pts_allow_14_20:1}
@@ -86,7 +88,9 @@ export function playerDetailsHTML(state){
  const pointKey=({ppr:'pts_ppr',half:'pts_half_ppr',standard:'pts_std'})[mode]
  const profileScoring=mode==='league'?l?.scoring_settings:{...STANDARD,rec:mode==='ppr'?1:mode==='half'?.5:0}
  const thisWeek=S.data.projections[S.data.week]?.[id]?.stats
- const weekProjection=season===Number(S.data.nfl.season)?(pointKey&&Number.isFinite(thisWeek?.[pointKey])?thisWeek[pointKey]:projected(thisWeek,profileScoring)):null
+ // The profile reads the projection through the same adapter as every other page, so the signals
+ // under it are worked out from the corrected number rather than from Sleeper's own.
+ const weekProjection=season===Number(S.data.nfl.season)?lens().project(pointKey&&Number.isFinite(thisWeek?.[pointKey])?thisWeek[pointKey]:projected(thisWeek,profileScoring),id,S.data.week):null
  const content=loading?'<p class="empty" role="status">Loading weekly stats…</p>':error?'<div class="empty" role="status"><h3>Stats are unavailable right now</h3><p>Try again, or use the links below for more stats and news.</p><button type="button" class="secondary" id="player-retry">Try again</button></div>':!model.weeks.some(w=>w.played)?'<div class="empty" role="status"><h3>No stats for this season</h3><p>Sleeper has no recorded games for this player yet. Try another season or the links below.</p></div>':`
   <dl class="player-totals">${[['Fantasy points',number(model.total)],['Points / game',number(model.average)],['Best week',number(model.best)],['Games with scores',String(model.scored.length)]].map(([label,value])=>`<div><dt>${label}</dt><dd>${value}</dd></div>`).join('')}</dl>
   ${profileSignals(rows,profileScoring,season===Number(S.data.nfl.season)?S.data.week:19,weekProjection,player.position,pointKey)}
@@ -99,6 +103,7 @@ export function playerDetailsHTML(state){
  <div class="player-controls"><label>Season<select class="select" id="player-season">${seasons.map(y=>`<option value="${y}" ${y===season?'selected':''}>${y}</option>`).join('')}</select></label><label>Scoring<select class="select" id="player-scoring">${enabled.map(l=>`<option value="league:${esc(l.league_id)}" ${mode==='league'&&l.league_id===leagueId?'selected':''}>${esc(l.name)}</option>`).join('')}${[['ppr','PPR'],['half','Half PPR'],['standard','Standard']].map(([key,label])=>`<option value="${key}" ${mode===key?'selected':''}>${label}</option>`).join('')}</select></label></div>
  <p class="muted small">${source} · ${season}${S.data.demo?' · Not actual player results':''}</p>
  ${playerNewsHTML(id)}
+ ${overrideBlockHTML(id,l,S.data.week)}
  <section aria-busy="${loading}">${content}</section><div class="player-external"><a class="secondary" href="${search}" target="_blank" rel="noopener noreferrer">Find ${esc(name)} stats & news ↗</a><a href="https://sleeper.com/nfl/players" target="_blank" rel="noopener noreferrer">Sleeper player directory ↗</a></div>`
 }
 

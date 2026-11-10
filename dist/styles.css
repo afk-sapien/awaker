@@ -217,3 +217,38 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
 /* On a wide screen a designation is five words and the name belongs beside it, not above it: stacked,
    twenty rows of three lines each is a column of mostly empty space. On a phone the stack is right. */
 @media(min-width:700px){.news-strip .news-item:has(.news-who){display:grid;grid-template-columns:minmax(110px,160px) 1fr;column-gap:14px;align-items:baseline}.news-strip .news-item .news-who{margin:0}.news-strip .news-item>:not(.news-who){grid-column:2}}
+/* The owner's own corrections. The mark on an adjusted number is small on purpose, because it sits
+   inside a figure rather than beside it, and it carries Sleeper's own number in its title. Nothing
+   here is color alone: the mark is a glyph and the inert row is also labelled in words. */
+.adjusted{font-size:.85em;color:#6a5bab;cursor:help}
+.injury-clear{color:#2c5c46;background:#e3f2e8}
+.override-note{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin:-16px 0 20px}
+.override-block{border-top:1px solid var(--line);margin-top:14px;padding-top:14px}
+.override-block p{margin:0 0 8px}
+#override-dialog{width:min(680px,calc(100vw - 32px));max-width:680px;max-height:90dvh;padding:26px;overflow:auto;overscroll-behavior:contain;color:var(--ink)}
+.override-top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:10px}
+.override-top h2{margin:0}
+.override-top p{margin:4px 0 0}
+.override-compare{font-size:15px;font-weight:600;margin:0 0 14px}
+.override-list{list-style:none;margin:0 0 16px;padding:0}
+.override-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+.override-row-main{min-width:0}
+.override-row-main div{margin-top:3px}
+.override-row-actions{display:flex;gap:7px;flex-shrink:0}
+.override-row-actions .secondary{padding:7px 11px;font-size:13px}
+.override-inert{opacity:.62}
+.override-form fieldset{border:1px solid var(--line);border-radius:9px;padding:14px 16px 4px;margin:0 0 14px}
+.override-form legend{font-size:12px;letter-spacing:1.4px;font-weight:700;color:var(--muted);padding:0 6px}
+.override-form label{display:block;font-size:14px;font-weight:600;margin-bottom:12px}
+.override-form input,.override-form textarea,.override-form .select{display:block;width:100%;margin-top:5px}
+.override-form textarea{border:1px solid var(--line);border-radius:7px;padding:10px;resize:vertical;font:inherit}
+.override-form p{margin:0 0 12px}
+.override-picker{border-top:1px solid var(--line);padding-top:16px}
+.override-picker .search{width:100%}
+.override-results{list-style:none;margin:12px 0 0;padding:0;max-height:260px;overflow:auto;overscroll-behavior:contain}
+.override-results li{border-top:1px solid var(--line);padding:2px 0}
+.override-result{display:flex;align-items:baseline;gap:9px;width:100%;text-align:left;background:transparent;padding:9px 6px;border-radius:7px}
+.override-result:hover{background:#f0f5f2}
+@media(min-width:620px){.override-form{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}.override-form fieldset:last-of-type{grid-column:1/-1}}
+@media(max-width:600px){#override-dialog{padding:18px;width:calc(100vw - 16px);max-height:94dvh}.override-row{flex-direction:column}.override-row-actions{width:100%}.override-row-actions .secondary{flex:1}.override-note{margin-top:-8px}}
+@media(pointer:coarse){.override-result{min-height:44px}.override-row-actions .secondary{min-height:40px}}

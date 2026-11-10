@@ -1,7 +1,9 @@
 // Shared pieces every page draws with: escaping, number formats, icons, navigation and page chrome.
 import {projected,ruledOut} from '../engine.js';
+import {describePoints} from '../overrides.js';
 import {DEFAULT_SITE,rename} from '../site.js';
 import {S} from './state.js';
+import {lens} from './overrides.js';
 
 export const icon=(name)=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${({watch:'<rect x="3" y="4" width="18" height="14" rx="2"/><path d="m8 22 4-4 4 4M8 10h8M12 6v8"/>',waivers:'<path d="m3 17 6-6 4 3 8-10M15 4h6v6"/>',lineup:'<path d="M9 5h12M9 12h12M9 19h12M3 5h1M3 12h1M3 19h1"/>',trades:'<path d="M3 7h18m-5-5 5 5-5 5M21 17H3m5-5-5 5 5 5"/>','trade-builder':'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 12h8m-4-4v8"/>',defenses:'<path d="m12 2 8 4v6c0 5-8 10-8 10S4 17 4 12V6z"/>',season:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',scoreboard:'<rect x="3" y="3" width="18" height="7" rx="1.5"/><rect x="3" y="14" width="18" height="7" rx="1.5"/><path d="M7 6.5h6M7 17.5h4"/>',league:'<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3"/>',notifications:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10 21a2 2 0 0 0 4 0"/>',settings:'<path d="M3 6h18M3 12h18M3 18h18"/><circle cx="8" cy="6" r="2" fill="currentColor"/><circle cx="16" cy="12" r="2" fill="currentColor"/><circle cx="10" cy="18" r="2" fill="currentColor"/>'})[name]}</svg>`;
 export const nav=[['watch','Awaker watchroom'],['scoreboard','Around the league'],['waivers','Waiver wire'],['lineup','Start / sit'],['trades','Auto trades'],['trade-builder','Trade builder'],['defenses','Defense planner'],['season','Season review'],['league','League outlook'],['notifications','Notifications'],['settings','My leagues']];
@@ -28,11 +30,40 @@ export function playerLink(id,label=pname(id)){
 }
 // Before his game in the current NFL week, a player ruled out projects the zero he will score, not whatever Sleeper
 // still lists for him. Once it has kicked off the pregame projection is history, and other weeks are not his status's to decide.
-export function value(id,l=league(),w=S.data.week){const p=S.data.players[id];if(w===(S.data.nfl?.week??S.data.week)&&ruledOut(p)&&(S.data.games?.[p.team]?.state??'pre')==='pre')return 0;return projected(S.data.projections[w]?.[id]?.stats,l?.scoring_settings)}
+// An override is applied here too, and an owner ruling a player out withholds the number instead of
+// promising the zero Sleeper's own designation promises: see the head of dist/overrides.js. That is
+// why the adjusted value is taken first and the ruled-out zero only answers for Sleeper's status.
+export function value(id,l=league(),w=S.data.week){
+ const o=lens(),p=o.player(S.data.players,id,w)||S.data.players[id];
+ const adjusted=o.project(projected(S.data.projections[w]?.[id]?.stats,l?.scoring_settings),id,w);
+ if(adjusted===null&&o.find(id,w))return null;
+ if(w===(S.data.nfl?.week??S.data.week)&&ruledOut(p)&&(S.data.games?.[p.team]?.state??'pre')==='pre')return 0;
+ return adjusted;
+}
+// What Sleeper says about this week's projection, before the owner's correction, for showing beside
+// an adjusted number.
+export function sleeperValue(id,l=league(),w=S.data.week){return projected(S.data.projections[w]?.[id]?.stats,l?.scoring_settings)}
+// A marker on every number an override moved, with Sleeper's own figure in the title, so no adjusted
+// figure on the page can be mistaken for Sleeper's.
+export function adjustedMark(id,original=null,w=S.data.week){
+ const record=lens().find(id,w);
+ if(!record)return '';
+ const was=Number.isFinite(original)?`Sleeper projected ${fmt(original)}. `:'';
+ const how=[record.points?describePoints(record.points):'',record.status||'',record.note||''].filter(Boolean).join(' · ');
+ return ` <span class="adjusted" title="${esc(`${was}Your override: ${how||'applied'}`)}" aria-label="${esc(`Adjusted by you. ${was}${how}`)}">✎</span>`;
+}
 export const scoring=l=>l.scoring_settings?.rec===1?'PPR':l.scoring_settings?.rec===.5?'HALF PPR':l.scoring_settings?.rec===0||!l.scoring_settings?.rec?'STANDARD':'CUSTOM';
 export function leagueOptions(selected=S.leagueId,all=false){return (all?'<option value="all">All leagues</option>':'')+S.data.leagues.filter(l=>l.enabled).map(l=>`<option value="${esc(l.league_id)}" ${selected===l.league_id?'selected':''}>${esc(l.name)}</option>`).join('')}
 export function empty(title,body=''){return `<div class="empty"><h3>${esc(title)}</h3>${body?`<p>${esc(body)}</p>`:''}</div>`}
-export function pageHead(title,desc,actions=''){return `<div class="page-head"><div><div class="eyebrow">${S.data.demo?'EXPLORE THE DEMO':esc(S.data.user.username)+'’S PLAYBOOK'} · WEEK ${S.data.week}</div><h1>${title}</h1><p>${desc}</p></div>${actions}</div>`}
+// A total, an odds figure or a ranking cannot carry a marker of its own, because the correction is
+// buried in the arithmetic rather than printed. Every page says at the top how many of the owner's
+// corrections went into its numbers, and offers the one place they can be read and removed.
+export function overrideNote(){
+ const count=lens().count(S.data.week);
+ if(!count)return '';
+ return `<p class="override-note" role="status">${count===1?'One correction of your own is':`${count} corrections of your own are`} in these numbers. <button type="button" class="inline-btn" data-override-manage>See and remove ${count===1?'it':'them'}</button></p>`;
+}
+export function pageHead(title,desc,actions=''){return `<div class="page-head"><div><div class="eyebrow">${S.data.demo?'EXPLORE THE DEMO':esc(S.data.user.username)+'’S PLAYBOOK'} · WEEK ${S.data.week}</div><h1>${title}</h1><p>${desc}</p></div>${actions}</div>${overrideNote()}`}
 export function projectionNote(){
  const l=league(),available=Object.keys(S.data.projections[S.data.week]||{}).length;let missing=[];
  if(l){const keys=new Set(Object.values(S.data.projections[S.data.week]||{}).flatMap(p=>Object.keys(p.stats||{})));missing=Object.entries(l.scoring_settings||{}).filter(([k,v])=>v!==0&&!keys.has(k)).map(([k])=>k)}
@@ -63,4 +94,15 @@ export const ordinal=n=>`${n}${['th','st','nd','rd'][n%10>3||Math.floor(n/10)%10
 export const teamCell=(r,note='')=>`<th scope="row" class="team-cell ${r.mine?'mine':''}"><strong>${esc(r.team)}</strong>${r.mine?' <span class="pill you">YOU</span>':''}<div class="muted small">${[r.manager?esc(r.manager):'',note].filter(Boolean).join(' · ')}</div></th>`;
 export const oddsBar=(p,o,label)=>`<div class="odds" title="${esc(label)}"><span class="odds-track"><i style="width:${Math.round(p*100)}%"></i></span><strong>${chance(p,o)}</strong></div>`;
 // An injury designation, colored by how likely he is to play: red when ruled out, orange when doubtful, yellow when questionable.
-export function injury(player){const status=player?.injury_status;if(!status)return '';const tone=ruledOut(player)?'out':status==='Doubtful'?'doubtful':status==='Questionable'?'questionable':'other';return ` · <span class="injury injury-${tone}">${esc(status)}</span>`}
+// A row the lens has already patched carries its own record. One straight out of S.data.players does
+// not, so the id on it finds the record here and every caller shows an overridden designation without
+// being changed. Clearing a stale designation shows as Cleared, because something has to be there for
+// the owner to see the correction took.
+export function injury(player){
+ const record=player?.override||lens().find(player?.player_id,S.data.week);
+ const status=player?.injury_status||(record?.status&&record.status!=='Healthy'?record.status:'');
+ const mark=record&&(record.status||record.bodyPart)?adjustedMark(player?.player_id):'';
+ if(!status)return record?.status==='Healthy'?` · <span class="injury injury-clear">Cleared${mark}</span>`:'';
+ const tone=ruledOut({injury_status:status})?'out':status==='Doubtful'?'doubtful':status==='Questionable'?'questionable':'other';
+ return ` · <span class="injury injury-${tone}">${esc(status)}${mark}</span>`;
+}

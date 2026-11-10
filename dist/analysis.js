@@ -2,16 +2,24 @@ import {activeSlots,eligible,projected,optimize,availableIds,playableIds,tradeCa
 import {realismReasons,compareTradeIdeas,tradeGains} from './trades.js';
 import {teamName} from './league.js';
 import {buildWaiverOutlook} from './waivers.js';
+import {lensFor} from './overrides.js';
 export const unavailable=UNAVAILABLE;
+// The owner's corrections, carried on data so that every page and the service read the same ones
+// without threading an argument through. A caller that has never heard of overrides gets the no-op
+// lens and Sleeper's numbers unchanged. players() is the directory with any designation override
+// applied, which is what a decision is made on; data.players stays Sleeper's own so the page can
+// show what it said.
+const lens=data=>lensFor(data);
+const roster=data=>lens(data).players(data.players,data.week);
 export function lockedLineup(data,league){
  const ids=league.matchups.find(m=>m.roster_id===league.mine.roster_id)?.starters||league.mine.starters||[],locks={};
  ids.forEach((id,i)=>{const g=data.games[data.players[id]?.team];if(id&&id!=='0'&&g&&g.state!=='pre')locks[i]=id});
  return {ids,locks};
 }
 export function usableValue(data,league,id,locked=[]){
- const p=data.players[id],g=data.games[p?.team];
+ const o=lens(data),p=o.players(data.players,data.week)[id],g=data.games[p?.team];
  if(!locked.includes(id)&&(unavailable.includes(p?.injury_status)||g&&g.state!=='pre'))return null;
- return projected(data.projections[data.week]?.[id]?.stats,league.scoring_settings);
+ return o.project(projected(data.projections[data.week]?.[id]?.stats,league.scoring_settings),id,data.week);
 }
 // The best few at every position. One list by raw points filled up with quarterbacks and defenses and
 // never evaluated the tight end who would have started.
@@ -19,30 +27,33 @@ const shortlist=(ids,players,score,each=8)=>{const seen={};return [...ids].sort(
 const moveRank=r=>r.gain??(r.status==='bench'?r.benchGain-500:-999);
 export function waiverRows(data,league,prefs={}){
  const excluded=prefs.waiverExcluded||{add:['K'],drop:[]},slots=activeSlots(league),trending=new Map(data.trends.map(t=>[t.player_id,t.count]));
- const free=tradeCandidateIds(availableIds(league,data.players),data.players,excluded.add).filter(id=>slots.some(slot=>eligible(data.players[id],slot)));
- const roster=playableIds(league.mine),{ids,locks}=lockedLineup(data,league),fixed=Object.values(locks),values=new Map();
+ const o=lens(data),players=roster(data);
+ const free=tradeCandidateIds(availableIds(league,players),players,excluded.add).filter(id=>slots.some(slot=>eligible(players[id],slot)));
+ const own=playableIds(league.mine),{ids,locks}=lockedLineup(data,league),fixed=Object.values(locks),values=new Map();
  const value=id=>{if(!values.has(id))values.set(id,usableValue(data,league,id,fixed));return values.get(id)};
- const projection=id=>projected(data.projections[data.week]?.[id]?.stats,league.scoring_settings);
- const baseline=optimize(roster,slots,data.players,value,locks);
+ const projection=id=>o.project(projected(data.projections[data.week]?.[id]?.stats,league.scoring_settings),id,data.week);
+ const baseline=optimize(own,slots,players,value,locks);
  // Shortlisted by what a player can still score this week. By raw projection, players whose games are
  // over fill every spot from Sunday night on and the Monday pickup that would help is never looked at.
- const candidates=[...new Set([...free.filter(id=>trending.has(id)).sort((a,b)=>trending.get(b)-trending.get(a)).slice(0,30),...shortlist(free.filter(id=>value(id)!==null),data.players,value)])];
- return candidates.map(id=>({id,count:trending.get(id)||0,projection:projection(id),...waiverMove({id,roster,slots,dropId:prefs.waiverDropId||null,players:data.players,value,locked:locks,protectedIds:prefs.waiverProtected?.[`${data.user.user_id}:${league.league_id}`]||[],starterIds:prefs.protectStarters!==false?ids:[],capacity:league.roster_positions.filter(s=>!['IR','TAXI'].includes(s)).length,samePosition:prefs.samePositionDrops!==false,excludedDropPositions:excluded.drop,baseline})})).sort((a,b)=>moveRank(b)-moveRank(a)||b.count-a.count).slice(0,25);
+ const candidates=[...new Set([...free.filter(id=>trending.has(id)).sort((a,b)=>trending.get(b)-trending.get(a)).slice(0,30),...shortlist(free.filter(id=>value(id)!==null),players,value)])];
+ return candidates.map(id=>({id,count:trending.get(id)||0,projection:projection(id),...waiverMove({id,roster:own,slots,dropId:prefs.waiverDropId||null,players,value,locked:locks,protectedIds:prefs.waiverProtected?.[`${data.user.user_id}:${league.league_id}`]||[],starterIds:prefs.protectStarters!==false?ids:[],capacity:league.roster_positions.filter(s=>!['IR','TAXI'].includes(s)).length,samePosition:prefs.samePositionDrops!==false,excludedDropPositions:excluded.drop,baseline})})).sort((a,b)=>moveRank(b)-moveRank(a)||b.count-a.count).slice(0,25);
 }
 // The same pickup and drop held across a window of future weeks. Used by the waiver view and by
 // background alerts, so both rank a pickup the same way.
 export function futureWaiverRows(data,league,outlook,prefs={}){
  const excluded=prefs.waiverExcluded||{add:['K'],drop:[]},slots=activeSlots(league),trending=new Map(data.trends.map(t=>[t.player_id,t.count]));
- const model=buildWaiverOutlook({league,players:data.players,outlook,dropId:prefs.waiverDropId||null,protectedIds:prefs.waiverProtected?.[`${data.user.user_id}:${league.league_id}`]||[],starterIds:prefs.protectStarters!==false?lockedLineup(data,league).ids:[],excludedDropPositions:excluded.drop,samePosition:prefs.samePositionDrops!==false});
- const free=tradeCandidateIds(availableIds(league,data.players),data.players,excluded.add).filter(id=>slots.some(slot=>eligible(data.players[id],slot)));
- const candidates=[...new Set([...free.filter(id=>trending.has(id)).sort((a,b)=>trending.get(b)-trending.get(a)).slice(0,30),...shortlist(free.filter(id=>model.totals[id]>0),data.players,id=>model.totals[id])])];
+ const players=roster(data);
+ const model=buildWaiverOutlook({league,players,outlook,overrides:lens(data),dropId:prefs.waiverDropId||null,protectedIds:prefs.waiverProtected?.[`${data.user.user_id}:${league.league_id}`]||[],starterIds:prefs.protectStarters!==false?lockedLineup(data,league).ids:[],excludedDropPositions:excluded.drop,samePosition:prefs.samePositionDrops!==false});
+ const free=tradeCandidateIds(availableIds(league,players),players,excluded.add).filter(id=>slots.some(slot=>eligible(players[id],slot)));
+ const candidates=[...new Set([...free.filter(id=>trending.has(id)).sort((a,b)=>trending.get(b)-trending.get(a)).slice(0,30),...shortlist(free.filter(id=>model.totals[id]>0),players,id=>model.totals[id])])];
  return candidates.map(id=>({id,count:trending.get(id)||0,projection:model.totals[id],...model.evaluate(id)})).sort((a,b)=>moveRank(b)-moveRank(a)||b.count-a.count).slice(0,25);
 }
 export async function findTradeIdeas(data,league,model,prefs={}, {limit=20,maxPairs=10000,maxPackages=1000,packages=true,cancelled=()=>false}={}){
  const excluded=prefs.tradeExcluded||{give:['DEF'],get:['DEF']},minGain=prefs.tradeMinGain??0,maxGap=prefs.tradeMaxGap??1,bias=prefs.tradeOwnBias??.15;
  // Evaluate roster impact before value balance. A useful bench player can have
  // zero value above the single best free agent while still fixing another team.
- const candidate=(roster,side)=>tradeCandidateIds(playableIds(roster),data.players,excluded[side]).filter(id=>Number.isFinite(model.totals[id])&&model.totals[id]>0&&!unavailable.includes(data.players[id]?.injury_status));
+ const players=roster(data);
+ const candidate=(r,side)=>tradeCandidateIds(playableIds(r),players,excluded[side]).filter(id=>Number.isFinite(model.totals[id])&&model.totals[id]>0&&!unavailable.includes(players[id]?.injury_status));
  const own=candidate(league.mine,'give'),ideas=[],nearMisses=[],diagnostics={offeredPlayers:own.length,partners:0,incomplete:0,noMutualBenefit:0,waiverRejected:0,belowMinimum:0,valueFiltered:0,mutual:0,packages:0};let checked=0,truncated=false;
  const protectedA=prefs.waiverProtected?.[`${data.user?.user_id}:${league.league_id}`]||[],singles=new Map();
  // Judges one evaluated offer the same way whatever its size. Returns true when it is listed.
@@ -116,10 +127,10 @@ export async function findTradeIdeas(data,league,model,prefs={}, {limit=20,maxPa
 // trade search this does not require the trade to help you. Moving a player you are done with can cost
 // a little, and the page shows that honestly. The other team must still gain, or they have no reason to say yes.
 export async function shopPlayer(data,league,model,playerId,prefs={}, {perPartner=3,limit=12,cancelled=()=>false}={}){
- const excluded=prefs.tradeExcluded||{give:['DEF'],get:['DEF']},offers=[],market=[];let checked=0;
+ const excluded=prefs.tradeExcluded||{give:['DEF'],get:['DEF']},offers=[],market=[],players=roster(data);let checked=0;
  const name=partner=>teamName(league,partner.roster_id).team;
  for(const partner of league.rosters.filter(r=>r.roster_id!==league.mine.roster_id)){
-  const incoming=tradeCandidateIds(playableIds(partner),data.players,excluded.get).filter(id=>Number.isFinite(model.totals[id])&&model.totals[id]>0&&!unavailable.includes(data.players[id]?.injury_status));
+  const incoming=tradeCandidateIds(playableIds(partner),players,excluded.get).filter(id=>Number.isFinite(model.totals[id])&&model.totals[id]>0&&!unavailable.includes(players[id]?.injury_status));
   const found=[];let interest=null;
   for(const b of incoming){
    if(cancelled())return {cancelled:true};
@@ -143,15 +154,15 @@ export async function shopPlayer(data,league,model,playerId,prefs={}, {perPartne
 // Their gain stops being a sanity check and becomes the price: it has to be positive or they have no
 // reason to answer, and the cheapest offer that clears it is the one to open with.
 export async function acquirePlayer(data,league,model,playerId,prefs={},{limit=12,cancelled=()=>false}={}){
- const excluded=prefs.tradeExcluded||{give:['DEF'],get:['DEF']};
+ const excluded=prefs.tradeExcluded||{give:['DEF'],get:['DEF']},players=roster(data);
  const held=r=>[...(r.players||[]),...(r.reserve||[]),...(r.taxi||[])];
  const owner=(league.rosters||[]).find(r=>r.roster_id!==league.mine.roster_id&&held(r).includes(playerId));
  if(!owner)throw Error('He is not on another roster in this league.');
  // Trades are valued on the rosters that can start, so a parked player has nothing to compare.
  if((owner.reserve||[]).includes(playerId))throw Error('He is on their injured reserve, so there is no trade to value until he is activated.');
  if((owner.taxi||[]).includes(playerId))throw Error('He is on their taxi squad, so there is no trade to value until he is promoted.');
- const outgoing=tradeCandidateIds(playableIds(league.mine),data.players,excluded.give)
-  .filter(id=>Number.isFinite(model.totals[id])&&model.totals[id]>0&&!unavailable.includes(data.players[id]?.injury_status));
+ const outgoing=tradeCandidateIds(playableIds(league.mine),players,excluded.give)
+  .filter(id=>Number.isFinite(model.totals[id])&&model.totals[id]>0&&!unavailable.includes(players[id]?.injury_status));
  const offers=[];let lift=null,best=null,checked=0;
  for(const b of outgoing){
   if(cancelled())return {cancelled:true};

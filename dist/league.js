@@ -1,5 +1,6 @@
 import {projected,activeSlots,playableIds,SLOT_POSITIONS,ruledOut} from './engine.js';
 import {seasonLineup} from './trades.js';
+import {NO_OVERRIDES} from './overrides.js';
 
 // The whole league at once: what every team has scored, what every roster projects to score,
 // how this week is going, and a simulation of the rest of the schedule for playoff odds.
@@ -63,12 +64,12 @@ export function seasonSoFar({league,players,weeks}){
 }
 
 // The best lineup each roster can field, averaged over the weeks that have projections, so byes count.
-export function rosterOutlook({league,players,projections,weeks}){
+export function rosterOutlook({league,players,projections,weeks,overrides=NO_OVERRIDES}){
  const slots=activeSlots(league),usable=weeks.filter(w=>Object.keys(projections[w]||{}).length),out={};
  for(const roster of league.rosters){
   const byPosition=Object.fromEntries(POSITIONS.map(p=>[p,0]));let total=0;
   for(const week of usable){
-   const value=id=>projected(projections[week][id]?.stats,league.scoring_settings);
+   const value=id=>overrides.project(projected(projections[week][id]?.stats,league.scoring_settings),id,week);
    const lineup=seasonLineup(playableIds(roster),slots,players,value);
    total+=lineup.total;for(const id of lineup.ids)if(id)byPosition[bucket(players,id)]+=value(id)||0;
   }
@@ -156,14 +157,14 @@ export function winChance(a,b){
 }
 // This week for every team: points so far, where the score is heading, and how much is still to play.
 // current: this is the NFL's current week, the only one today's injury designations decide.
-export function liveWeek({league,players,projections={},games={},spread=24,current=true}){
+export function liveWeek({league,players:directory,projections={},games={},spread=24,current=true,week=null,overrides=NO_OVERRIDES}){
  // Without the NFL schedule nobody can be called finished: a starter with points is taken as halfway, the rest as yet to play.
- const teams={},known=Object.keys(games).length>0;
+ const teams={},known=Object.keys(games).length>0,players=overrides.players(directory,week);
  for(const m of league.matchups||[]){
   let open=0,planned=0,remaining=0;const counts={pre:0,live:0,done:0};let top=null;
   const starters=(m.starters||[]).filter(id=>players[id]);
   for(const id of starters){
-   const points=Number(m.players_points?.[id])||0,game=games[players[id].team],left=known?(game?gameRemaining(game):0):points?.5:1,plan=current&&ruledOut(players[id])&&(!game||game.state==='pre')?0:Math.max(0,projected(projections[id]?.stats,league.scoring_settings)||0);
+   const points=Number(m.players_points?.[id])||0,game=games[players[id].team],left=known?(game?gameRemaining(game):0):points?.5:1,plan=current&&ruledOut(players[id])&&(!game||game.state==='pre')?0:Math.max(0,overrides.project(projected(projections[id]?.stats,league.scoring_settings),id,week)||0);
    counts[!known?(points?'live':'pre'):!game||game.state==='post'?'done':game.state==='pre'?'pre':'live']++;
    planned+=plan;open+=plan*left;remaining+=left;
    if(points>0&&(!top||points>top.points))top={id,points};
@@ -182,11 +183,11 @@ export function liveWeek({league,players,projections={},games={},spread=24,curre
 // Both lineups of one matchup, slot by slot, the way Sleeper lays a matchup out: starters in lineup
 // order, then the bench, each with points so far, the pregame projection and where he is heading.
 export const SLOT_LABELS={FLEX:'FLX',SUPER_FLEX:'SF',REC_FLEX:'W/T',WRRB_FLEX:'W/R',IDP_FLEX:'IDP'};
-export function matchupDetail({league,players,projections={},games={},rosterIds,current=true}){
- const slots=activeSlots(league),known=Object.keys(games).length>0;
+export function matchupDetail({league,players:directory,projections={},games={},rosterIds,current=true,week=null,overrides=NO_OVERRIDES}){
+ const slots=activeSlots(league),known=Object.keys(games).length>0,players=overrides.players(directory,week);
  const line=(m,id)=>{
   if(!id||id==='0'||!players[id])return {id:null,points:0,projection:null,heading:0,state:'empty',game:null};
-  const points=Number(m.players_points?.[id])||0,game=games[players[id].team]||null,projection=current&&ruledOut(players[id])&&(!game||game.state==='pre')?0:projected(projections[id]?.stats,league.scoring_settings);
+  const points=Number(m.players_points?.[id])||0,game=games[players[id].team]||null,projection=current&&ruledOut(players[id])&&(!game||game.state==='pre')?0:overrides.project(projected(projections[id]?.stats,league.scoring_settings),id,week);
   const state=!known?'unknown':!game?'bye':game.state==='post'?'done':game.state==='pre'?'pre':'live',left=state==='pre'||state==='unknown'?1:state==='live'?gameRemaining(game):0;
   return {id,points:round(points),projection:Number.isFinite(projection)?round(projection):null,heading:round(points+Math.max(0,projection||0)*left),state,game};
  };
@@ -241,16 +242,16 @@ export function simulate({league,rating,standing,current=null,future=[],spread=2
 }
 
 // past: [{week, matchups}] before the current week. future: [{week, matchups}] after it, scores empty.
-export function leagueOutlook({league,players,past=[],future=[],currentWeek,isNflWeek=true,projections={},games={},runs=4000,rosterMemo=(weeks,compute)=>compute()}){
+export function leagueOutlook({league,players,past=[],future=[],currentWeek,isNflWeek=true,projections={},games={},runs=4000,rosterMemo=(weeks,compute)=>compute(),overrides=NO_OVERRIDES}){
  const shape=leagueShape(league),regular=currentWeek<shape.playoffStart;
- const first=seasonSoFar({league,players,weeks:past}),live=liveWeek({league,players,projections:projections[currentWeek],games,spread:weeklySpread(first),current:isNflWeek});
+ const first=seasonSoFar({league,players,weeks:past}),live=liveWeek({league,players,projections:projections[currentWeek],games,spread:weeklySpread(first),current:isNflWeek,week:currentWeek,overrides});
  // Once every game is final the current week is a result like any other.
  const closed=regular&&live.complete,finished=closed?[...past,{week:currentWeek,matchups:league.matchups}]:past,season=closed?seasonSoFar({league,players,weeks:finished}):first;
  const spread=weeklySpread(season),ahead=Object.keys(projections).map(Number).filter(w=>w>=currentWeek+(closed?1:0)&&w<=18).sort((a,b)=>a-b);
- const outlook=rosterMemo(ahead,()=>rosterOutlook({league,players,projections,weeks:ahead})),rating=ratings({season,outlook});
+ const outlook=rosterMemo(ahead,()=>rosterOutlook({league,players,projections,weeks:ahead,overrides})),rating=ratings({season,outlook});
 // Depth charts: what each player has scored a game, and what he projects to score in the weeks he plays.
  const scored=playerAverages(finished);
- const planned=id=>{const list=ahead.map(w=>projected(projections[w]?.[id]?.stats,league.scoring_settings)).filter(Number.isFinite);return list.length?mean(list):null};
+ const planned=id=>{const list=ahead.map(w=>overrides.project(projected(projections[w]?.[id]?.stats,league.scoring_settings),id,w)).filter(Number.isFinite);return list.length?mean(list):null};
  const depth={season:season.games?depthChart({league,players,value:id=>scored[id]??null}):null,roster:ahead.length?depthChart({league,players,value:planned}):null};
  const schedule=future.filter(w=>w.week>currentWeek&&w.week<shape.playoffStart).map(w=>({week:w.week,pairs:pairings(w.matchups)}));
  const current=regular&&!closed&&live.games.length?live:null;
@@ -266,7 +267,7 @@ export function leagueOutlook({league,players,past=[],future=[],currentWeek,isNf
  rows.sort((a,b)=>b.odds.playoff-a.odds.playoff||b.wins+b.ties/2-(a.wins+a.ties/2)||b.pf-a.pf||b.rating-a.rating);
  // What a what-if needs to replay the season with different rosters. Kept off the enumerable result so it is never serialised.
  const result={shape,rows,depth,weeks:season.weeks,games:season.games,live,current:!!current,closed,regular,spread,weeksLeft:schedule.length+(current?1:0),scheduledGames:schedule.reduce((n,w)=>n+w.pairs.length,current?current.games.length:0),projectedWeeks:ahead,runs};
- Object.defineProperty(result,'context',{value:{league,players,projections,ahead,season,outlook,standing,current,schedule,spread,ratingSpread,seed,baselines:new Map()}});
+ Object.defineProperty(result,'context',{value:{league,players,projections,ahead,season,outlook,standing,current,schedule,spread,ratingSpread,seed,overrides,baselines:new Map()}});
  return result;
 }
 
@@ -280,10 +281,10 @@ export function rosterOdds(result,changes,{runs=2000,horizon=null,memo=(key,comp
  const key=`${runs}:${horizon?.key??'near'}`,projections=horizon?.projections||c.projections,weeks=horizon?.weeks||c.ahead;
  const play=outlook=>simulate({league:c.league,rating:ratings({season:c.season,outlook}),standing:c.standing,current:c.current,future:c.schedule,spread:c.spread,ratingSpread:c.ratingSpread,runs,seed:c.seed});
  // Rating every roster over the horizon does not depend on live scores, so the caller may keep it.
- if(!c.baselines.has(key)){const outlook=horizon?memo(horizon.key,()=>rosterOutlook({league:c.league,players:c.players,projections,weeks})):c.outlook;c.baselines.set(key,{outlook,odds:play(outlook)})}
+ if(!c.baselines.has(key)){const outlook=horizon?memo(horizon.key,()=>rosterOutlook({league:c.league,players:c.players,projections,weeks,overrides:c.overrides})):c.outlook;c.baselines.set(key,{outlook,odds:play(outlook)})}
  const base=c.baselines.get(key),rosters=changes.map(({rosterId,add=[],remove=[]})=>{const roster=c.league.rosters.find(r=>r.roster_id===rosterId);return roster&&base.outlook[rosterId]?{...roster,players:(roster.players||[]).filter(id=>!remove.includes(id)).concat(add)}:null});
  if(!rosters.length||rosters.includes(null))return null;
- const moved=rosterOutlook({league:{...c.league,rosters},players:c.players,projections,weeks}),after=play({...base.outlook,...moved});
+ const moved=rosterOutlook({league:{...c.league,rosters},players:c.players,projections,weeks,overrides:c.overrides}),after=play({...base.outlook,...moved});
  return Object.fromEntries(changes.map(({rosterId:id})=>[id,{playoff:[base.odds[id].playoff,after[id].playoff],title:[base.odds[id].title,after[id].title],roster:[base.outlook[id].points,moved[id].points]}]));
 }
 export function tradeOdds(result,{partnerId,give,get,dropA=[],dropB=[]},options){

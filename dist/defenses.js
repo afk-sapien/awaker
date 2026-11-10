@@ -1,4 +1,5 @@
 import {projected,playableIds} from './engine.js';
+import {NO_OVERRIDES} from './overrides.js';
 
 export function defenseAvailability(league,players){
  const ids=r=>[...(r.players||[]),...(r.reserve||[]),...(r.taxi||[])];
@@ -15,13 +16,13 @@ export function defenseTone(delta){
  if(!Number.isFinite(delta))return 'unknown';
  return delta>=3?'strong':delta>=1?'good':delta<=-3?'poor':delta<=-1?'weak':'neutral';
 }
-export function defenseOutlook({players,projections,schedules,weeks,scoring}){
+export function defenseOutlook({players,projections,schedules,weeks,scoring,overrides=NO_OVERRIDES}){
  const ids=Object.keys(players).filter(id=>players[id].position==='DEF');
  return Object.fromEntries(weeks.map(week=>{
   const games=schedules[week],hasSchedule=!!games&&Object.keys(games).length>0;
   const rows=Object.fromEntries(ids.map(id=>{
    const team=players[id].team||id,bye=hasSchedule&&!games[team];
-   return [id,{bye,points:bye?0:projected(projections[week]?.[id]?.stats,scoring)}];
+   return [id,{bye,points:bye?0:overrides.project(projected(projections[week]?.[id]?.stats,scoring),id,week)}];
   }));
   // Compare with every projected NFL defense playing this week, including
   // defenses rostered by other managers. Byes are not streamable matchups.

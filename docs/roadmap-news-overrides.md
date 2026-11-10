@@ -60,7 +60,7 @@ as markup, which is already the rule the MCP adapter states to its clients.
 declared and `tests/origins.test.js` stays quiet. New tier one module `dist/news.js` for the join and
 the normalising. `dist/api.js` gains one cached fetch beside `trends`, ten minute TTL, since ESPN
 sends `max-age=1` and the feed moves slowly. `dist/ui/player-details.js` gains the section,
-`dist/ui/watch.js` the strip. The service gains a `get_news` contract in `server/contracts.js` and a
+`dist/ui/pages/watchroom.js` the strip. The service gains a `get_news` contract in `server/contracts.js` and a
 route in `server/service.js`. One new test file.
 
 **Smallest useful version:** `dist/news.js` plus the player dialog section, fed by one `news?limit=50`

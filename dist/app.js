@@ -8,6 +8,7 @@ import {DEFAULT_SITE,loadSiteFile,rename} from './site.js';
 import {S} from './ui/state.js';
 import {$,isLeagueView,isTradeView,nav,pname} from './ui/core.js';
 import {readPreferences,applyPreferences} from './ui/preferences.js';
+import {STORAGE_KEY,readOverrides,syncOverrides} from './ui/overrides.js';
 import {ensureTradeOutlook} from './ui/outlook.js';
 import {ensureLeagueSeason} from './ui/pages/league-outlook.js';
 import {ensureSeasonPage} from './ui/pages/season-review.js';
@@ -34,6 +35,11 @@ if(S.site.name!==DEFAULT_SITE.name){
 }
 let stored=null;try{stored=localStorage.getItem('sunday-preferences')}catch{}
 applyPreferences(readPreferences(stored,S.serviceMode?S.serviceSettings:null));
+// The owner's corrections are read from this device now, and the service's own copy replaces them on
+// the first client fetch. A static host has only this one.
+let storedOverrides=null;try{storedOverrides=localStorage.getItem(STORAGE_KEY)}catch{}
+S.overrides=readOverrides(storedOverrides);
+syncOverrides();
 try{S.themeId=getTheme(localStorage.getItem('sunday-theme')).id}catch{}
 applyTheme(S.themeId);
 bindEvents();

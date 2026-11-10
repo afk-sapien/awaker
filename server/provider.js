@@ -9,7 +9,10 @@ import * as api from '../dist/api.js';
 // reason: it is the exact key from an ESPN article to a player, and it cannot be recovered later.
 // Measured on the live directory, the seven added fields cost about 170 KB raw across 3300 players,
 // most of it news_updated, against a file that was already near 500 KB.
-const FIELDS=['full_name','first_name','last_name','position','fantasy_positions','team','number','injury_status','active',
+// player_id repeats the key of the row it sits on, which is what lets a row carry its own identity
+// once it has been handed to a function on its own: an owner's override is found by id, and the
+// injury pill is drawn from a player object with no id beside it in a dozen places.
+const FIELDS=['player_id','full_name','first_name','last_name','position','fantasy_positions','team','number','injury_status','active',
  'espn_id','news_updated','injury_body_part','injury_notes','injury_start_date','practice_participation','practice_description'];
 // status is Active for 2876 of 3317 and names a retirement for most of the rest, so it is kept only
 // where it says something about a player who could be picked up: on a team, and not Active.

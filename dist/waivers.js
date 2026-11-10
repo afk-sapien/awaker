@@ -1,5 +1,6 @@
 import {activeSlots,playableIds,waiverDropReason,eligible,benchMove,BENCH_MARGIN,filledSlots,betterMove,UNAVAILABLE} from './engine.js';
 import {futurePoints,seasonLineup} from './trades.js';
+import {NO_OVERRIDES} from './overrides.js';
 
 export function waiverWeeks(week,horizon,endWeek=17){
  if(horizon==='current')return [week];
@@ -9,10 +10,11 @@ export function waiverWeeks(week,horizon,endWeek=17){
 
 // A pickup and its chosen drop are held for the entire window. Re-optimize each
 // week's lineup, never invent a different drop or extra waiver move each week.
-export function buildWaiverOutlook({league,players,outlook,protectedIds=[],starterIds=[],excludedDropPositions=[],samePosition=true,dropId=null}){
+export function buildWaiverOutlook({league,players:directory,outlook,overrides=NO_OVERRIDES,protectedIds=[],starterIds=[],excludedDropPositions=[],samePosition=true,dropId=null}){
  const weeks=outlook.weeks,slots=activeSlots(league),roster=playableIds(league.mine),values={},totals={};
+ const players=overrides.players(directory,weeks[0]??null);
  for(const id of Object.keys(players)){
-  values[id]=weeks.map(w=>futurePoints(id,outlook.data[w],players,league.scoring_settings));
+  values[id]=weeks.map(w=>futurePoints(id,outlook.data[w],players,league.scoring_settings,overrides,w));
   totals[id]=weeks.length&&values[id].every(Number.isFinite)?values[id].reduce((s,v)=>s+v,0):null;
  }
  const lineup=(ids,i)=>seasonLineup(ids,slots,players,id=>values[id]?.[i]??null);
