@@ -1,5 +1,68 @@
 # Changelog
 
+## 0.8.0
+
+- A player's news and condition, from Sleeper always and ESPN by choice. One module reads them, so
+  the page, the service route and the AI surface all say the same thing. Sleeper's record carries the
+  injury status, the body part, the note and when it last moved, and works with every other source
+  off. ESPN league news is a second source behind a switch, on by default for a self-hosted app and
+  removable in site.json, and it carries a headline, a source, a time and a link out, never an
+  article body. A headline is joined to a player by Sleeper's espn_id first and a normalised name
+  second, over players on a team, and each item reports which of the two found it. A name held by two
+  players resolves to neither. Two places read it: the News and condition section of a player
+  profile, and a roster strip in the watchroom whose summary is worth reading closed.
+- The owner can correct a projection, and every number worked out from it moves. One record against
+  a Sleeper player id, applied by one adapter, so a single correction moves the lineup, the start and
+  sit call, the waiver rows, the defense plan and the trade model together. A correction can set the
+  projected points as a multiplier and a delta, the designation, the body part, the roster status, a
+  note and the weeks it applies to. Ruling a player out withholds the projection rather than
+  promising a zero. Every adjusted number is marked and carries Sleeper's own figure beside it, every
+  page says how many corrections went into its numbers, and one view reads and removes them all. A
+  finished week is still graded against what was projected before kickoff.
+- An agent can read one league whole. get_snapshot answers what used to take six calls: the league
+  and what it scores, every roster, the lineup the optimizer would start, this week's matchup, the
+  news, the corrections in force with who wrote each one, and the age of every part separately. Every
+  projection travels as points, Sleeper's own points and who moved it, so an agent that wrote a
+  correction cannot read its own number back and agree with itself forever. A null says which kind it
+  is: nobody expects the player to play, or Sleeper has nothing to say about him.
+- An agent can correct a projection under its own name, and only its own. set_override is the one
+  tool that writes. A reason is required and is stored as the record's note. The name on a record is
+  stamped by the server from the name the client gave when it connected, so a payload cannot claim to
+  be someone else. An agent may change and remove only its own records, the owner's are refused to
+  every agent, and the owner can remove any of them. An agent's correction carries an expiry week so
+  nothing it writes outlives the week it was reasoning about, and a 50 per agent cap sits under the
+  500 total. Nothing is written back to Sleeper. The manage view shows the owner's corrections and
+  the agents' apart, with the name, the reason and the expiry week on each. dist/llms.txt is new and
+  served at /llms.txt, describing the read tools, the one write tool and the freshness rules.
+- Every outside source is now a switch a host or the owner can turn off, and the app says what it
+  lost rather than guessing. With NFL game status off there is no request to ESPN's scoreboard at
+  all: who plays whom and who is on bye come from the Sleeper projections, no page claims a quarter,
+  a clock or a score, the week is described by how many starters have points rather than called live,
+  and the watchroom offers only the filters it can fill. A player whose team has no game that week
+  reads as on bye, and only a week whose projections never arrived says its schedule is unavailable.
+  A cold load asks ESPN for this week alone instead of five weeks.
+- Player profiles, trade returns and a research view. A profile holds the recent scoring, the PPR,
+  half and standard columns, the depth around him, the news and condition, and what a trade for him
+  has returned.
+- The Notifications page lists what was sent, and the sidebar counts what is new.
+- The dashboard runs on a static host with no service behind it, instead of waiting fifteen seconds
+  for an answer that was never coming. A page says where it is in its own markup, npm run manifest
+  writes the file list a host copies, and a host that writes dist/site.json renames the app
+  everywhere the name is drawn and adds up to six footer links. On a touch screen or a narrow one the
+  small controls and the footer links are a 24px and a 34px target, decided in one place for every
+  view. A mouse sees the layout it always saw.
+- Fixes. A scoring key worth zero no longer counts as a projection, so a row holding only a category
+  the league does not score reads as no projection instead of a confident 0.00, and a lineup built on
+  it no longer calls itself complete. The profile's scoring columns read the projection from the same
+  totals as the recent scoring they sit beside, rather than scoring it themselves. The waiver
+  toolbar's select no longer grows to its longest option and pushes the page 9px sideways on a phone.
+  A stored correction holding a season was compared as a number against the season Sleeper hands out
+  as a string, so every such record was invisible and a correction would save and do nothing.
+- The image takes the Alpine layer carrying the patched musl and zlib, which clears the two
+  advisories that had the scan blocking every build. The content security policy is built from the
+  origins the app declares it reaches, the build fails when a module crosses a tier, and the served
+  player directory is a slim file rather than 15 MB.
+
 ## 0.7.1
 
 - Kickers project their long field goals and their misses. Sleeper's kicker projections now list
